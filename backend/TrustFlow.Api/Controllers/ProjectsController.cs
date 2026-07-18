@@ -30,14 +30,23 @@ namespace TrustFlow.Api.Controllers
         [HttpGet]
         public async Task<IActionResult> GetProjects(CancellationToken cancellationToken)
         {
-            var projects = await dbContext.Projects.AsNoTracking().OrderByDescending(projects => projects.CreatedAt).ToListAsync(cancellationToken);
-            return Ok(projects);
+            var projects = await dbContext.Projects
+                .AsNoTracking()
+                .OrderByDescending(project => project.CreatedAt)
+                .ToListAsync(cancellationToken); return Ok(projects);
         }
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetProfilById(Guid id, CancellationToken cancellationToken)
         {
-            var project = await dbContext.Projects.AsNoTracking().FirstOrDefaultAsync(project => project.Id == id, cancellationToken);
-            if (project is null)
+            var project = await dbContext.Projects
+                .AsNoTracking()
+                .Include(project =>
+                    project.Milestones.OrderBy(milestone => milestone.SequenceNumber)
+                )
+                .FirstOrDefaultAsync(
+                    project => project.Id == id,
+                    cancellationToken
+                ); if (project is null)
             {
                 return NotFound(new
                 {

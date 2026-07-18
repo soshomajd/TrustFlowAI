@@ -122,3 +122,4 @@ E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\obj\Debug\net10.0\Trus
 E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\obj\Debug\net10.0\TrustFlow.Api.genruntimeconfig.cache
 E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\obj\Debug\net10.0\ref\TrustFlow.Api.dll
 E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\bin\Debug\net10.0\Scalar.AspNetCore.dll
+E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\bin\Debug\net10.0\Microsoft.AspNetCore.Identity.EntityFrameworkCore.dll

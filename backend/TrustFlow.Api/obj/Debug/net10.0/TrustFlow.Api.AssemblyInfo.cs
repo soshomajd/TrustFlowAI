@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TrustFlow.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c76756d50f556442ff7bbbe09888758620319bac")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2a666e2d4b3a080c67f74e75527cc87d577665f8")]
 [assembly: System.Reflection.AssemblyProductAttribute("TrustFlow.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TrustFlow.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

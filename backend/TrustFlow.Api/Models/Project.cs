@@ -14,5 +14,6 @@ namespace TrustFlow.Api.Models
         public DateTime Deadline { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public ICollection<MileStone> Milestones { get; set; } = new List<MileStone>();
     }
 }
