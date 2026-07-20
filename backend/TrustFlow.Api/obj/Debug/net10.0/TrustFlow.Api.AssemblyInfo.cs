@@ -10,10 +10,11 @@
 using System;
 using System.Reflection;
 
+[assembly: Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute("dcc62bb8-01ad-4589-87a2-59d876a8fb25")]
 [assembly: System.Reflection.AssemblyCompanyAttribute("TrustFlow.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2a666e2d4b3a080c67f74e75527cc87d577665f8")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+da2df94bdae1dcac42c7905cb32fdd1f52a50af6")]
 [assembly: System.Reflection.AssemblyProductAttribute("TrustFlow.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TrustFlow.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

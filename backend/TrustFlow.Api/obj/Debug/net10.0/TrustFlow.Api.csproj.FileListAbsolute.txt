@@ -123,3 +123,12 @@ E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\obj\Debug\net10.0\Trus
 E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\obj\Debug\net10.0\ref\TrustFlow.Api.dll
 E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\bin\Debug\net10.0\Scalar.AspNetCore.dll
 E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\bin\Debug\net10.0\Microsoft.AspNetCore.Identity.EntityFrameworkCore.dll
+E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
+E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\bin\Debug\net10.0\Microsoft.Bcl.Cryptography.dll
+E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\bin\Debug\net10.0\Microsoft.IdentityModel.Abstractions.dll
+E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\bin\Debug\net10.0\Microsoft.IdentityModel.JsonWebTokens.dll
+E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\bin\Debug\net10.0\Microsoft.IdentityModel.Logging.dll
+E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\bin\Debug\net10.0\Microsoft.IdentityModel.Protocols.dll
+E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\bin\Debug\net10.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\bin\Debug\net10.0\Microsoft.IdentityModel.Tokens.dll
+E:\projects\TrustFlowAI\TrustFlowAI\backend\TrustFlow.Api\bin\Debug\net10.0\System.IdentityModel.Tokens.Jwt.dll
