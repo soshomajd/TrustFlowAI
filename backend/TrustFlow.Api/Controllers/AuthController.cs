@@ -4,6 +4,8 @@ using TrustFlow.Api.Constants;
 using TrustFlow.Api.Dtos.Auth;
 using TrustFlow.Api.Models.Identity;
 using TrustFlow.Api.Services.Auth;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 
 namespace TrustFlow.Api.Controllers;
 
@@ -159,6 +161,45 @@ public class AuthController(
                 user.Email,
                 Roles = roles
             }
+        });
+    }
+    [Authorize]
+    [HttpGet("me")]
+    public async Task<IActionResult> GetCurrentUser()
+    {
+        var userIdValue = User.FindFirstValue(
+            ClaimTypes.NameIdentifier
+        );
+
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return Unauthorized(new
+            {
+                message = "Invalid user identity."
+            });
+        }
+
+        var user = await userManager.FindByIdAsync(
+            userId.ToString()
+        );
+
+        if (user is null)
+        {
+            return Unauthorized(new
+            {
+                message = "User no longer exists."
+            });
+        }
+
+        var roles = await userManager.GetRolesAsync(user);
+
+        return Ok(new
+        {
+            user.Id,
+            user.FullName,
+            user.Email,
+            Roles = roles,
+            user.CreatedAt
         });
     }
 }

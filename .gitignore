@@ -1,0 +1,24 @@
+# .NET
+**/bin/
+**/obj/
+
+# User secrets and local settings
+*.user
+*.suo
+
+# Visual Studio / Rider
+.vs/
+.idea/
+
+# Next.js
+**/.next/
+**/node_modules/
+**/out/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log

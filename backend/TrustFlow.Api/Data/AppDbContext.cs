@@ -13,6 +13,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<MileStone> Milestones => Set<MileStone>();
 
+    public DbSet<Proposal> Proposals => Set<Proposal>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -26,6 +28,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             .WithMany(project => project.Milestones)
             .HasForeignKey(milestone => milestone.ProjectId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Proposal>()
+            .Property(proposal => proposal.Status)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<Proposal>().
+             HasOne(proposal => proposal.Project)
+            .WithMany(project => project.Proposals)
+            .HasForeignKey(proposal => proposal.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+
+        modelBuilder.Entity<Project>()
+            .HasOne(project => project.Client)
+            .WithMany(user => user.ClientProjects)
+            .HasForeignKey(project => project.ClientId)
+            .OnDelete(DeleteBehavior.Restrict);
+
 
         modelBuilder.Entity<MileStone>()
             .HasIndex(milestone => new

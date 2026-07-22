@@ -1,5 +1,8 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using TrustFlow.Api.Constants;
 using TrustFlow.Api.Data;
 using TrustFlow.Api.Dtos.Milestones;
 using TrustFlow.Api.Models;
@@ -11,16 +14,26 @@ namespace TrustFlow.Api.Controllers;
 public class MilestonesController(AppDbContext dbContext)
     : ControllerBase
 {
+    [Authorize(Roles = AppRoles.Client)]
     [HttpPost]
     public async Task<IActionResult> CreateMilestone(
         Guid projectId,
         CreateMilestoneRequest request,
         CancellationToken cancellationToken)
     {
+        var clientIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!Guid.TryParse(clientIdValue, out var clientId))
+        {
+            return Unauthorized();
+        }
+
+
+
         var project = await dbContext.Projects
             .AsNoTracking()
             .FirstOrDefaultAsync(
-                project => project.Id == projectId,
+                project => project.Id == projectId && project.ClientId == clientId,
                 cancellationToken
             );
 
@@ -146,6 +159,7 @@ public class MilestonesController(AppDbContext dbContext)
 
         return Ok(milestone);
     }
+    [Authorize(Roles = AppRoles.Client)]
     [HttpPut("{milestoneId:guid}")]
     public async Task<IActionResult> UpdateMilestone(
     Guid projectId,
@@ -153,10 +167,16 @@ public class MilestonesController(AppDbContext dbContext)
     UpdateMilestoneRequest request,
     CancellationToken cancellationToken)
     {
+        var clientIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(clientIdValue, out var clientId))
+        {
+            return Unauthorized();
+        }
+
         var project = await dbContext.Projects
             .AsNoTracking()
             .FirstOrDefaultAsync(
-                project => project.Id == projectId,
+                project => project.Id == projectId && project.ClientId == clientId,
                 cancellationToken
             );
 
@@ -240,16 +260,24 @@ public class MilestonesController(AppDbContext dbContext)
         return Ok(milestone);
     }
     [HttpDelete("{milestoneId:guid}")]
+    [Authorize(Roles = AppRoles.Client)]
     public async Task<IActionResult> DeleteMilestone(
     Guid projectId,
     Guid milestoneId,
     CancellationToken cancellationToken)
     {
+        var clientIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!Guid.TryParse(clientIdValue, out var clientId))
+        {
+            return Unauthorized();
+        }
+
         var milestone = await dbContext.Milestones
             .FirstOrDefaultAsync(
                 milestone =>
                     milestone.Id == milestoneId &&
-                    milestone.ProjectId == projectId,
+                    milestone.ProjectId == projectId && milestone.Project.ClientId == clientId,
                 cancellationToken
             );
 
