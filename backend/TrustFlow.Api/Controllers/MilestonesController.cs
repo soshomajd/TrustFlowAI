@@ -6,6 +6,8 @@ using TrustFlow.Api.Constants;
 using TrustFlow.Api.Data;
 using TrustFlow.Api.Dtos.Milestones;
 using TrustFlow.Api.Models;
+using System.Data;
+using Npgsql;
 
 namespace TrustFlow.Api.Controllers;
 
@@ -14,6 +16,23 @@ namespace TrustFlow.Api.Controllers;
 public class MilestonesController(AppDbContext dbContext)
     : ControllerBase
 {
+    private static bool IsSerializationFailure(Exception exception)
+    {
+        Exception? currentException = exception;
+        while (currentException is not null)
+        {
+            if (currentException is PostgresException postgresException && postgresException.SqlState == PostgresErrorCodes.SerializationFailure)
+            {
+                return true;
+            }
+            currentException = currentException.InnerException;
+        }
+
+        return false;
+    }
+
+
+
     [Authorize(Roles = AppRoles.Client)]
     [HttpPost]
     public async Task<IActionResult> CreateMilestone(

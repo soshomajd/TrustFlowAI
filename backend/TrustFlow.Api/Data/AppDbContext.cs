@@ -39,13 +39,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             .HasForeignKey(proposal => proposal.ProjectId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        modelBuilder.Entity<Proposal>()
+            .HasOne(proposal => proposal.Freelancer)
+            .WithMany(user => user.FreelancerProposals)
+            .HasForeignKey(proposal => proposal.FreelancerId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<Project>()
             .HasOne(project => project.Client)
             .WithMany(user => user.ClientProjects)
             .HasForeignKey(project => project.ClientId)
             .OnDelete(DeleteBehavior.Restrict);
-
 
         modelBuilder.Entity<MileStone>()
             .HasIndex(milestone => new

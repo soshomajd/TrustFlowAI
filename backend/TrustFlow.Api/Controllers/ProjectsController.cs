@@ -93,6 +93,38 @@ namespace TrustFlow.Api.Controllers
                     message = "Project not found."
                 });
             }
+
+            var allocatedAmount = await dbContext.Milestones
+            .Where(milestone => milestone.ProjectId == id)
+            .SumAsync(milestone => (decimal?)milestone.Amount, cancellationToken) ?? 0m;
+
+            if (updateProjectRequest.Budget < allocatedAmount)
+            {
+                return BadRequest(new
+                {
+                    message = "Project budget cannot be less than the total milestone amount.",
+                    requestedBudget = updateProjectRequest.Budget,
+                    allocatedAmount
+                });
+            }
+
+            var latestMilestoneDeadline = await dbContext.Milestones
+            .Where(milestone => milestone.ProjectId == id)
+            .MaxAsync(milestone => (DateTime?)milestone.Deadline, cancellationToken);
+
+
+            if (latestMilestoneDeadline.HasValue && updateProjectRequest.Deadline < latestMilestoneDeadline)
+            {
+                return BadRequest(new
+                {
+                    message = "Project deadline cannot be before the latest milestone deadline.",
+                    requestedDeadline = updateProjectRequest.Deadline,
+                    latestMilestoneDeadline
+                });
+            }
+
+
+
             project.Title = updateProjectRequest.Title;
             project.Description = updateProjectRequest.Description;
             project.Budget = updateProjectRequest.Budget;
