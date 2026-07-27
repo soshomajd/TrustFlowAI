@@ -1,22 +1,16 @@
-using System.ComponentModel.DataAnnotations;
+
+using TrustFlow.Api.Models.Enums;
 
 namespace TrustFlow.Api.Dtos.Milestones;
 
-public class UpdateMilestoneRequest
+public class MilestoneResponse
 {
-    [Required]
-    [MaxLength(150)]
+    public Guid Id { get; set; }
+    public Guid ProjectId { get; set; }
     public string Title { get; set; } = string.Empty;
-
-    [Required]
-    [MaxLength(2000)]
     public string Description { get; set; } = string.Empty;
-
-    [Range(1, double.MaxValue)]
     public decimal Amount { get; set; }
-
-    [Range(1, int.MaxValue)]
     public int SequenceNumber { get; set; }
-
     public DateTimeOffset Deadline { get; set; }
+    public MileStoneStatus Status { get; set; }
 }

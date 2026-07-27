@@ -13,7 +13,6 @@ namespace TrustFlow.Api.Controllers;
 [Route("api/auth")]
 public class AuthController(
     UserManager<ApplicationUser> userManager,
-    RoleManager<IdentityRole<Guid>> roleManager,
     SignInManager<ApplicationUser> signInManager,
     IJwtTokenService jwtTokenService)
     : ControllerBase
@@ -31,9 +30,11 @@ public class AuthController(
                 message = "Role must be Client or Freelancer."
             });
         }
+        var email = request.Email.Trim();
+
 
         var existingUser = await userManager.FindByEmailAsync(
-            request.Email
+           email
         );
 
         if (existingUser is not null)
@@ -44,32 +45,11 @@ public class AuthController(
             });
         }
 
-        var roleExists = await roleManager.RoleExistsAsync(role);
-
-        if (!roleExists)
-        {
-            var createRoleResult = await roleManager.CreateAsync(
-                new IdentityRole<Guid>
-                {
-                    Name = role
-                }
-            );
-
-            if (!createRoleResult.Succeeded)
-            {
-                return BadRequest(new
-                {
-                    errors = createRoleResult.Errors
-                        .Select(error => error.Description)
-                });
-            }
-        }
-
         var user = new ApplicationUser
         {
             FullName = request.FullName.Trim(),
-            Email = request.Email.Trim(),
-            UserName = request.Email.Trim()
+            Email = email,
+            UserName = email
         };
 
         var createUserResult = await userManager.CreateAsync(

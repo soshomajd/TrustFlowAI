@@ -33,6 +33,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             .Property(proposal => proposal.Status)
             .HasConversion<string>();
 
+        modelBuilder.Entity<Project>()
+            .Property(project => project.Status)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<Project>()
+            .HasOne(project => project.Freelancer)
+            .WithMany(user => user.FreelancerProjects)
+            .HasForeignKey(project => project.FreelancerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         modelBuilder.Entity<Proposal>().
              HasOne(proposal => proposal.Project)
             .WithMany(project => project.Proposals)
@@ -44,6 +54,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             .WithMany(user => user.FreelancerProposals)
             .HasForeignKey(proposal => proposal.FreelancerId)
             .OnDelete(DeleteBehavior.Restrict);
+
+
+        modelBuilder.Entity<Proposal>()
+            .HasIndex(proposal => new
+            {
+                proposal.ProjectId,
+                proposal.FreelancerId
+            })
+            .IsUnique();
 
         modelBuilder.Entity<Project>()
             .HasOne(project => project.Client)

@@ -8,6 +8,7 @@ using TrustFlow.Api.Dtos.Milestones;
 using TrustFlow.Api.Models;
 using System.Data;
 using Npgsql;
+using IsolationLevel = System.Data.IsolationLevel;
 
 namespace TrustFlow.Api.Controllers;
 
@@ -31,128 +32,201 @@ public class MilestonesController(AppDbContext dbContext)
         return false;
     }
 
+    private static bool IsUniqueViolation(Exception exception)
+    {
+        Exception? currentException = exception;
+
+        while (currentException is not null)
+        {
+            if (currentException is PostgresException postgresException &&
+                postgresException.SqlState ==
+                PostgresErrorCodes.UniqueViolation)
+            {
+                return true;
+            }
+
+            currentException = currentException.InnerException;
+        }
+
+        return false;
+    }
+
+    private static MilestoneResponse ToResponse(MileStone milestone)
+    {
+        return new MilestoneResponse
+        {
+            Id = milestone.Id,
+            ProjectId = milestone.ProjectId,
+            Title = milestone.Title,
+            Description = milestone.Description,
+            Amount = milestone.Amount,
+            SequenceNumber = milestone.SequenceNumber,
+            Deadline = milestone.Deadline,
+            Status = milestone.Status
+        };
+    }
+
 
 
     [Authorize(Roles = AppRoles.Client)]
     [HttpPost]
     public async Task<IActionResult> CreateMilestone(
-        Guid projectId,
-        CreateMilestoneRequest request,
-        CancellationToken cancellationToken)
+      Guid projectId,
+      CreateMilestoneRequest request,
+      CancellationToken cancellationToken)
     {
-        var clientIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var clientIdValue = User.FindFirstValue(
+            ClaimTypes.NameIdentifier
+        );
 
         if (!Guid.TryParse(clientIdValue, out var clientId))
         {
             return Unauthorized();
         }
 
+        const int maxAttempts = 3;
 
-
-        var project = await dbContext.Projects
-            .AsNoTracking()
-            .FirstOrDefaultAsync(
-                project => project.Id == projectId && project.ClientId == clientId,
-                cancellationToken
-            );
-
-        if (project is null)
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            return NotFound(new
+            try
             {
-                message = "Project not found."
-            });
+                await using var transaction =
+                    await dbContext.Database.BeginTransactionAsync(
+                        IsolationLevel.Serializable,
+                        cancellationToken
+                    );
+
+                var project = await dbContext.Projects
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        project =>
+                            project.Id == projectId &&
+                            project.ClientId == clientId,
+                        cancellationToken
+                    );
+
+                if (project is null)
+                {
+                    return NotFound(new
+                    {
+                        message = "Project not found."
+                    });
+                }
+
+                var sequenceExists = await dbContext.Milestones
+                    .AnyAsync(
+                        milestone =>
+                            milestone.ProjectId == projectId &&
+                            milestone.SequenceNumber ==
+                            request.SequenceNumber,
+                        cancellationToken
+                    );
+
+                if (sequenceExists)
+                {
+                    return Conflict(new
+                    {
+                        message = "This sequence number already exists."
+                    });
+                }
+
+                var allocatedAmount = await dbContext.Milestones
+                    .Where(
+                        milestone =>
+                            milestone.ProjectId == projectId
+                    )
+                    .SumAsync(
+                        milestone => (decimal?)milestone.Amount,
+                        cancellationToken
+                    ) ?? 0m;
+
+                if (allocatedAmount + request.Amount > project.Budget)
+                {
+                    return BadRequest(new
+                    {
+                        message = "Milestone amounts cannot exceed project budget.",
+                        projectBudget = project.Budget,
+                        allocatedAmount,
+                        requestedAmount = request.Amount,
+                        remainingBudget =
+                            project.Budget - allocatedAmount
+                    });
+                }
+
+                if (request.Deadline > project.Deadline)
+                {
+                    return BadRequest(new
+                    {
+                        message = "Milestone deadline cannot be after project deadline."
+                    });
+                }
+
+                var milestone = new MileStone
+                {
+                    ProjectId = projectId,
+                    Title = request.Title,
+                    Description = request.Description,
+                    Amount = request.Amount,
+                    SequenceNumber = request.SequenceNumber,
+                    Deadline = request.Deadline.ToUniversalTime()
+                };
+
+                dbContext.Milestones.Add(milestone);
+
+                await dbContext.SaveChangesAsync(
+                    cancellationToken
+                );
+
+                await transaction.CommitAsync(
+                    cancellationToken
+                );
+                return Created(
+                    $"/api/projects/{projectId}/milestones/{milestone.Id}",
+                    ToResponse(milestone)
+                );
+            }
+            catch (Exception exception)
+                when (
+                    IsSerializationFailure(exception) &&
+                    attempt < maxAttempts
+                )
+            {
+                dbContext.ChangeTracker.Clear();
+
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(50 * attempt),
+                    cancellationToken
+                );
+            }
+            catch (Exception exception)
+                when (IsSerializationFailure(exception))
+            {
+                dbContext.ChangeTracker.Clear();
+
+                return Conflict(new
+                {
+                    message = "Another request changed this project. Please try again."
+                });
+            }
+            catch (Exception exception)
+                 when (IsUniqueViolation(exception))
+            {
+                dbContext.ChangeTracker.Clear();
+
+                return Conflict(new
+                {
+                    message = "This sequence number already exists."
+                });
+            }
         }
 
-        var sequenceExists = await dbContext.Milestones
-            .AnyAsync(
-                milestone =>
-                    milestone.ProjectId == projectId &&
-                    milestone.SequenceNumber == request.SequenceNumber,
-                cancellationToken
-            );
-
-        if (sequenceExists)
+        return Conflict(new
         {
-            return Conflict(new
-            {
-                message = "This sequence number already exists."
-            });
-        }
-
-        var allocatedAmount = await dbContext.Milestones
-            .Where(milestone => milestone.ProjectId == projectId)
-            .SumAsync(
-                milestone => (decimal?)milestone.Amount,
-                cancellationToken
-            ) ?? 0m;
-
-        if (allocatedAmount + request.Amount > project.Budget)
-        {
-            return BadRequest(new
-            {
-                message = "Milestone amounts cannot exceed project budget.",
-                projectBudget = project.Budget,
-                allocatedAmount,
-                remainingBudget = project.Budget - allocatedAmount
-            });
-        }
-
-        if (request.Deadline > project.Deadline)
-        {
-            return BadRequest(new
-            {
-                message = "Milestone deadline cannot be after project deadline."
-            });
-        }
-
-        var milestone = new MileStone
-        {
-            ProjectId = projectId,
-            Title = request.Title,
-            Description = request.Description,
-            Amount = request.Amount,
-            SequenceNumber = request.SequenceNumber,
-            Deadline = request.Deadline
-        };
-
-        dbContext.Milestones.Add(milestone);
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        return Created(
-            $"/api/projects/{projectId}/milestones/{milestone.Id}",
-            milestone
-        );
-
+            message = "The milestone could not be created due to concurrent requests."
+        });
     }
-    [HttpGet]
-    public async Task<IActionResult> GetMilestones(
-    Guid projectId,
-    CancellationToken cancellationToken)
-    {
-        var projectExists = await dbContext.Projects
-            .AnyAsync(
-                project => project.Id == projectId,
-                cancellationToken
-            );
 
-        if (!projectExists)
-        {
-            return NotFound(new
-            {
-                message = "Project not found."
-            });
-        }
 
-        var milestones = await dbContext.Milestones
-            .AsNoTracking()
-            .Where(milestone => milestone.ProjectId == projectId)
-            .OrderBy(milestone => milestone.SequenceNumber)
-            .ToListAsync(cancellationToken);
-
-        return Ok(milestones);
-    }
     [HttpGet("{milestoneId:guid}")]
     public async Task<IActionResult> GetMilestoneById(
     Guid projectId,
@@ -160,13 +234,22 @@ public class MilestonesController(AppDbContext dbContext)
     CancellationToken cancellationToken)
     {
         var milestone = await dbContext.Milestones
-            .AsNoTracking()
-            .FirstOrDefaultAsync(
-                milestone =>
-                    milestone.Id == milestoneId &&
-                    milestone.ProjectId == projectId,
-                cancellationToken
-            );
+     .AsNoTracking()
+     .Where(milestone =>
+         milestone.Id == milestoneId &&
+         milestone.ProjectId == projectId)
+     .Select(milestone => new MilestoneResponse
+     {
+         Id = milestone.Id,
+         ProjectId = milestone.ProjectId,
+         Title = milestone.Title,
+         Description = milestone.Description,
+         Amount = milestone.Amount,
+         SequenceNumber = milestone.SequenceNumber,
+         Deadline = milestone.Deadline,
+         Status = milestone.Status
+     })
+     .FirstOrDefaultAsync(cancellationToken);
 
         if (milestone is null)
         {
@@ -181,102 +264,177 @@ public class MilestonesController(AppDbContext dbContext)
     [Authorize(Roles = AppRoles.Client)]
     [HttpPut("{milestoneId:guid}")]
     public async Task<IActionResult> UpdateMilestone(
-    Guid projectId,
-    Guid milestoneId,
-    UpdateMilestoneRequest request,
-    CancellationToken cancellationToken)
+      Guid projectId,
+      Guid milestoneId,
+      UpdateMilestoneRequest request,
+      CancellationToken cancellationToken)
     {
-        var clientIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var clientIdValue = User.FindFirstValue(
+            ClaimTypes.NameIdentifier
+        );
+
         if (!Guid.TryParse(clientIdValue, out var clientId))
         {
             return Unauthorized();
         }
 
-        var project = await dbContext.Projects
-            .AsNoTracking()
-            .FirstOrDefaultAsync(
-                project => project.Id == projectId && project.ClientId == clientId,
-                cancellationToken
-            );
+        const int maxAttempts = 3;
 
-        if (project is null)
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            return NotFound(new
+            try
             {
-                message = "Project not found."
-            });
+                await using var transaction =
+                    await dbContext.Database.BeginTransactionAsync(
+                        IsolationLevel.Serializable,
+                        cancellationToken
+                    );
+
+                var project = await dbContext.Projects
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        project =>
+                            project.Id == projectId &&
+                            project.ClientId == clientId,
+                        cancellationToken
+                    );
+
+                if (project is null)
+                {
+                    return NotFound(new
+                    {
+                        message = "Project not found."
+                    });
+                }
+
+                var milestone = await dbContext.Milestones
+                    .FirstOrDefaultAsync(
+                        milestone =>
+                            milestone.Id == milestoneId &&
+                            milestone.ProjectId == projectId,
+                        cancellationToken
+                    );
+
+                if (milestone is null)
+                {
+                    return NotFound(new
+                    {
+                        message = "Milestone not found."
+                    });
+                }
+
+                var sequenceExists = await dbContext.Milestones
+                    .AnyAsync(
+                        otherMilestone =>
+                            otherMilestone.ProjectId == projectId &&
+                            otherMilestone.SequenceNumber ==
+                                request.SequenceNumber &&
+                            otherMilestone.Id != milestoneId,
+                        cancellationToken
+                    );
+
+                if (sequenceExists)
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "This sequence number already exists."
+                    });
+                }
+
+                var otherMilestonesAmount =
+                    await dbContext.Milestones
+                        .Where(otherMilestone =>
+                            otherMilestone.ProjectId == projectId &&
+                            otherMilestone.Id != milestoneId)
+                        .SumAsync(
+                            otherMilestone =>
+                                (decimal?)otherMilestone.Amount,
+                            cancellationToken
+                        ) ?? 0m;
+
+                if (otherMilestonesAmount + request.Amount >
+                    project.Budget)
+                {
+                    return BadRequest(new
+                    {
+                        message =
+                            "Milestone amounts cannot exceed project budget.",
+                        projectBudget = project.Budget,
+                        allocatedAmount = otherMilestonesAmount,
+                        requestedAmount = request.Amount,
+                        remainingBudget =
+                            project.Budget - otherMilestonesAmount
+                    });
+                }
+
+                if (request.Deadline > project.Deadline)
+                {
+                    return BadRequest(new
+                    {
+                        message =
+                            "Milestone deadline cannot be after project deadline."
+                    });
+                }
+
+                milestone.Title = request.Title;
+                milestone.Description = request.Description;
+                milestone.Amount = request.Amount;
+                milestone.SequenceNumber = request.SequenceNumber;
+                milestone.Deadline = request.Deadline.ToUniversalTime();
+
+                await dbContext.SaveChangesAsync(
+                    cancellationToken
+                );
+
+                await transaction.CommitAsync(
+                    cancellationToken
+                );
+
+                return Ok(ToResponse(milestone));
+            }
+            catch (Exception exception)
+                when (
+                    IsSerializationFailure(exception) &&
+                    attempt < maxAttempts
+                )
+            {
+                dbContext.ChangeTracker.Clear();
+
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(50 * attempt),
+                    cancellationToken
+                );
+            }
+            catch (Exception exception)
+                when (IsSerializationFailure(exception))
+            {
+                dbContext.ChangeTracker.Clear();
+
+                return Conflict(new
+                {
+                    message =
+                        "Another request changed this project. Please try again."
+                });
+            }
+            catch (Exception exception)
+             when (IsUniqueViolation(exception))
+            {
+                dbContext.ChangeTracker.Clear();
+
+                return Conflict(new
+                {
+                    message =
+                        "This sequence number already exists."
+                });
+            }
         }
 
-        var milestone = await dbContext.Milestones
-            .FirstOrDefaultAsync(
-                milestone =>
-                    milestone.Id == milestoneId &&
-                    milestone.ProjectId == projectId,
-                cancellationToken
-            );
-
-        if (milestone is null)
+        return Conflict(new
         {
-            return NotFound(new
-            {
-                message = "Milestone not found."
-            });
-        }
-
-        var sequenceExists = await dbContext.Milestones
-            .AnyAsync(
-                otherMilestone =>
-                    otherMilestone.ProjectId == projectId &&
-                    otherMilestone.SequenceNumber == request.SequenceNumber &&
-                    otherMilestone.Id != milestoneId,
-                cancellationToken
-            );
-
-        if (sequenceExists)
-        {
-            return Conflict(new
-            {
-                message = "This sequence number already exists."
-            });
-        }
-
-        var otherMilestonesAmount = await dbContext.Milestones
-            .Where(otherMilestone =>
-                otherMilestone.ProjectId == projectId &&
-                otherMilestone.Id != milestoneId)
-            .SumAsync(
-                otherMilestone => (decimal?)otherMilestone.Amount,
-                cancellationToken
-            ) ?? 0m;
-
-        if (otherMilestonesAmount + request.Amount > project.Budget)
-        {
-            return BadRequest(new
-            {
-                message = "Milestone amounts cannot exceed project budget.",
-                projectBudget = project.Budget,
-                allocatedAmount = otherMilestonesAmount,
-                requestedAmount = request.Amount
-            });
-        }
-
-        if (request.Deadline > project.Deadline)
-        {
-            return BadRequest(new
-            {
-                message = "Milestone deadline cannot be after project deadline."
-            });
-        }
-
-        milestone.Title = request.Title;
-        milestone.Description = request.Description;
-        milestone.Amount = request.Amount;
-        milestone.SequenceNumber = request.SequenceNumber;
-        milestone.Deadline = request.Deadline;
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        return Ok(milestone);
+            message =
+                "The milestone could not be updated due to concurrent requests."
+        });
     }
     [HttpDelete("{milestoneId:guid}")]
     [Authorize(Roles = AppRoles.Client)]

@@ -18,5 +18,5 @@ public class CreateMilestoneRequest
     [Range(1, int.MaxValue)]
     public int SequenceNumber { get; set; }
 
-    public DateTime Deadline { get; set; }
+    public DateTimeOffset Deadline { get; set; }
 }

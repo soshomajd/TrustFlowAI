@@ -1,6 +1,7 @@
 
 using System.Text.Json.Serialization;
 using TrustFlow.Api.Models.Identity;
+using TrustFlow.Api.Models.Enums;
 
 namespace TrustFlow.Api.Models
 {
@@ -18,10 +19,14 @@ namespace TrustFlow.Api.Models
 
         public decimal Budget { get; set; }
 
-        public DateTime Deadline { get; set; }
+        public DateTimeOffset Deadline { get; set; }
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
         public ICollection<MileStone> Milestones { get; set; } = [];
         public ICollection<Proposal> Proposals { get; set; } = [];
+        public Guid? FreelancerId { get; set; }
+        [JsonIgnore]
+        public ApplicationUser? Freelancer { get; set; }
+        public ProjectStatus Status { get; set; } = ProjectStatus.Open;
     }
 }

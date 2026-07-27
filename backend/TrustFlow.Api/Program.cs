@@ -20,9 +20,9 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.Converters.Add(
             new JsonStringEnumConverter()
         );
-    }); builder.Services.AddDbContext<AppDbContext>(Options =>
+    }); builder.Services.AddDbContext<AppDbContext>(options =>
 {
-    Options.UseNpgsql(
+    options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection")
     );
 });
@@ -56,10 +56,42 @@ var jwtSettings = builder.Configuration
         "JWT settings are missing."
     );
 
+if (string.IsNullOrWhiteSpace(jwtSettings.Issuer))
+{
+    throw new InvalidOperationException(
+        "JWT issuer is missing."
+    );
+}
+
+if (string.IsNullOrWhiteSpace(jwtSettings.Audience))
+{
+    throw new InvalidOperationException(
+        "JWT audience is missing."
+    );
+}
+
 if (string.IsNullOrWhiteSpace(jwtSettings.Key))
 {
     throw new InvalidOperationException(
         "JWT secret key is missing."
+    );
+}
+
+if (jwtSettings.ExpirationMinutes <= 0)
+{
+    throw new InvalidOperationException(
+        "JWT expiration minutes must be greater than zero."
+    );
+}
+
+var jwtKeyBytes = Encoding.UTF8.GetBytes(
+    jwtSettings.Key
+);
+
+if (jwtKeyBytes.Length < 32)
+{
+    throw new InvalidOperationException(
+        "JWT secret key must be at least 32 bytes."
     );
 }
 
@@ -79,12 +111,9 @@ builder.Services
                 ValidAudience = jwtSettings.Audience,
 
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey =
-                    new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(
-                            jwtSettings.Key
-                        )
-                    ),
+
+
+                IssuerSigningKey = new SymmetricSecurityKey(jwtKeyBytes),
 
                 ValidateLifetime = true,
 
@@ -104,6 +133,7 @@ builder.Services.AddScoped<
 >();
 
 var app = builder.Build();
+await app.SeedRolesAsync();
 
 
 if (app.Environment.IsDevelopment())

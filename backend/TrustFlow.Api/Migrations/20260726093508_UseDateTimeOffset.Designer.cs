@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TrustFlow.Api.Data;
@@ -11,9 +12,11 @@ using TrustFlow.Api.Data;
 namespace TrustFlow.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260726093508_UseDateTimeOffset")]
+    partial class UseDateTimeOffset
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -287,13 +290,6 @@ namespace TrustFlow.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid?>("FreelancerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("text");
@@ -301,8 +297,6 @@ namespace TrustFlow.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ClientId");
-
-                    b.HasIndex("FreelancerId");
 
                     b.ToTable("Projects");
                 });
@@ -340,8 +334,7 @@ namespace TrustFlow.Api.Migrations
 
                     b.HasIndex("FreelancerId");
 
-                    b.HasIndex("ProjectId", "FreelancerId")
-                        .IsUnique();
+                    b.HasIndex("ProjectId");
 
                     b.ToTable("Proposals");
                 });
@@ -415,14 +408,7 @@ namespace TrustFlow.Api.Migrations
                         .HasForeignKey("ClientId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", "Freelancer")
-                        .WithMany("FreelancerProjects")
-                        .HasForeignKey("FreelancerId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("Client");
-
-                    b.Navigation("Freelancer");
                 });
 
             modelBuilder.Entity("TrustFlow.Api.Models.Proposal", b =>
@@ -447,8 +433,6 @@ namespace TrustFlow.Api.Migrations
             modelBuilder.Entity("TrustFlow.Api.Models.Identity.ApplicationUser", b =>
                 {
                     b.Navigation("ClientProjects");
-
-                    b.Navigation("FreelancerProjects");
 
                     b.Navigation("FreelancerProposals");
                 });

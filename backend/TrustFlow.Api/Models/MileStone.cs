@@ -17,11 +17,11 @@ namespace TrustFlow.Api.Models
 
         public int SequenceNumber { get; set; }
 
-        public DateTime Deadline { get; set; }
+        public DateTimeOffset Deadline { get; set; }
 
         public MileStoneStatus Status { get; set; } = MileStoneStatus.Pending;
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
 
     }

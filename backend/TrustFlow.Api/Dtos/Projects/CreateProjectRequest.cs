@@ -16,6 +16,6 @@ namespace TrustFlow.Api.Dtos.Projects
         [Range(1, double.MaxValue)]
         public decimal Budget { get; set; }
 
-        public DateTime DeadLine { get; set; }
+        public DateTimeOffset Deadline { get; set; }
     }
 }
