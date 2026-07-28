@@ -9,6 +9,7 @@ using TrustFlow.Api.Models;
 using System.Data;
 using Npgsql;
 using IsolationLevel = System.Data.IsolationLevel;
+using TrustFlow.Api.Models.Enums;
 
 namespace TrustFlow.Api.Controllers;
 
@@ -471,5 +472,252 @@ public class MilestonesController(AppDbContext dbContext)
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return NoContent();
+    }
+    [Authorize(Roles = AppRoles.Freelancer)]
+    [HttpPatch("{milestoneId:guid}/start")]
+    public async Task<IActionResult> StartMilestone(
+    Guid projectId,
+    Guid milestoneId,
+    CancellationToken cancellationToken)
+    {
+        var freelancerIdValue = User.FindFirstValue(
+            ClaimTypes.NameIdentifier
+        );
+
+        if (!Guid.TryParse(
+            freelancerIdValue,
+            out var freelancerId))
+        {
+            return Unauthorized();
+        }
+
+        var affectedRows = await dbContext.Milestones
+            .Where(milestone =>
+                milestone.Id == milestoneId &&
+                milestone.ProjectId == projectId &&
+                milestone.Project.FreelancerId == freelancerId &&
+                milestone.Project.Status == ProjectStatus.InProgress &&
+                (
+                    milestone.Status == MileStoneStatus.Pending ||
+                    milestone.Status == MileStoneStatus.Rejected
+                ))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    milestone => milestone.Status,
+                    MileStoneStatus.InProgress
+                ),
+                cancellationToken
+            );
+
+        if (affectedRows == 1)
+        {
+            return Ok(new
+            {
+                id = milestoneId,
+                status = MileStoneStatus.InProgress
+            });
+        }
+
+        var milestoneStatus = await dbContext.Milestones
+            .AsNoTracking()
+            .Where(milestone =>
+                milestone.Id == milestoneId &&
+                milestone.ProjectId == projectId &&
+                milestone.Project.FreelancerId == freelancerId)
+            .Select(milestone => new
+            {
+                MilestoneStatus = milestone.Status,
+                ProjectStatus = milestone.Project.Status
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (milestoneStatus is null)
+        {
+            return NotFound(new
+            {
+                message = "Milestone not found."
+            });
+        }
+
+        if (milestoneStatus.ProjectStatus != ProjectStatus.InProgress)
+        {
+            return Conflict(new
+            {
+                message =
+                    "Milestones can only be started when the project is in progress.",
+                currentProjectStatus =
+                    milestoneStatus.ProjectStatus
+            });
+        }
+
+        return Conflict(new
+        {
+            message =
+                "Only a pending or rejected milestone can be started.",
+            currentStatus =
+                milestoneStatus.MilestoneStatus
+        });
+    }
+    [Authorize(Roles = AppRoles.Freelancer)]
+    [HttpPatch("{milestoneId:guid}/submit")]
+    public async Task<IActionResult> SubmitMilestone(
+    Guid projectId,
+    Guid milestoneId,
+    CancellationToken cancellationToken)
+    {
+        var freelancerIdValue = User.FindFirstValue(
+            ClaimTypes.NameIdentifier
+        );
+
+        if (!Guid.TryParse(freelancerIdValue, out var freelancerId))
+        {
+            return Unauthorized();
+        }
+
+        var affectedRows = await dbContext.Milestones
+            .Where(milestone =>
+                milestone.Id == milestoneId &&
+                milestone.ProjectId == projectId &&
+                milestone.Project.FreelancerId == freelancerId &&
+                milestone.Project.Status == ProjectStatus.InProgress &&
+                milestone.Status == MileStoneStatus.InProgress)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    milestone => milestone.Status,
+                    MileStoneStatus.Submitted
+                ),
+                cancellationToken
+            );
+
+        if (affectedRows == 1)
+        {
+            return Ok(new MilestoneStatusResponse
+            {
+                Id = milestoneId,
+                Status = MileStoneStatus.Submitted
+            });
+        }
+
+        var milestoneInfo = await dbContext.Milestones
+            .AsNoTracking()
+            .Where(milestone =>
+                milestone.Id == milestoneId &&
+                milestone.ProjectId == projectId &&
+                milestone.Project.FreelancerId == freelancerId)
+            .Select(milestone => new
+            {
+                MilestoneStatus = milestone.Status,
+                ProjectStatus = milestone.Project.Status
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (milestoneInfo is null)
+        {
+            return NotFound(new
+            {
+                message = "Milestone not found."
+            });
+        }
+
+        if (milestoneInfo.ProjectStatus !=
+            ProjectStatus.InProgress)
+        {
+            return Conflict(new
+            {
+                message =
+                    "Milestones can only be submitted when the project is in progress.",
+                currentProjectStatus =
+                    milestoneInfo.ProjectStatus
+            });
+        }
+
+        return Conflict(new
+        {
+            message =
+                "Only an in-progress milestone can be submitted.",
+            currentStatus =
+                milestoneInfo.MilestoneStatus
+        });
+    }
+    [Authorize(Roles = AppRoles.Client)]
+    [HttpPatch("{milestoneId:guid}/approve")]
+    public async Task<IActionResult> ApproveMilestone(
+    Guid projectId,
+    Guid milestoneId,
+    CancellationToken cancellationToken)
+    {
+        var clientIdValue = User.FindFirstValue(
+            ClaimTypes.NameIdentifier
+        );
+
+        if (!Guid.TryParse(clientIdValue, out var clientId))
+        {
+            return Unauthorized();
+        }
+
+        var affectedRows = await dbContext.Milestones
+            .Where(milestone =>
+                milestone.Id == milestoneId &&
+                milestone.ProjectId == projectId &&
+                milestone.Project.ClientId == clientId &&
+                milestone.Project.Status == ProjectStatus.InProgress &&
+                milestone.Status == MileStoneStatus.Submitted)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    milestone => milestone.Status,
+                    MileStoneStatus.Approved
+                ),
+                cancellationToken
+            );
+
+        if (affectedRows == 1)
+        {
+            return Ok(new MilestoneStatusResponse
+            {
+                Id = milestoneId,
+                Status = MileStoneStatus.Approved
+            });
+        }
+
+        var milestoneInfo = await dbContext.Milestones
+            .AsNoTracking()
+            .Where(milestone =>
+                milestone.Id == milestoneId &&
+                milestone.ProjectId == projectId &&
+                milestone.Project.ClientId == clientId)
+            .Select(milestone => new
+            {
+                MilestoneStatus = milestone.Status,
+                ProjectStatus = milestone.Project.Status
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (milestoneInfo is null)
+        {
+            return NotFound(new
+            {
+                message = "Milestone not found."
+            });
+        }
+
+        if (milestoneInfo.ProjectStatus !=
+            ProjectStatus.InProgress)
+        {
+            return Conflict(new
+            {
+                message =
+                    "Milestones can only be approved when the project is in progress.",
+                currentProjectStatus =
+                    milestoneInfo.ProjectStatus
+            });
+        }
+
+        return Conflict(new
+        {
+            message =
+                "Only a submitted milestone can be approved.",
+            currentStatus =
+                milestoneInfo.MilestoneStatus
+        });
     }
 }

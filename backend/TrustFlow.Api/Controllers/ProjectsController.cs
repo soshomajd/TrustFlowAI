@@ -295,5 +295,153 @@ namespace TrustFlow.Api.Controllers
             await dbContext.SaveChangesAsync(cancellationToken);
             return NoContent();
         }
+        [Authorize(Roles = AppRoles.Freelancer)]
+        [HttpGet("assigned-to-me")]
+        public async Task<IActionResult> GetAssignedProjects(
+    CancellationToken cancellationToken)
+        {
+            var freelancerIdValue = User.FindFirstValue(
+                ClaimTypes.NameIdentifier
+            );
+
+            if (!Guid.TryParse(
+                freelancerIdValue,
+                out var freelancerId))
+            {
+                return Unauthorized();
+            }
+
+            var projects = await dbContext.Projects
+                .AsNoTracking()
+                .Where(project =>
+                    project.FreelancerId == freelancerId)
+                .OrderByDescending(project =>
+                    project.CreatedAt)
+                .Select(project =>
+                    new AssignedProjectResponse
+                    {
+                        Id = project.Id,
+
+                        ClientId = project.ClientId!.Value,
+
+                        ClientFullName =
+                            project.Client == null
+                                ? string.Empty
+                                : project.Client.FullName,
+
+                        Title = project.Title,
+
+                        Description = project.Description,
+
+                        Budget = project.Budget,
+
+                        AllocatedAmount =
+                            project.Milestones
+                                .Sum(milestone =>
+                                    (decimal?)milestone.Amount)
+                            ?? 0m,
+
+                        MilestoneCount =
+                            project.Milestones.Count,
+
+                        Deadline = project.Deadline,
+
+                        Status = project.Status,
+
+                        CreatedAt = project.CreatedAt
+                    })
+                .ToListAsync(cancellationToken);
+
+            return Ok(projects);
+        }
+        [Authorize]
+        [HttpGet("{id:guid}/workspace")]
+        public async Task<IActionResult> GetProjectWorkspace(
+    Guid id,
+    CancellationToken cancellationToken)
+        {
+            var userIdValue = User.FindFirstValue(
+                ClaimTypes.NameIdentifier
+            );
+
+            if (!Guid.TryParse(userIdValue, out var userId))
+            {
+                return Unauthorized();
+            }
+
+            var project = await dbContext.Projects
+                .AsNoTracking()
+                .Where(project =>
+                    project.Id == id &&
+                    (
+                        project.ClientId == userId ||
+                        project.FreelancerId == userId
+                    ))
+                .Select(project =>
+                    new ProjectWorkspaceResponse
+                    {
+                        Id = project.Id,
+
+                        ClientId = project.ClientId,
+
+                        ClientFullName =
+                            project.Client == null
+                                ? string.Empty
+                                : project.Client.FullName,
+
+                        FreelancerId =
+                            project.FreelancerId,
+
+                        FreelancerFullName =
+                            project.Freelancer == null
+                                ? null
+                                : project.Freelancer.FullName,
+
+                        Title = project.Title,
+
+                        Description = project.Description,
+
+                        Budget = project.Budget,
+
+                        Deadline = project.Deadline,
+
+                        Status = project.Status,
+
+                        CreatedAt = project.CreatedAt,
+
+                        Milestones = project.Milestones
+                            .OrderBy(milestone =>
+                                milestone.SequenceNumber)
+                            .Select(milestone =>
+                                new MilestoneResponse
+                                {
+                                    Id = milestone.Id,
+                                    ProjectId =
+                                        milestone.ProjectId,
+                                    Title = milestone.Title,
+                                    Description =
+                                        milestone.Description,
+                                    Amount = milestone.Amount,
+                                    SequenceNumber =
+                                        milestone.SequenceNumber,
+                                    Deadline =
+                                        milestone.Deadline,
+                                    Status =
+                                        milestone.Status
+                                })
+                            .ToList()
+                    })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (project is null)
+            {
+                return NotFound(new
+                {
+                    message = "Project workspace not found."
+                });
+            }
+
+            return Ok(project);
+        }
     }
 }
