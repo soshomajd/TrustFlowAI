@@ -8,11 +8,12 @@ using TrustFlow.Api.Options;
 
 namespace TrustFlow.Api.Services.Auth;
 
-public class JwtTokenService(
+public sealed class JwtTokenService(
     IOptions<JwtSettings> options
 ) : IJwtTokenService
 {
-    private readonly JwtSettings _settings = options.Value;
+    private readonly JwtSettings _settings =
+        options.Value;
 
     public JwtTokenResult CreateToken(
         ApplicationUser user,
@@ -50,32 +51,48 @@ public class JwtTokenService(
             )
         };
 
-        foreach (var role in roles)
+        var distinctRoles = roles
+            .Where(role =>
+                !string.IsNullOrWhiteSpace(role))
+            .Distinct(
+                StringComparer.OrdinalIgnoreCase
+            );
+
+        foreach (var role in distinctRoles)
         {
             claims.Add(
-                new Claim(ClaimTypes.Role, role)
+                new Claim(
+                    ClaimTypes.Role,
+                    role
+                )
             );
         }
 
-        var securityKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(_settings.Key)
-        );
+        var securityKey =
+            new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(
+                    _settings.Key
+                )
+            );
 
-        var signingCredentials = new SigningCredentials(
-            securityKey,
-            SecurityAlgorithms.HmacSha256
-        );
+        var signingCredentials =
+            new SigningCredentials(
+                securityKey,
+                SecurityAlgorithms.HmacSha256
+            );
 
         var token = new JwtSecurityToken(
             issuer: _settings.Issuer,
             audience: _settings.Audience,
             claims: claims,
+            notBefore: DateTime.UtcNow,
             expires: expiresAtUtc,
             signingCredentials: signingCredentials
         );
 
-        var accessToken = new JwtSecurityTokenHandler()
-            .WriteToken(token);
+        var accessToken =
+            new JwtSecurityTokenHandler()
+                .WriteToken(token);
 
         return new JwtTokenResult(
             accessToken,

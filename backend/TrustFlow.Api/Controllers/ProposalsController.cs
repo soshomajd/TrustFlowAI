@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using TrustFlow.Api.Constants;
 using TrustFlow.Api.Data;
+using TrustFlow.Api.Dtos.Common;
 using TrustFlow.Api.Dtos.Proposals;
 using TrustFlow.Api.Models;
 using TrustFlow.Api.Models.Enums;
@@ -59,9 +60,9 @@ public class ProposalsController(AppDbContext dbContext)
     [Authorize(Roles = AppRoles.Freelancer)]
     [HttpPost]
     public async Task<IActionResult> CreateProposal(
-    Guid projectId,
-    CreateProposalRequest request,
-    CancellationToken cancellationToken)
+     Guid projectId,
+     CreateProposalRequest request,
+     CancellationToken cancellationToken)
     {
         var freelancerIdValue = User.FindFirstValue(
             ClaimTypes.NameIdentifier
@@ -74,92 +75,160 @@ public class ProposalsController(AppDbContext dbContext)
             return Unauthorized();
         }
 
-        var projectExists = await dbContext.Projects
-            .AsNoTracking()
-            .AnyAsync(
-                project => project.Id == projectId,
-                cancellationToken
-            );
+        const int maxAttempts = 3;
 
-        if (!projectExists)
+        for (var attempt = 1;
+             attempt <= maxAttempts;
+             attempt++)
         {
-            return NotFound(new
+            try
             {
-                message = "Project not found."
-            });
-        }
+                await using var transaction =
+                    await dbContext.Database.BeginTransactionAsync(
+                        System.Data.IsolationLevel.Serializable,
+                        cancellationToken
+                    );
 
-        var proposalExists = await dbContext.Proposals
-            .AsNoTracking()
-            .AnyAsync(
-                proposal =>
-                    proposal.ProjectId == projectId &&
-                    proposal.FreelancerId == freelancerId,
-                cancellationToken
-            );
+                var project = await dbContext.Projects
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        project =>
+                            project.Id == projectId,
+                        cancellationToken
+                    );
 
-        if (proposalExists)
-        {
-            return Conflict(new
+                if (project is null)
+                {
+                    return NotFound(new
+                    {
+                        message = "Project not found."
+                    });
+                }
+
+                if (project.Status != ProjectStatus.Open)
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "Proposals can only be submitted for open projects.",
+                        currentProjectStatus = project.Status
+                    });
+                }
+
+                var proposalExists = await dbContext.Proposals
+                    .AsNoTracking()
+                    .AnyAsync(
+                        proposal =>
+                            proposal.ProjectId == projectId &&
+                            proposal.FreelancerId ==
+                                freelancerId,
+                        cancellationToken
+                    );
+
+                if (proposalExists)
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "You have already submitted a proposal for this project."
+                    });
+                }
+
+                var proposal = new Proposal
+                {
+                    ProjectId = projectId,
+                    FreelancerId = freelancerId,
+                    CoverLetter =
+                        request.CoverLetter.Trim(),
+                    BidAmount = request.BidAmount,
+                    EstimatedDays =
+                        request.EstimatedDays,
+                    Status = ProposalStatus.Pending,
+                    CreatedAt =
+                        DateTimeOffset.UtcNow
+                };
+
+                dbContext.Proposals.Add(proposal);
+
+                await dbContext.SaveChangesAsync(
+                    cancellationToken
+                );
+
+                await transaction.CommitAsync(
+                    cancellationToken
+                );
+
+                var response = new ProposalResponse
+                {
+                    Id = proposal.Id,
+                    ProjectId = proposal.ProjectId,
+                    FreelancerId =
+                        proposal.FreelancerId,
+                    CoverLetter =
+                        proposal.CoverLetter,
+                    BidAmount = proposal.BidAmount,
+                    EstimatedDays =
+                        proposal.EstimatedDays,
+                    Status = proposal.Status,
+                    CreatedAt = proposal.CreatedAt
+                };
+
+                return Created(
+                    $"/api/projects/{projectId}/proposals/{proposal.Id}",
+                    response
+                );
+            }
+            catch (Exception exception)
+                when (
+                    IsSerializationFailure(exception) &&
+                    attempt < maxAttempts
+                )
             {
-                message =
-                    "You have already submitted a proposal for this project."
-            });
-        }
+                dbContext.ChangeTracker.Clear();
 
-        var proposal = new Proposal
-        {
-            ProjectId = projectId,
-            FreelancerId = freelancerId,
-            CoverLetter = request.CoverLetter.Trim(),
-            BidAmount = request.BidAmount,
-            EstimatedDays = request.EstimatedDays,
-            Status = ProposalStatus.Pending,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-
-        dbContext.Proposals.Add(proposal);
-
-        try
-        {
-            await dbContext.SaveChangesAsync(
-                cancellationToken
-            );
-        }
-        catch (Exception exception)
-            when (IsUniqueViolation(exception))
-        {
-            dbContext.ChangeTracker.Clear();
-
-            return Conflict(new
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(
+                        50 * attempt
+                    ),
+                    cancellationToken
+                );
+            }
+            catch (Exception exception)
+                when (IsSerializationFailure(exception))
             {
-                message =
-                    "You have already submitted a proposal for this project."
-            });
+                dbContext.ChangeTracker.Clear();
+
+                return Conflict(new
+                {
+                    message =
+                        "The project was changed by another request. Please try again."
+                });
+            }
+            catch (Exception exception)
+                when (IsUniqueViolation(exception))
+            {
+                dbContext.ChangeTracker.Clear();
+
+                return Conflict(new
+                {
+                    message =
+                        "You have already submitted a proposal for this project."
+                });
+            }
         }
 
-        var response = new ProposalResponse
+        return Conflict(new
         {
-            Id = proposal.Id,
-            ProjectId = proposal.ProjectId,
-            FreelancerId = proposal.FreelancerId,
-            CoverLetter = proposal.CoverLetter,
-            BidAmount = proposal.BidAmount,
-            EstimatedDays = proposal.EstimatedDays,
-            Status = proposal.Status,
-            CreatedAt = proposal.CreatedAt
-        };
-
-        return Created(
-            $"/api/projects/{projectId}/proposals/{proposal.Id}",
-            response
-        );
+            message =
+                "The proposal could not be submitted due to concurrent requests."
+        });
     }
     [Authorize(Roles = AppRoles.Client)]
     [HttpGet]
     public async Task<IActionResult> GetProjectProposals(
-    Guid projectId,
-    CancellationToken cancellationToken)
+     Guid projectId,
+     [FromQuery] PaginationRequest pagination,
+     CancellationToken cancellationToken)
     {
         var clientIdValue = User.FindFirstValue(
             ClaimTypes.NameIdentifier
@@ -187,12 +256,23 @@ public class ProposalsController(AppDbContext dbContext)
             });
         }
 
-        var proposals = await dbContext.Proposals
+        var query = dbContext.Proposals
             .AsNoTracking()
             .Where(proposal =>
-                proposal.ProjectId == projectId)
+                proposal.ProjectId == projectId);
+
+        var totalItems = await query.CountAsync(
+            cancellationToken
+        );
+
+        var items = await query
             .OrderByDescending(proposal =>
                 proposal.CreatedAt)
+            .Skip(
+                (pagination.Page - 1) *
+                pagination.PageSize
+            )
+            .Take(pagination.PageSize)
             .Select(proposal =>
                 new ProposalForClientResponse
                 {
@@ -211,12 +291,34 @@ public class ProposalsController(AppDbContext dbContext)
                 })
             .ToListAsync(cancellationToken);
 
-        return Ok(proposals);
+        var totalPages = (int)Math.Ceiling(
+            totalItems /
+            (double)pagination.PageSize
+        );
+
+        var response =
+            new PagedResponse<ProposalForClientResponse>
+            {
+                Items = items,
+                Page = pagination.Page,
+                PageSize = pagination.PageSize,
+                TotalItems = totalItems,
+                TotalPages = totalPages,
+
+                HasPreviousPage =
+                    pagination.Page > 1,
+
+                HasNextPage =
+                    pagination.Page < totalPages
+            };
+
+        return Ok(response);
     }
     [Authorize(Roles = AppRoles.Freelancer)]
     [HttpGet("~/api/proposals/mine")]
     public async Task<IActionResult> GetMyProposals(
-    CancellationToken cancellationToken)
+      [FromQuery] PaginationRequest pagination,
+      CancellationToken cancellationToken)
     {
         var freelancerIdValue = User.FindFirstValue(
             ClaimTypes.NameIdentifier
@@ -229,33 +331,62 @@ public class ProposalsController(AppDbContext dbContext)
             return Unauthorized();
         }
 
-        var proposals = await dbContext.Proposals
+        var query = dbContext.Proposals
             .AsNoTracking()
             .Where(proposal =>
-                proposal.FreelancerId == freelancerId)
+                proposal.FreelancerId == freelancerId);
+
+        var totalItems = await query.CountAsync(
+            cancellationToken
+        );
+
+        var items = await query
             .OrderByDescending(proposal =>
                 proposal.CreatedAt)
-            .Select(proposal => new MyProposalResponse
-            {
-                Id = proposal.Id,
+            .Skip(
+                (pagination.Page - 1) *
+                pagination.PageSize
+            )
+            .Take(pagination.PageSize)
+            .Select(proposal =>
+                new MyProposalResponse
+                {
+                    Id = proposal.Id,
+                    ProjectId = proposal.ProjectId,
 
-                ProjectId = proposal.ProjectId,
+                    ProjectTitle =
+                        proposal.Project.Title,
 
-                ProjectTitle = proposal.Project.Title,
-
-                CoverLetter = proposal.CoverLetter,
-
-                BidAmount = proposal.BidAmount,
-
-                EstimatedDays = proposal.EstimatedDays,
-
-                Status = proposal.Status,
-
-                CreatedAt = proposal.CreatedAt
-            })
+                    CoverLetter = proposal.CoverLetter,
+                    BidAmount = proposal.BidAmount,
+                    EstimatedDays = proposal.EstimatedDays,
+                    Status = proposal.Status,
+                    CreatedAt = proposal.CreatedAt
+                })
             .ToListAsync(cancellationToken);
 
-        return Ok(proposals);
+        var totalPages = (int)Math.Ceiling(
+            totalItems /
+            (double)pagination.PageSize
+        );
+
+        var response =
+            new PagedResponse<MyProposalResponse>
+            {
+                Items = items,
+                Page = pagination.Page,
+                PageSize = pagination.PageSize,
+                TotalItems = totalItems,
+                TotalPages = totalPages,
+
+                HasPreviousPage =
+                    pagination.Page > 1,
+
+                HasNextPage =
+                    pagination.Page < totalPages
+            };
+
+        return Ok(response);
     }
     [Authorize(Roles = AppRoles.Freelancer)]
     [HttpPatch("~/api/proposals/{proposalId:guid}/withdraw")]

@@ -10,6 +10,9 @@ using TrustFlow.Api.Constants;
 using System.Data;
 using Npgsql;
 using TrustFlow.Api.Dtos.Milestones;
+using TrustFlow.Api.Models.Enums;
+using TrustFlow.Api.Dtos.Common;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace TrustFlow.Api.Controllers
 {
@@ -65,71 +68,222 @@ namespace TrustFlow.Api.Controllers
             return Created($"/api/projects/{project.Id}", project);
         }
 
+
+        [EnableRateLimiting(RateLimitPolicies.PublicMarketplace)]
         [HttpGet]
         public async Task<IActionResult> GetProjects(
-     CancellationToken cancellationToken)
+       [FromQuery] ProjectMarketplaceQuery request,
+       CancellationToken cancellationToken)
         {
-            var projects = await dbContext.Projects
+            var query = dbContext.Projects
                 .AsNoTracking()
-                .OrderByDescending(project => project.CreatedAt)
-                .Select(project => new ProjectSummaryResponse
-                {
-                    Id = project.Id,
-                    Title = project.Title,
-                    Description = project.Description,
-                    Budget = project.Budget,
+                .Where(project =>
+                    project.Status == ProjectStatus.Open);
 
-                    AllocatedAmount = project.Milestones
-                        .Sum(milestone => (decimal?)milestone.Amount) ?? 0m,
+            if (!string.IsNullOrWhiteSpace(request.Search))
+            {
+                var searchTerm = request.Search.Trim();
 
-                    MilestoneCount = project.Milestones.Count,
+                query = query.Where(project =>
+                    EF.Functions.ILike(
+                        project.Title,
+                        $"%{searchTerm}%"
+                    ) ||
+                    EF.Functions.ILike(
+                        project.Description,
+                        $"%{searchTerm}%"
+                    )
+                );
+            }
 
-                    Deadline = project.Deadline,
-                    CreatedAt = project.CreatedAt
-                })
+            if (request.MinBudget.HasValue)
+            {
+                query = query.Where(project =>
+                    project.Budget >=
+                    request.MinBudget.Value
+                );
+            }
+
+            if (request.MaxBudget.HasValue)
+            {
+                query = query.Where(project =>
+                    project.Budget <=
+                    request.MaxBudget.Value
+                );
+            }
+
+            if (request.DeadlineBefore.HasValue)
+            {
+                var deadlineBeforeUtc =
+                    request.DeadlineBefore.Value
+                        .ToUniversalTime();
+
+                query = query.Where(project =>
+                    project.Deadline <= deadlineBeforeUtc
+                );
+            }
+
+            var totalItems = await query.CountAsync(
+                cancellationToken
+            );
+
+            query = request.SortBy switch
+            {
+                ProjectSortOption.Oldest =>
+                    query
+                        .OrderBy(project =>
+                            project.CreatedAt)
+                        .ThenBy(project =>
+                            project.Id),
+
+                ProjectSortOption.BudgetLowToHigh =>
+                    query
+                        .OrderBy(project =>
+                            project.Budget)
+                        .ThenByDescending(project =>
+                            project.CreatedAt),
+
+                ProjectSortOption.BudgetHighToLow =>
+                    query
+                        .OrderByDescending(project =>
+                            project.Budget)
+                        .ThenByDescending(project =>
+                            project.CreatedAt),
+
+                ProjectSortOption.DeadlineSoonest =>
+                    query
+                        .OrderBy(project =>
+                            project.Deadline)
+                        .ThenByDescending(project =>
+                            project.CreatedAt),
+
+                ProjectSortOption.DeadlineLatest =>
+                    query
+                        .OrderByDescending(project =>
+                            project.Deadline)
+                        .ThenByDescending(project =>
+                            project.CreatedAt),
+
+                _ =>
+                    query
+                        .OrderByDescending(project =>
+                            project.CreatedAt)
+                        .ThenByDescending(project =>
+                            project.Id)
+            };
+
+            var items = await query
+                .Skip(
+                    (request.Page - 1) *
+                    request.PageSize
+                )
+                .Take(request.PageSize)
+                .Select(project =>
+                    new ProjectSummaryResponse
+                    {
+                        Id = project.Id,
+                        Title = project.Title,
+                        Description = project.Description,
+                        Budget = project.Budget,
+
+                        AllocatedAmount =
+                            project.Milestones
+                                .Sum(milestone =>
+                                    (decimal?)milestone.Amount)
+                            ?? 0m,
+
+                        MilestoneCount =
+                            project.Milestones.Count,
+
+                        Deadline = project.Deadline,
+                        CreatedAt = project.CreatedAt,
+                        Status = project.Status
+                    })
                 .ToListAsync(cancellationToken);
 
-            return Ok(projects);
+            var totalPages = (int)Math.Ceiling(
+                totalItems /
+                (double)request.PageSize
+            );
+
+            var response =
+                new PagedResponse<ProjectSummaryResponse>
+                {
+                    Items = items,
+                    Page = request.Page,
+                    PageSize = request.PageSize,
+                    TotalItems = totalItems,
+                    TotalPages = totalPages,
+                    HasPreviousPage = request.Page > 1,
+                    HasNextPage = request.Page < totalPages
+                };
+
+            return Ok(response);
         }
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetProjectById(
-       Guid id,
-       CancellationToken cancellationToken)
+             Guid id,
+            CancellationToken cancellationToken)
         {
             var project = await dbContext.Projects
                 .AsNoTracking()
-                .Where(project => project.Id == id)
-                .Select(project => new ProjectDetailsResponse
-                {
-                    Id = project.Id,
-                    Title = project.Title,
-                    Description = project.Description,
-                    Budget = project.Budget,
-                    Deadline = project.Deadline,
-                    CreatedAt = project.CreatedAt,
+                .Where(project =>
+                    project.Id == id &&
+                    project.Status == ProjectStatus.Open)
+                .Select(project =>
+                    new PublicProjectDetailsResponse
+                    {
+                        Id = project.Id,
 
-                    Milestones = project.Milestones
-                        .OrderBy(milestone => milestone.SequenceNumber)
-                        .Select(milestone => new MilestoneResponse
-                        {
-                            Id = milestone.Id,
-                            ProjectId = milestone.ProjectId,
-                            Title = milestone.Title,
-                            Description = milestone.Description,
-                            Amount = milestone.Amount,
-                            SequenceNumber = milestone.SequenceNumber,
-                            Deadline = milestone.Deadline,
-                            Status = milestone.Status
-                        })
-                        .ToList()
-                })
+                        Title = project.Title,
+
+                        Description = project.Description,
+
+                        Budget = project.Budget,
+
+                        AllocatedAmount =
+                            project.Milestones
+                                .Sum(milestone =>
+                                    (decimal?)milestone.Amount)
+                            ?? 0m,
+
+                        Deadline = project.Deadline,
+
+                        CreatedAt = project.CreatedAt,
+
+                        Status = project.Status,
+
+                        Milestones = project.Milestones
+                            .OrderBy(milestone =>
+                                milestone.SequenceNumber)
+                            .Select(milestone =>
+                                new PublicMilestoneResponse
+                                {
+                                    Id = milestone.Id,
+
+                                    Title = milestone.Title,
+
+                                    Description =
+                                        milestone.Description,
+
+                                    Amount = milestone.Amount,
+
+                                    SequenceNumber =
+                                        milestone.SequenceNumber,
+
+                                    Deadline =
+                                        milestone.Deadline
+                                })
+                            .ToList()
+                    })
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (project is null)
             {
                 return NotFound(new
                 {
-                    message = "Project not found."
+                    message =
+                        "Open project not found."
                 });
             }
 
@@ -176,6 +330,15 @@ namespace TrustFlow.Api.Controllers
                         return NotFound(new
                         {
                             message = "Project not found."
+                        });
+                    }
+                    if (project.Status != ProjectStatus.Open)
+                    {
+                        return Conflict(new
+                        {
+                            message =
+                                "Only an open project can be updated.",
+                            currentProjectStatus = project.Status
                         });
                     }
 
@@ -270,35 +433,112 @@ namespace TrustFlow.Api.Controllers
             });
         }
 
-        [HttpDelete("{id:guid}")]
         [Authorize(Roles = AppRoles.Client)]
-
-        public async Task<IActionResult> DeleteProject(Guid id, CancellationToken cancellationToken)
+        [HttpDelete("{id:guid}")]
+        public async Task<IActionResult> DeleteProject(
+     Guid id,
+     CancellationToken cancellationToken)
         {
-            var ClientValueId = User.FindFirstValue(
+            var clientIdValue = User.FindFirstValue(
                 ClaimTypes.NameIdentifier
             );
-            if (!Guid.TryParse(ClientValueId, out var clientId))
+
+            if (!Guid.TryParse(clientIdValue, out var clientId))
             {
                 return Unauthorized();
             }
-            var project = await dbContext.Projects.FirstOrDefaultAsync(project => project.Id == id && project.ClientId == clientId, cancellationToken);
-            if (project is null)
+
+            const int maxAttempts = 3;
+
+            for (var attempt = 1;
+                 attempt <= maxAttempts;
+                 attempt++)
             {
-                return NotFound(new
+                try
                 {
-                    message = "Project not found."
-                });
+                    await using var transaction =
+                        await dbContext.Database.BeginTransactionAsync(
+                            System.Data.IsolationLevel.Serializable,
+                            cancellationToken
+                        );
+
+                    var project = await dbContext.Projects
+                        .FirstOrDefaultAsync(
+                            project =>
+                                project.Id == id &&
+                                project.ClientId == clientId,
+                            cancellationToken
+                        );
+
+                    if (project is null)
+                    {
+                        return NotFound(new
+                        {
+                            message = "Project not found."
+                        });
+                    }
+
+                    if (project.Status != ProjectStatus.Open)
+                    {
+                        return Conflict(new
+                        {
+                            message =
+                                "Only an open project can be deleted.",
+                            currentProjectStatus = project.Status
+                        });
+                    }
+
+                    dbContext.Projects.Remove(project);
+
+                    await dbContext.SaveChangesAsync(
+                        cancellationToken
+                    );
+
+                    await transaction.CommitAsync(
+                        cancellationToken
+                    );
+
+                    return NoContent();
+                }
+                catch (Exception exception)
+                    when (
+                        IsSerializationFailure(exception) &&
+                        attempt < maxAttempts
+                    )
+                {
+                    dbContext.ChangeTracker.Clear();
+
+                    await Task.Delay(
+                        TimeSpan.FromMilliseconds(
+                            50 * attempt
+                        ),
+                        cancellationToken
+                    );
+                }
+                catch (Exception exception)
+                    when (IsSerializationFailure(exception))
+                {
+                    dbContext.ChangeTracker.Clear();
+
+                    return Conflict(new
+                    {
+                        message =
+                            "Another request changed this project. Please try again."
+                    });
+                }
             }
 
-            dbContext.Projects.Remove(project);
-            await dbContext.SaveChangesAsync(cancellationToken);
-            return NoContent();
+            return Conflict(new
+            {
+                message =
+                    "The project could not be deleted due to concurrent requests."
+            });
         }
         [Authorize(Roles = AppRoles.Freelancer)]
         [HttpGet("assigned-to-me")]
         public async Task<IActionResult> GetAssignedProjects(
-    CancellationToken cancellationToken)
+       [FromQuery] PaginationRequest pagination,
+       CancellationToken cancellationToken)
         {
             var freelancerIdValue = User.FindFirstValue(
                 ClaimTypes.NameIdentifier
@@ -311,12 +551,23 @@ namespace TrustFlow.Api.Controllers
                 return Unauthorized();
             }
 
-            var projects = await dbContext.Projects
+            var query = dbContext.Projects
                 .AsNoTracking()
                 .Where(project =>
-                    project.FreelancerId == freelancerId)
+                    project.FreelancerId == freelancerId);
+
+            var totalItems = await query.CountAsync(
+                cancellationToken
+            );
+
+            var items = await query
                 .OrderByDescending(project =>
                     project.CreatedAt)
+                .Skip(
+                    (pagination.Page - 1) *
+                    pagination.PageSize
+                )
+                .Take(pagination.PageSize)
                 .Select(project =>
                     new AssignedProjectResponse
                     {
@@ -352,7 +603,32 @@ namespace TrustFlow.Api.Controllers
                     })
                 .ToListAsync(cancellationToken);
 
-            return Ok(projects);
+            var totalPages = (int)Math.Ceiling(
+                totalItems /
+                (double)pagination.PageSize
+            );
+
+            var response =
+                new PagedResponse<AssignedProjectResponse>
+                {
+                    Items = items,
+
+                    Page = pagination.Page,
+
+                    PageSize = pagination.PageSize,
+
+                    TotalItems = totalItems,
+
+                    TotalPages = totalPages,
+
+                    HasPreviousPage =
+                        pagination.Page > 1,
+
+                    HasNextPage =
+                        pagination.Page < totalPages
+                };
+
+            return Ok(response);
         }
         [Authorize]
         [HttpGet("{id:guid}/workspace")]
@@ -442,6 +718,129 @@ namespace TrustFlow.Api.Controllers
             }
 
             return Ok(project);
+        }
+        [Authorize(Roles = AppRoles.Client)]
+        [HttpGet("mine")]
+        public async Task<IActionResult> GetMyProjects(
+    [FromQuery] PaginationRequest pagination,
+    [FromQuery] ProjectStatus? status,
+    CancellationToken cancellationToken)
+        {
+            var clientIdValue = User.FindFirstValue(
+                ClaimTypes.NameIdentifier
+            );
+
+            if (!Guid.TryParse(
+                clientIdValue,
+                out var clientId))
+            {
+                return Unauthorized();
+            }
+
+            var query = dbContext.Projects
+                .AsNoTracking()
+                .Where(project =>
+                    project.ClientId == clientId);
+
+            if (status.HasValue)
+            {
+                query = query.Where(project =>
+                    project.Status == status.Value);
+            }
+
+            var totalItems = await query.CountAsync(
+                cancellationToken
+            );
+
+            var items = await query
+                .OrderByDescending(project =>
+                    project.CreatedAt)
+                .ThenByDescending(project =>
+                    project.Id)
+                .Skip(
+                    (pagination.Page - 1) *
+                    pagination.PageSize
+                )
+                .Take(pagination.PageSize)
+                .Select(project =>
+                    new ClientProjectResponse
+                    {
+                        Id = project.Id,
+
+                        FreelancerId =
+                            project.FreelancerId,
+
+                        FreelancerFullName =
+                            project.Freelancer == null
+                                ? null
+                                : project.Freelancer.FullName,
+
+                        Title = project.Title,
+
+                        Description = project.Description,
+
+                        Budget = project.Budget,
+
+                        AllocatedAmount =
+                            project.Milestones
+                                .Sum(milestone =>
+                                    (decimal?)milestone.Amount)
+                            ?? 0m,
+
+                        MilestoneCount =
+                            project.Milestones.Count,
+
+                        ApprovedMilestoneCount =
+                            project.Milestones.Count(
+                                milestone =>
+                                    milestone.Status ==
+                                    MileStoneStatus.Approved
+                            ),
+
+                        ProposalCount =
+                            project.Proposals.Count,
+
+                        PendingProposalCount =
+                            project.Proposals.Count(
+                                proposal =>
+                                    proposal.Status ==
+                                    ProposalStatus.Pending
+                            ),
+
+                        Deadline = project.Deadline,
+
+                        Status = project.Status,
+
+                        CreatedAt = project.CreatedAt
+                    })
+                .ToListAsync(cancellationToken);
+
+            var totalPages = (int)Math.Ceiling(
+                totalItems /
+                (double)pagination.PageSize
+            );
+
+            var response =
+                new PagedResponse<ClientProjectResponse>
+                {
+                    Items = items,
+
+                    Page = pagination.Page,
+
+                    PageSize = pagination.PageSize,
+
+                    TotalItems = totalItems,
+
+                    TotalPages = totalPages,
+
+                    HasPreviousPage =
+                        pagination.Page > 1,
+
+                    HasNextPage =
+                        pagination.Page < totalPages
+                };
+
+            return Ok(response);
         }
     }
 }

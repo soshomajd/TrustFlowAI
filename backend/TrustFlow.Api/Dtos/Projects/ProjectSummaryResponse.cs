@@ -1,3 +1,5 @@
+using TrustFlow.Api.Models.Enums;
+using TrustFlow.Api.Validation;
 namespace TrustFlow.Api.Dtos.Projects;
 
 public class ProjectSummaryResponse
@@ -10,4 +12,6 @@ public class ProjectSummaryResponse
     public int MilestoneCount { get; set; }
     public DateTimeOffset Deadline { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+    public ProjectStatus Status { get; set; }
+
 }

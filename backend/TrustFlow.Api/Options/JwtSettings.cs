@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace TrustFlow.Api.Options
 {
@@ -16,5 +12,6 @@ namespace TrustFlow.Api.Options
         public string Key { get; set; } = string.Empty;
 
         public int ExpirationMinutes { get; set; } = 60;
+        public int RefreshTokenExpirationDays { get; set; }
     }
 }

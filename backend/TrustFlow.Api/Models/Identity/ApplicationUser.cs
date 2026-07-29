@@ -11,5 +11,6 @@ public class ApplicationUser : IdentityUser<Guid>
     public ICollection<Project> ClientProjects { get; set; } = [];
     public ICollection<Proposal> FreelancerProposals { get; set; } = [];
     public ICollection<Project> FreelancerProjects { get; set; } = [];
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
 
 }

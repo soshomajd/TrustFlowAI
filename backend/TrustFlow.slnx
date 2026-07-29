@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="TrustFlow.Api.IntegrationTests/TrustFlow.Api.IntegrationTests.csproj" />
+  <Project Path="TrustFlow.Api/TrustFlow.Api.csproj" />
+</Solution>

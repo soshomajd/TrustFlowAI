@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TrustFlow.Api.Data;
@@ -11,9 +12,11 @@ using TrustFlow.Api.Data;
 namespace TrustFlow.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260729111048_AddQueryPerformanceIndexes")]
+    partial class AddQueryPerformanceIndexes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -223,53 +226,6 @@ namespace TrustFlow.Api.Migrations
                         .HasDatabaseName("UserNameIndex");
 
                     b.ToTable("AspNetUsers", (string)null);
-                });
-
-            modelBuilder.Entity("TrustFlow.Api.Models.Identity.RefreshToken", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("FamilyId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ReplacedByTokenHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<DateTimeOffset?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("TokenHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ExpiresAt")
-                        .HasDatabaseName("IX_RefreshTokens_ExpiresAt");
-
-                    b.HasIndex("TokenHash")
-                        .IsUnique();
-
-                    b.HasIndex("UserId", "FamilyId")
-                        .HasDatabaseName("IX_RefreshTokens_UserId_FamilyId");
-
-                    b.ToTable("RefreshTokens", t =>
-                        {
-                            t.HasCheckConstraint("CK_RefreshTokens_Expiration", "\"ExpiresAt\" > \"CreatedAt\"");
-                        });
                 });
 
             modelBuilder.Entity("TrustFlow.Api.Models.MileStone", b =>
@@ -494,17 +450,6 @@ namespace TrustFlow.Api.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("TrustFlow.Api.Models.Identity.RefreshToken", b =>
-                {
-                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", "User")
-                        .WithMany("RefreshTokens")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("TrustFlow.Api.Models.MileStone", b =>
                 {
                     b.HasOne("TrustFlow.Api.Models.Project", "Project")
@@ -559,8 +504,6 @@ namespace TrustFlow.Api.Migrations
                     b.Navigation("FreelancerProjects");
 
                     b.Navigation("FreelancerProposals");
-
-                    b.Navigation("RefreshTokens");
                 });
 
             modelBuilder.Entity("TrustFlow.Api.Models.Project", b =>

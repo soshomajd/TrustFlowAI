@@ -237,29 +237,51 @@ public class MilestonesController(AppDbContext dbContext)
     }
 
 
+    [Authorize]
     [HttpGet("{milestoneId:guid}")]
     public async Task<IActionResult> GetMilestoneById(
-    Guid projectId,
-    Guid milestoneId,
-    CancellationToken cancellationToken)
+      Guid projectId,
+      Guid milestoneId,
+      CancellationToken cancellationToken)
     {
+        var userIdValue = User.FindFirstValue(
+            ClaimTypes.NameIdentifier
+        );
+
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return Unauthorized();
+        }
+
         var milestone = await dbContext.Milestones
-     .AsNoTracking()
-     .Where(milestone =>
-         milestone.Id == milestoneId &&
-         milestone.ProjectId == projectId)
-     .Select(milestone => new MilestoneResponse
-     {
-         Id = milestone.Id,
-         ProjectId = milestone.ProjectId,
-         Title = milestone.Title,
-         Description = milestone.Description,
-         Amount = milestone.Amount,
-         SequenceNumber = milestone.SequenceNumber,
-         Deadline = milestone.Deadline,
-         Status = milestone.Status
-     })
-     .FirstOrDefaultAsync(cancellationToken);
+            .AsNoTracking()
+            .Where(milestone =>
+                milestone.Id == milestoneId &&
+                milestone.ProjectId == projectId &&
+                (
+                    milestone.Project.ClientId == userId ||
+                    milestone.Project.FreelancerId == userId
+                ))
+            .Select(milestone => new MilestoneResponse
+            {
+                Id = milestone.Id,
+
+                ProjectId = milestone.ProjectId,
+
+                Title = milestone.Title,
+
+                Description = milestone.Description,
+
+                Amount = milestone.Amount,
+
+                SequenceNumber =
+                    milestone.SequenceNumber,
+
+                Deadline = milestone.Deadline,
+
+                Status = milestone.Status
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (milestone is null)
         {
@@ -537,9 +559,9 @@ public class MilestonesController(AppDbContext dbContext)
     [Authorize(Roles = AppRoles.Freelancer)]
     [HttpPatch("{milestoneId:guid}/start")]
     public async Task<IActionResult> StartMilestone(
-    Guid projectId,
-    Guid milestoneId,
-    CancellationToken cancellationToken)
+        Guid projectId,
+        Guid milestoneId,
+        CancellationToken cancellationToken)
     {
         var freelancerIdValue = User.FindFirstValue(
             ClaimTypes.NameIdentifier
@@ -561,6 +583,14 @@ public class MilestonesController(AppDbContext dbContext)
                 (
                     milestone.Status == MileStoneStatus.Pending ||
                     milestone.Status == MileStoneStatus.Rejected
+                ) &&
+                !dbContext.Milestones.Any(previousMilestone =>
+                    previousMilestone.ProjectId ==
+                        milestone.ProjectId &&
+                    previousMilestone.SequenceNumber <
+                        milestone.SequenceNumber &&
+                    previousMilestone.Status !=
+                        MileStoneStatus.Approved
                 ))
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(
@@ -579,7 +609,7 @@ public class MilestonesController(AppDbContext dbContext)
             });
         }
 
-        var milestoneStatus = await dbContext.Milestones
+        var milestoneInfo = await dbContext.Milestones
             .AsNoTracking()
             .Where(milestone =>
                 milestone.Id == milestoneId &&
@@ -588,11 +618,12 @@ public class MilestonesController(AppDbContext dbContext)
             .Select(milestone => new
             {
                 MilestoneStatus = milestone.Status,
-                ProjectStatus = milestone.Project.Status
+                ProjectStatus = milestone.Project.Status,
+                milestone.SequenceNumber
             })
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (milestoneStatus is null)
+        if (milestoneInfo is null)
         {
             return NotFound(new
             {
@@ -600,23 +631,69 @@ public class MilestonesController(AppDbContext dbContext)
             });
         }
 
-        if (milestoneStatus.ProjectStatus != ProjectStatus.InProgress)
+        if (milestoneInfo.ProjectStatus !=
+            ProjectStatus.InProgress)
         {
             return Conflict(new
             {
                 message =
                     "Milestones can only be started when the project is in progress.",
                 currentProjectStatus =
-                    milestoneStatus.ProjectStatus
+                    milestoneInfo.ProjectStatus
+            });
+        }
+
+        if (milestoneInfo.MilestoneStatus !=
+                MileStoneStatus.Pending &&
+            milestoneInfo.MilestoneStatus !=
+                MileStoneStatus.Rejected)
+        {
+            return Conflict(new
+            {
+                message =
+                    "Only a pending or rejected milestone can be started.",
+                currentStatus =
+                    milestoneInfo.MilestoneStatus
+            });
+        }
+
+        var blockingMilestone = await dbContext.Milestones
+            .AsNoTracking()
+            .Where(previousMilestone =>
+                previousMilestone.ProjectId == projectId &&
+                previousMilestone.SequenceNumber <
+                    milestoneInfo.SequenceNumber &&
+                previousMilestone.Status !=
+                    MileStoneStatus.Approved)
+            .OrderBy(previousMilestone =>
+                previousMilestone.SequenceNumber)
+            .Select(previousMilestone => new
+            {
+                previousMilestone.Id,
+                previousMilestone.SequenceNumber,
+                previousMilestone.Status
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (blockingMilestone is not null)
+        {
+            return Conflict(new
+            {
+                message =
+                    "Previous milestones must be approved before this milestone can be started.",
+                blockingMilestoneId =
+                    blockingMilestone.Id,
+                blockingSequenceNumber =
+                    blockingMilestone.SequenceNumber,
+                blockingStatus =
+                    blockingMilestone.Status
             });
         }
 
         return Conflict(new
         {
             message =
-                "Only a pending or rejected milestone can be started.",
-            currentStatus =
-                milestoneStatus.MilestoneStatus
+                "The milestone could not be started because its state changed."
         });
     }
     [Authorize(Roles = AppRoles.Freelancer)]
