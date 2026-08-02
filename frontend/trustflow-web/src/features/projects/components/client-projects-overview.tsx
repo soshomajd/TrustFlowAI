@@ -21,6 +21,12 @@ import type {
 import { getApiErrorMessage } from
     "@/lib/api/get-api-error-message";
 import { cn } from "@/lib/utils";
+import {
+    AnimatedSection,
+    StaggerContainer,
+    StaggerItem,
+} from
+    "@/components/motion/animation-primitives";
 
 export function ClientProjectsOverview() {
     const projectsQuery =
@@ -55,48 +61,53 @@ export function ClientProjectsOverview() {
     }
 
     return (
-        <section className="rounded-2xl border bg-card/70 backdrop-blur">
-            <header className="flex flex-col gap-4 border-b p-5 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <p className="text-sm font-semibold">
-                        Recent projects
-                    </p>
+        <AnimatedSection>
+            <section className="rounded-2xl border bg-card/70 backdrop-blur">
+                <header className="flex flex-col gap-4 border-b p-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p className="text-sm font-semibold">
+                            Recent projects
+                        </p>
 
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        {projectsQuery.data.totalItems}{" "}
-                        projects in total
-                    </p>
-                </div>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            {projectsQuery.data.totalItems}{" "}
+                            projects in total
+                        </p>
+                    </div>
 
-                <Button
-                    asChild
-                    variant="outline"
-                    size="sm"
-                >
-                    <Link href="/dashboard/client/projects">
-                        View all projects
-                        <ArrowRight className="size-4" />
-                    </Link>
-                </Button>
-            </header>
+                    <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                    >
+                        <Link href="/dashboard/client/projects">
+                            View all projects
+                            <ArrowRight className="size-4" />
+                        </Link>
+                    </Button>
+                </header>
 
-            <div className="divide-y">
-                {projects.map((project) => (
-                    <ProjectRow
-                        key={project.id}
-                        project={project}
-                    />
-                ))}
-            </div>
+                <StaggerContainer className="divide-y">
+                    {projects.map((project) => (
+                        <StaggerItem
+                            key={project.id}
+                        >
+                            <ProjectRow
+                                project={project}
+                            />
+                        </StaggerItem>
+                    ))}
+                </StaggerContainer>
 
-            {projectsQuery.isFetching && (
-                <div className="flex items-center gap-2 border-t px-5 py-3 text-xs text-muted-foreground">
-                    <LoaderCircle className="size-3.5 animate-spin" />
+                {projectsQuery.isFetching && (
+                    <div className="flex items-center gap-2 border-t px-5 py-3 text-xs text-muted-foreground">
+                        <LoaderCircle className="size-3.5 animate-spin" />
 
-                    Updating projects...
-                </div>
-            )}
-        </section>
+                        Updating projects...
+                    </div>
+                )}
+            </section>
+        </AnimatedSection>
     );
 }
 

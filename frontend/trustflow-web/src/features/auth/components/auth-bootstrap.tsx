@@ -13,12 +13,6 @@ export function AuthBootstrap() {
     );
 
     useEffect(() => {
-        /*
-         * "checking" ro ham ghabool mikonim
-         * ta agar Fast Refresh state ro rooye
-         * checking negah dasht, restore dobare
-         * shoroo beshe.
-         */
         if (
             status !== "idle" &&
             status !== "checking"

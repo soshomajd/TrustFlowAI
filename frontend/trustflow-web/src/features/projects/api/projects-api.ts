@@ -3,10 +3,13 @@ import "client-only";
 import type {
   ClientProject,
   GetClientProjectsParams,
+  CreateProjectRequest,
+  CreatedProjectResponse,
 } from "@/features/projects/types/project";
 import { apiClient } from "@/lib/api/api-client";
 import type { PagedResponse } from "@/types/pagination";
 import type { ClientDashboardSummary } from "@/features/projects/types/client-dashboard";
+import type { ProjectWorkspace } from "@/features/projects/types/project-workspace";
 
 export async function getClientProjects(params: GetClientProjectsParams = {}) {
   const response = await apiClient.get<PagedResponse<ClientProject>>(
@@ -24,11 +27,25 @@ export async function getClientProjects(params: GetClientProjectsParams = {}) {
 }
 
 export async function getClientDashboardSummary() {
-  await new Promise((resolve) => {
-    setTimeout(resolve, 4000);
-  });
   const response = await apiClient.get<ClientDashboardSummary>(
     "/projects/dashboard-summary",
+  );
+
+  return response.data;
+}
+
+export async function createProject(request: CreateProjectRequest) {
+  const response = await apiClient.post<CreatedProjectResponse>(
+    "/projects",
+    request,
+  );
+
+  return response.data;
+}
+
+export async function getProjectWorkspace(projectId: string) {
+  const response = await apiClient.get<ProjectWorkspace>(
+    `/projects/${projectId}/workspace`,
   );
 
   return response.data;

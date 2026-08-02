@@ -236,6 +236,66 @@ public class MilestonesController(AppDbContext dbContext)
         });
     }
 
+    [Authorize]
+    [HttpGet]
+    public async Task<IActionResult> GetMilestones(
+    Guid projectId,
+    CancellationToken cancellationToken)
+    {
+        var userIdValue = User.FindFirstValue(
+            ClaimTypes.NameIdentifier
+        );
+
+        if (!Guid.TryParse(
+            userIdValue,
+            out var userId))
+        {
+            return Unauthorized(new
+            {
+                message = "Invalid user identity."
+            });
+        }
+
+        var hasAccess = await dbContext.Projects
+            .AsNoTracking()
+            .AnyAsync(
+                project =>
+                    project.Id == projectId &&
+                    (
+                        project.ClientId == userId ||
+                        project.FreelancerId == userId
+                    ),
+                cancellationToken
+            );
+
+        if (!hasAccess)
+        {
+            return NotFound(new
+            {
+                message = "Project not found."
+            });
+        }
+
+        var milestones = await dbContext.Milestones
+            .AsNoTracking()
+            .Where(milestone =>
+                milestone.ProjectId ==
+                    projectId
+            )
+            .OrderBy(milestone =>
+                milestone.SequenceNumber
+            )
+            .ToListAsync(
+                cancellationToken
+            );
+
+        var response = milestones
+            .Select(ToResponse)
+            .ToList();
+
+        return Ok(response);
+    }
+
 
     [Authorize]
     [HttpGet("{milestoneId:guid}")]

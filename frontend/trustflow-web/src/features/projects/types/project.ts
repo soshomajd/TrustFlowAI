@@ -28,3 +28,20 @@ export type GetClientProjectsParams = {
   pageSize?: number;
   status?: ProjectStatus;
 };
+
+export type CreateProjectRequest = {
+  title: string;
+  description: string;
+  budget: number;
+  deadline: string;
+};
+
+export type CreatedProjectResponse = {
+  id: string;
+  title: string;
+  description: string;
+  budget: number;
+  deadline: string;
+  status: ProjectStatus;
+  createdAt: string;
+};

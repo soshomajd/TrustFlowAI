@@ -22,12 +22,8 @@ const axiosDefaults = {
 
 export const apiClient = axios.create(axiosDefaults);
 
-/*
- * In client interceptor nadare.
- * Faghat baraye refresh-token estefade mishe
- * ta loop-e 401 ijad nashe.
- */
 const refreshClient = axios.create(axiosDefaults);
+
 const AUTHENTICATION_PATHS = [
   "/auth/login",
   "/auth/register",

@@ -12,6 +12,12 @@ import {
     WalletCards,
     Workflow,
 } from "lucide-react";
+import {
+    AnimatedSection,
+    StaggerContainer,
+    StaggerItem,
+} from
+    "@/components/motion/animation-primitives";
 
 import { Button } from
     "@/components/ui/button";
@@ -113,43 +119,49 @@ export function ClientDashboardStats() {
     ];
 
     return (
-        <section
-            aria-labelledby="client-dashboard-stats-title"
-            className="space-y-4"
-        >
-            <header className="flex items-end justify-between gap-4">
-                <div>
-                    <h2
-                        id="client-dashboard-stats-title"
-                        className="font-semibold"
-                    >
-                        Project summary
-                    </h2>
+        <AnimatedSection>
+            <section
+                aria-labelledby="client-dashboard-stats-title"
+                className="space-y-4"
+            >
+                <header className="flex items-end justify-between gap-4">
+                    <div>
+                        <h2
+                            id="client-dashboard-stats-title"
+                            className="font-semibold"
+                        >
+                            Project summary
+                        </h2>
 
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        A quick overview of your
-                        project activity.
-                    </p>
-                </div>
-
-                {summaryQuery.isFetching && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <LoaderCircle className="size-3.5 animate-spin" />
-
-                        Updating
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            A quick overview of your
+                            project activity.
+                        </p>
                     </div>
-                )}
-            </header>
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {stats.map((stat) => (
-                    <DashboardStatCard
-                        key={stat.label}
-                        stat={stat}
-                    />
-                ))}
-            </div>
-        </section>
+                    {summaryQuery.isFetching && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <LoaderCircle className="size-3.5 animate-spin" />
+
+                            Updating
+                        </div>
+                    )}
+                </header>
+
+                <StaggerContainer className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {stats.map((stat) => (
+                        <StaggerItem
+                            key={stat.label}
+                            className="h-full"
+                        >
+                            <DashboardStatCard
+                                stat={stat}
+                            />
+                        </StaggerItem>
+                    ))}
+                </StaggerContainer>
+            </section>
+        </AnimatedSection>
     );
 }
 
@@ -164,7 +176,7 @@ function DashboardStatCard({
     const Icon = stat.icon;
 
     return (
-        <article className="group rounded-2xl border bg-card/70 p-5 backdrop-blur transition hover:border-primary/40 hover:bg-card">
+        <article className="group h-full rounded-2xl border bg-card/70 p-5 backdrop-blur transition hover:border-primary/40 hover:bg-card">
             <div className="flex items-start justify-between">
                 <div className="flex size-10 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
                     <Icon className="size-5 text-electric" />

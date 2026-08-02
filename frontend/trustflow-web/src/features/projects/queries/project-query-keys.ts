@@ -12,4 +12,9 @@ export const projectQueryKeys = {
 
   clientDashboardSummary: () =>
     [...projectQueryKeys.client(), "dashboard-summary"] as const,
+
+  create: () => [...projectQueryKeys.all, "create"] as const,
+
+  workspace: (projectId: string) =>
+    [...projectQueryKeys.all, "workspace", projectId] as const,
 };

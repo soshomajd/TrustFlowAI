@@ -9,6 +9,10 @@ import { Button } from
     "@/components/ui/button";
 import { ClientProjectsFilters } from
     "@/features/projects/components/client-projects-filters";
+import { ClientProjectsListSection } from
+    "@/features/projects/components/client-projects-list-section";
+import { ClientProjectsListSkeleton } from
+    "@/features/projects/components/client-projects-list-skeleton";
 
 export default function ClientProjectsPage() {
     return (
@@ -50,19 +54,20 @@ export default function ClientProjectsPage() {
                 <ClientProjectsFilters />
             </Suspense>
 
-            <section className="mt-6 rounded-2xl border border-dashed bg-card/40 p-8 text-center">
-                <p className="text-sm text-muted-foreground">
-                    Project list will be connected
-                    in the next step.
-                </p>
-            </section>
+            <Suspense
+                fallback={
+                    <ClientProjectsListSkeleton />
+                }
+            >
+                <ClientProjectsListSection />
+            </Suspense>
         </main>
     );
 }
 
 function ProjectsFiltersSkeleton() {
     return (
-        <section className="mt-8 flex h-[74px] animate-pulse items-center rounded-2xl border bg-card/70 p-4">
+        <section className="mt-8 flex h-18.5 animate-pulse items-center rounded-2xl border bg-card/70 p-4">
             <div className="h-10 w-48 rounded-lg bg-muted" />
         </section>
     );

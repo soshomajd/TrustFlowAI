@@ -1,42 +1,7 @@
-"use client";
-
-import dynamic from "next/dynamic";
-
-import {
-    ClientDashboardStatsSkeleton,
-    ClientProjectsModuleSkeleton,
-} from
-    "@/components/dashboard/dashboard-section-skeletons";
-
-const ClientDashboardStats = dynamic(
-    () =>
-        import(
-            "@/features/projects/components/client-dashboard-stats"
-        ).then(
-            (module) =>
-                module.ClientDashboardStats,
-        ),
-    {
-        loading: () => (
-            <ClientDashboardStatsSkeleton />
-        ),
-    },
-);
-
-const ClientProjectsOverview = dynamic(
-    () =>
-        import(
-            "@/features/projects/components/client-projects-overview"
-        ).then(
-            (module) =>
-                module.ClientProjectsOverview,
-        ),
-    {
-        loading: () => (
-            <ClientProjectsModuleSkeleton />
-        ),
-    },
-);
+import { ClientDashboardStats } from
+    "@/features/projects/components/client-dashboard-stats";
+import { ClientProjectsOverview } from
+    "@/features/projects/components/client-projects-overview";
 
 export function ClientDashboardSections() {
     return (
