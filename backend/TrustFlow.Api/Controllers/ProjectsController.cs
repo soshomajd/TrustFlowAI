@@ -720,6 +720,74 @@ namespace TrustFlow.Api.Controllers
             return Ok(project);
         }
         [Authorize(Roles = AppRoles.Client)]
+        [HttpGet("dashboard-summary")]
+        public async Task<IActionResult> GetClientDashboardSummary(
+    CancellationToken cancellationToken)
+        {
+            var clientIdValue = User.FindFirstValue(
+                ClaimTypes.NameIdentifier
+            );
+
+            if (!Guid.TryParse(
+                clientIdValue,
+                out var clientId))
+            {
+                return Unauthorized(new
+                {
+                    message = "Invalid user identity."
+                });
+            }
+
+            var summary = await dbContext.Projects
+                .AsNoTracking()
+                .Where(project =>
+                    project.ClientId == clientId)
+                .GroupBy(project => 1)
+                .Select(projects =>
+                    new ClientDashboardSummaryResponse
+                    {
+                        TotalProjects =
+                            projects.Count(),
+
+                        OpenProjects =
+                            projects.Count(project =>
+                                project.Status ==
+                                ProjectStatus.Open),
+
+                        InProgressProjects =
+                            projects.Count(project =>
+                                project.Status ==
+                                ProjectStatus.InProgress),
+
+                        CompletedProjects =
+                            projects.Count(project =>
+                                project.Status ==
+                                ProjectStatus.Completed),
+
+                        TotalBudget =
+                            projects.Sum(project =>
+                                project.Budget)
+                    })
+                .FirstOrDefaultAsync(
+                    cancellationToken
+                )
+                ?? new ClientDashboardSummaryResponse();
+
+            summary.PendingProposals =
+                await dbContext.Proposals
+                    .AsNoTracking()
+                    .CountAsync(
+                        proposal =>
+                            proposal.Project.ClientId ==
+                            clientId &&
+                            proposal.Status ==
+                            ProposalStatus.Pending,
+                        cancellationToken
+                    );
+
+            return Ok(summary);
+        }
+        [Authorize(Roles = AppRoles.Client)]
         [HttpGet("mine")]
         public async Task<IActionResult> GetMyProjects(
     [FromQuery] PaginationRequest pagination,
