@@ -3,6 +3,7 @@ import "client-only";
 import type {
   ProjectMilestone,
   CreateMilestoneRequest,
+  UpdateMilestoneRequest,
 } from "@/features/milestones/types/milestone";
 import { apiClient } from "@/lib/api/api-client";
 
@@ -24,4 +25,19 @@ export async function createMilestone(
   );
 
   return response.data;
+}
+
+export async function updateMilestone(
+  projectId: string,
+  milestoneId: string,
+  request: UpdateMilestoneRequest,
+) {
+  const response = await apiClient.put<ProjectMilestone>(
+    `/projects/${projectId}/milestones/${milestoneId}`,
+    request,
+  );
+  return response.data;
+}
+export async function deleteMilestone(projectId: string, milestoneId: string) {
+  await apiClient.delete(`/projects/${projectId}/milestones/${milestoneId}`);
 }

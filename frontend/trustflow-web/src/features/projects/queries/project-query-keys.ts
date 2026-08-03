@@ -1,4 +1,5 @@
 import type { GetClientProjectsParams } from "@/features/projects/types/project";
+import type { NormalizedMarketplaceProjectsParams } from "@/features/projects/types/marketplace-project";
 
 export const projectQueryKeys = {
   all: ["projects"] as const,
@@ -17,4 +18,8 @@ export const projectQueryKeys = {
 
   workspace: (projectId: string) =>
     [...projectQueryKeys.all, "workspace", projectId] as const,
+  marketplaceLists: () => [...projectQueryKeys.all, "marketplace"] as const,
+
+  marketplaceList: (params: NormalizedMarketplaceProjectsParams) =>
+    [...projectQueryKeys.marketplaceLists(), params] as const,
 };

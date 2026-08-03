@@ -16,6 +16,8 @@ import { getApiErrorMessage } from "@/lib/api/get-api-error-message";
 import { cn } from "@/lib/utils";
 import { CreateMilestoneDialog } from "@/features/milestones/components/create-milestone-dialog";
 import type { ProjectStatus } from "@/features/projects/types/project";
+import { DeleteMilestoneDialog } from "@/features/milestones/components/delete-milestone-dialog";
+import { EditMilestoneDialog } from "@/features/milestones/components/edit-milestone-dialog";
 
 type ProjectMilestonesSectionProps = {
     projectId: string;
@@ -143,11 +145,21 @@ export function ProjectMilestonesSection({
                             (milestone) => (
                                 <StaggerItem
                                     key={milestone.id}
-                                >
-                                    <MilestoneCard
-                                        milestone={
-                                            milestone
+                                ><MilestoneCard
+                                        projectId={projectId}
+                                        projectStatus={
+                                            projectStatus
                                         }
+                                        projectDeadline={
+                                            projectDeadline
+                                        }
+                                        remainingBudget={
+                                            remainingBudget
+                                        }
+                                        existingSequenceNumbers={
+                                            existingSequenceNumbers
+                                        }
+                                        milestone={milestone}
                                     />
                                 </StaggerItem>
                             ),
@@ -160,23 +172,61 @@ export function ProjectMilestonesSection({
 }
 
 function MilestoneCard({
+    projectId,
+    projectStatus,
+    projectDeadline,
+    remainingBudget,
+    existingSequenceNumbers,
     milestone,
 }: {
+    projectId: string;
+    projectStatus: ProjectStatus;
+    projectDeadline: string;
+    remainingBudget: number;
+    existingSequenceNumbers: number[];
     milestone: ProjectMilestone;
 }) {
+    const canManageMilestone =
+        projectStatus === "Open" &&
+        milestone.status === "Pending";
     return (
         <article className="group rounded-xl border bg-background/40 p-4 transition hover:border-primary/40 hover:bg-background/70 sm:p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-3">
-                        <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                            Milestone{" "}
-                            {milestone.sequenceNumber}
-                        </span>
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                                Milestone{" "}
+                                {milestone.sequenceNumber}
+                            </span>
 
-                        <MilestoneStatusBadge
-                            status={milestone.status}
-                        />
+                            <MilestoneStatusBadge
+                                status={milestone.status}
+                            />
+                        </div>
+
+                        {canManageMilestone && (
+                            <div className="flex shrink-0 items-center">
+                                <EditMilestoneDialog
+                                    projectId={projectId}
+                                    projectDeadline={
+                                        projectDeadline
+                                    }
+                                    remainingBudget={
+                                        remainingBudget
+                                    }
+                                    existingSequenceNumbers={
+                                        existingSequenceNumbers
+                                    }
+                                    milestone={milestone}
+                                />
+
+                                <DeleteMilestoneDialog
+                                    projectId={projectId}
+                                    milestone={milestone}
+                                />
+                            </div>
+                        )}
                     </div>
 
                     <h3 className="mt-3 wrap-break-word font-semibold">

@@ -1,16 +1,20 @@
-import { Search } from
-    "lucide-react";
+import { Suspense } from
+    "react";
 
-import { SectionPlaceholder } from
-    "@/components/shared/section-placeholder";
+import {
+    MarketplacePageSkeleton,
+    MarketplaceProjectsScreen,
+} from
+    "@/features/projects/components/marketplace-projects-screen";
 
-export default function MarketplacePage() {
+export default function FreelancerMarketplacePage() {
     return (
-        <SectionPlaceholder
-            eyebrow="Freelancer workspace"
-            title="Project marketplace"
-            description="Search, filter and explore open projects from clients."
-            icon={Search}
-        />
+        <Suspense
+            fallback={
+                <MarketplacePageSkeleton />
+            }
+        >
+            <MarketplaceProjectsScreen />
+        </Suspense>
     );
 }

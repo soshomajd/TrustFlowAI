@@ -26,3 +26,5 @@ export type CreateMilestoneRequest = {
   sequenceNumber: number;
   deadline: string;
 };
+
+export type UpdateMilestoneRequest = CreateMilestoneRequest;

@@ -1,5 +1,11 @@
-import { CodeXml } from
-    "lucide-react";
+import {
+    ArrowRight,
+    CodeXml,
+} from "lucide-react";
+import Link from "next/link";
+
+import { Button } from
+    "@/components/ui/button";
 
 export default function FreelancerDashboardPage() {
     return (
@@ -17,10 +23,21 @@ export default function FreelancerDashboardPage() {
                     Freelancer dashboard
                 </h1>
 
-                <p className="mt-3 text-muted-foreground">
-                    Assigned projects, proposals and
-                    milestones will appear here.
+                <p className="mt-3 max-w-2xl text-muted-foreground">
+                    Browse open projects,
+                    submit proposals and manage
+                    assigned milestones from your
+                    freelancer workspace.
                 </p>
+
+                <div className="mt-6">
+                    <Button asChild>
+                        <Link href="/dashboard/freelancer/marketplace">
+                            Browse marketplace
+                            <ArrowRight className="size-4" />
+                        </Link>
+                    </Button>
+                </div>
             </div>
         </main>
     );

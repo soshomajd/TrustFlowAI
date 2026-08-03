@@ -13,8 +13,7 @@ public sealed class DecimalValidationTests
 {
     private readonly HttpClient _client;
 
-    public DecimalValidationTests(
-        CustomWebApplicationFactory factory)
+    public DecimalValidationTests(CustomWebApplicationFactory factory)
     {
         _client = factory.CreateClient(
             new WebApplicationFactoryClientOptions

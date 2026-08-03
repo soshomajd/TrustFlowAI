@@ -33,6 +33,8 @@ type ProjectWorkspaceScreenProps = {
 };
 import { ProjectMilestonesSection } from
     "@/features/milestones/components/project-milestones-section";
+import { ProjectProposalsSection } from
+    "@/features/proposals/components/project-proposals-section";
 
 export function ProjectWorkspaceScreen({
     projectId,
@@ -196,6 +198,11 @@ export function ProjectWorkspaceScreen({
                     projectStatus={
                         project.status
                     }
+                />
+            </div>
+            <div className="mt-6">
+                <ProjectProposalsSection
+                    projectId={project.id}
                 />
             </div>
         </AnimatedSection>
