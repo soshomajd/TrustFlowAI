@@ -45,3 +45,26 @@ export type CreatedProjectResponse = {
   status: ProjectStatus;
   createdAt: string;
 };
+
+export type AssignedProject = {
+  id: string;
+
+  clientId: string;
+  clientFullName: string;
+
+  title: string;
+  description: string;
+
+  budget: number;
+  allocatedAmount: number;
+  milestoneCount: number;
+
+  deadline: string;
+  status: ProjectStatus;
+  createdAt: string;
+};
+
+export type GetAssignedProjectsParams = {
+  page?: number;
+  pageSize?: number;
+};

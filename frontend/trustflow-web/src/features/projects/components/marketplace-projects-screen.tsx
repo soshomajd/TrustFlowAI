@@ -395,7 +395,6 @@ function MarketplaceFilters({
 }: MarketplaceFiltersProps) {
     return (
         <AnimatedSection
-            delay={0.05}
             className="mt-6"
         >
             <form
@@ -569,7 +568,6 @@ function MarketplaceResults({
 
     return (
         <AnimatedSection
-            delay={0.1}
             className="mt-6"
         >
             <section

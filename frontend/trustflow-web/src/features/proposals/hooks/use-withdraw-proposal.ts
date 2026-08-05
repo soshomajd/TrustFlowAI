@@ -3,23 +3,21 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { createProposal } from "@/features/proposals/api/proposals-api";
+import { withdrawProposal } from "@/features/proposals/api/proposals-api";
 import { proposalQueryKeys } from "@/features/proposals/queries/proposal-query-keys";
-import type { CreateProposalRequest } from "@/features/proposals/types/proposal";
 import { getApiErrorMessage } from "@/lib/api/get-api-error-message";
 
-export function useCreateProposal(projectId: string) {
+export function useWithdrawProposal(proposalId: string) {
   const queryClient = useQueryClient();
 
-  const normalizedProjectId = projectId.trim();
+  const normalizedProposalId = proposalId.trim();
 
   return useMutation({
-    mutationKey: proposalQueryKeys.create(normalizedProjectId),
+    mutationKey: proposalQueryKeys.withdraw(normalizedProposalId),
 
-    mutationFn: (request: CreateProposalRequest) =>
-      createProposal(normalizedProjectId, request),
+    mutationFn: () => withdrawProposal(normalizedProposalId),
 
-    onSuccess: async (createdProposal) => {
+    onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: proposalQueryKeys.myLists(),
@@ -30,14 +28,12 @@ export function useCreateProposal(projectId: string) {
         }),
       ]);
 
-      toast.success(
-        `Proposal submitted with status ${createdProposal.status}.`,
-      );
+      toast.success("Proposal withdrawn.");
     },
 
     onError: (error) => {
       toast.error(
-        getApiErrorMessage(error, "Proposal could not be submitted."),
+        getApiErrorMessage(error, "Proposal could not be withdrawn."),
       );
     },
   });

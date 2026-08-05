@@ -11,7 +11,25 @@ import {
     RefreshCw,
     TriangleAlert,
     UserRound,
+    CheckCircle2,
+    XCircle,
+
 } from "lucide-react";
+
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+
+import { useAcceptProposal } from "@/features/proposals/hooks/use-accept-proposal";
+
+import { useRejectProposal } from "@/features/proposals/hooks/use-reject-proposal";
+
 import { useState } from "react";
 
 import {
@@ -139,6 +157,8 @@ export function ProjectProposalsSection({
                                             proposal={
                                                 proposal
                                             }
+                                            projectId={projectId}
+
                                         />
                                     </StaggerItem>
                                 ),
@@ -190,10 +210,11 @@ export function ProjectProposalsSection({
 }
 
 function ProposalCard({
+    projectId,
     proposal,
 }: {
-    proposal:
-    ClientProjectProposal;
+    projectId: string;
+    proposal: ClientProjectProposal;
 }) {
     return (
         <article className="rounded-xl border bg-background/40 p-4 transition hover:border-primary/40 hover:bg-background/70 sm:p-5">
@@ -248,14 +269,356 @@ function ProposalCard({
                         icon={Clock3}
                         label="Estimated time"
                         value={`${proposal.estimatedDays} ${proposal.estimatedDays ===
-                                1
-                                ? "day"
-                                : "days"
+                            1
+                            ? "day"
+                            : "days"
                             }`}
                     />
                 </div>
             </div>
+            {proposal.status === "Pending" && (
+                <div className="mt-5 flex flex-col gap-3 border-t pt-5 sm:flex-row sm:justify-end">
+                    <RejectProposalDialog
+                        projectId={projectId}
+                        proposal={proposal}
+                    />
+
+                    <AcceptProposalDialog
+                        projectId={projectId}
+                        proposal={proposal}
+                    />
+                </div>
+            )}
         </article>
+    );
+}
+function AcceptProposalDialog({
+    projectId,
+    proposal,
+}: {
+    projectId: string;
+    proposal: ClientProjectProposal;
+}) {
+    const [open, setOpen] =
+        useState(false);
+
+    const acceptMutation =
+        useAcceptProposal(
+            projectId,
+            proposal.id,
+        );
+
+    const isAccepting =
+        acceptMutation.isPending;
+
+    const errorMessage =
+        acceptMutation.isError
+            ? getApiErrorMessage(
+                acceptMutation.error,
+                "Proposal could not be accepted.",
+            )
+            : null;
+
+    function handleOpenChange(
+        nextOpen: boolean,
+    ) {
+        if (isAccepting) {
+            return;
+        }
+
+        if (nextOpen) {
+            acceptMutation.reset();
+        }
+
+        setOpen(nextOpen);
+    }
+
+    function handleAccept() {
+        acceptMutation.mutate(
+            undefined,
+            {
+                onSuccess: () => {
+                    setOpen(false);
+                },
+            },
+        );
+    }
+
+    return (
+        <Dialog
+            open={open}
+            onOpenChange={
+                handleOpenChange
+            }
+        >
+            <DialogTrigger asChild>
+                <Button
+                    type="button"
+                    size="sm"
+                >
+                    <CheckCircle2 className="size-4" />
+                    Accept proposal
+                </Button>
+            </DialogTrigger>
+
+            <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                    <div className="mb-2 flex size-11 items-center justify-center rounded-full bg-emerald-500/10">
+                        <CheckCircle2 className="size-5 text-emerald-400" />
+                    </div>
+
+                    <DialogTitle>
+                        Accept this proposal?
+                    </DialogTitle>
+
+                    <DialogDescription className="leading-6">
+                        You are about to assign{" "}
+                        <span className="font-medium text-foreground">
+                            {proposal.freelancerFullName}
+                        </span>{" "}
+                        to this project.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-3 rounded-xl border bg-card/50 p-4 text-sm">
+                    <div className="flex items-center justify-between gap-4">
+                        <span className="text-muted-foreground">
+                            Bid amount
+                        </span>
+
+                        <span className="font-medium">
+                            {formatAmount(
+                                proposal.bidAmount,
+                            )}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4">
+                        <span className="text-muted-foreground">
+                            Estimated time
+                        </span>
+
+                        <span className="font-medium">
+                            {proposal.estimatedDays}{" "}
+                            {proposal.estimatedDays === 1
+                                ? "day"
+                                : "days"}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm leading-6 text-muted-foreground">
+                    Accepting this proposal will
+                    change the project status to
+                    InProgress. All other pending
+                    proposals will automatically
+                    be rejected.
+                </div>
+
+                {errorMessage && (
+                    <div
+                        role="alert"
+                        aria-live="assertive"
+                        className="flex gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4"
+                    >
+                        <TriangleAlert className="mt-0.5 size-5 shrink-0 text-destructive" />
+
+                        <div>
+                            <p className="text-sm font-semibold text-destructive">
+                                Could not accept proposal
+                            </p>
+
+                            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                                {errorMessage}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                <DialogFooter className="gap-2 sm:gap-0">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        disabled={isAccepting}
+                        onClick={() => {
+                            setOpen(false);
+                        }}
+                    >
+                        Cancel
+                    </Button>
+
+                    <Button
+                        type="button"
+                        disabled={isAccepting}
+                        onClick={handleAccept}
+                    >
+                        {isAccepting ? (
+                            <>
+                                <LoaderCircle className="size-4 animate-spin" />
+                                Accepting
+                            </>
+                        ) : (
+                            <>
+                                <CheckCircle2 className="size-4" />
+                                Accept and assign
+                            </>
+                        )}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+function RejectProposalDialog({
+    projectId,
+    proposal,
+}: {
+    projectId: string;
+    proposal: ClientProjectProposal;
+}) {
+    const [open, setOpen] =
+        useState(false);
+
+    const rejectMutation =
+        useRejectProposal(
+            projectId,
+            proposal.id,
+        );
+
+    const isRejecting =
+        rejectMutation.isPending;
+
+    const errorMessage =
+        rejectMutation.isError
+            ? getApiErrorMessage(
+                rejectMutation.error,
+                "Proposal could not be rejected.",
+            )
+            : null;
+
+    function handleOpenChange(
+        nextOpen: boolean,
+    ) {
+        if (isRejecting) {
+            return;
+        }
+
+        if (nextOpen) {
+            rejectMutation.reset();
+        }
+
+        setOpen(nextOpen);
+    }
+
+    function handleReject() {
+        rejectMutation.mutate(
+            undefined,
+            {
+                onSuccess: () => {
+                    setOpen(false);
+                },
+            },
+        );
+    }
+
+    return (
+        <Dialog
+            open={open}
+            onOpenChange={
+                handleOpenChange
+            }
+        >
+            <DialogTrigger asChild>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                >
+                    <XCircle className="size-4" />
+                    Reject
+                </Button>
+            </DialogTrigger>
+
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <div className="mb-2 flex size-11 items-center justify-center rounded-full bg-destructive/10">
+                        <XCircle className="size-5 text-destructive" />
+                    </div>
+
+                    <DialogTitle>
+                        Reject this proposal?
+                    </DialogTitle>
+
+                    <DialogDescription className="leading-6">
+                        The proposal submitted by{" "}
+                        <span className="font-medium text-foreground">
+                            {proposal.freelancerFullName}
+                        </span>{" "}
+                        will be changed from Pending
+                        to Rejected.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm leading-6 text-muted-foreground">
+                    Rejecting this proposal does
+                    not assign a freelancer and
+                    does not change the project
+                    status.
+                </div>
+
+                {errorMessage && (
+                    <div
+                        role="alert"
+                        aria-live="assertive"
+                        className="flex gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4"
+                    >
+                        <TriangleAlert className="mt-0.5 size-5 shrink-0 text-destructive" />
+
+                        <div>
+                            <p className="text-sm font-semibold text-destructive">
+                                Could not reject proposal
+                            </p>
+
+                            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                                {errorMessage}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                <DialogFooter className="gap-2 sm:gap-0">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        disabled={isRejecting}
+                        onClick={() => {
+                            setOpen(false);
+                        }}
+                    >
+                        Cancel
+                    </Button>
+
+                    <Button
+                        type="button"
+                        variant="destructive"
+                        disabled={isRejecting}
+                        onClick={handleReject}
+                    >
+                        {isRejecting ? (
+                            <>
+                                <LoaderCircle className="size-4 animate-spin" />
+                                Rejecting
+                            </>
+                        ) : (
+                            <>
+                                <XCircle className="size-4" />
+                                Reject proposal
+                            </>
+                        )}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }
 

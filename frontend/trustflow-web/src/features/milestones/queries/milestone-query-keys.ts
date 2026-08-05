@@ -17,4 +17,16 @@ export const milestoneQueryKeys = {
 
   remove: (projectId: string, milestoneId: string) =>
     [...milestoneQueryKeys.all, "delete", projectId, milestoneId] as const,
+
+  start: (projectId: string, milestoneId: string) =>
+    [...milestoneQueryKeys.all, "start", projectId, milestoneId] as const,
+
+  submit: (projectId: string, milestoneId: string) =>
+    [...milestoneQueryKeys.all, "submit", projectId, milestoneId] as const,
+
+  approve: (projectId: string, milestoneId: string) =>
+    [...milestoneQueryKeys.all, "approve", projectId, milestoneId] as const,
+
+  reject: (projectId: string, milestoneId: string) =>
+    [...milestoneQueryKeys.all, "reject", projectId, milestoneId] as const,
 };

@@ -1,4 +1,7 @@
-import type { GetProjectProposalsParams } from "@/features/proposals/types/proposal";
+import type {
+  GetProjectProposalsParams,
+  GetMyProposalsParams,
+} from "@/features/proposals/types/proposal";
 
 export const proposalQueryKeys = {
   all: ["proposals"] as const,
@@ -18,4 +21,12 @@ export const proposalQueryKeys = {
 
   create: (projectId: string) =>
     [...proposalQueryKeys.all, "create", projectId] as const,
+
+  myLists: () => [...proposalQueryKeys.all, "mine"] as const,
+
+  myList: (params: Required<GetMyProposalsParams>) =>
+    [...proposalQueryKeys.myLists(), params] as const,
+
+  withdraw: (proposalId: string) =>
+    [...proposalQueryKeys.all, "withdraw", proposalId] as const,
 };

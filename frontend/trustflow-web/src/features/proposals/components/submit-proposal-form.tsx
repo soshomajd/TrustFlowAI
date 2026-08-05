@@ -28,6 +28,8 @@ import {
     type CreateProposalFormOutput,
 } from
     "@/features/proposals/schemas/create-proposal-schema";
+import { TriangleAlert, } from "lucide-react";
+import { getApiErrorMessage } from "@/lib/api/get-api-error-message";
 
 type SubmitProposalFormProps = {
     projectId: string;
@@ -48,6 +50,14 @@ export function SubmitProposalForm({
 }: SubmitProposalFormProps) {
     const createProposalMutation =
         useCreateProposal(projectId);
+
+    const submitError =
+        createProposalMutation.isError
+            ? getApiErrorMessage(
+                createProposalMutation.error,
+                "Proposal could not be submitted.",
+            )
+            : null;
 
     const form = useForm<
         CreateProposalFormInput,
@@ -256,6 +266,26 @@ export function SubmitProposalForm({
                 submit another proposal for the
                 same project.
             </div>
+
+            {submitError && (
+                <div
+                    role="alert"
+                    aria-live="assertive"
+                    className="flex gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4"
+                >
+                    <TriangleAlert className="mt-0.5 size-5 shrink-0 text-destructive" />
+
+                    <div>
+                        <p className="text-sm font-semibold text-destructive">
+                            Could not submit proposal
+                        </p>
+
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                            {submitError}
+                        </p>
+                    </div>
+                </div>
+            )}
 
             <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end">
                 <Button

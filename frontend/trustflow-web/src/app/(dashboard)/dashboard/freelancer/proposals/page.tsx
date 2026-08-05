@@ -1,15 +1,20 @@
-import { Send } from "lucide-react";
+import { Suspense } from
+    "react";
 
-import { SectionPlaceholder } from
-    "@/components/shared/section-placeholder";
+import {
+    MyProposalsPageSkeleton,
+    MyProposalsScreen,
+} from
+    "@/features/proposals/components/my-proposals-screen";
 
 export default function FreelancerProposalsPage() {
     return (
-        <SectionPlaceholder
-            eyebrow="Freelancer workspace"
-            title="My proposals"
-            description="Track pending, accepted, rejected and withdrawn proposals."
-            icon={Send}
-        />
+        <Suspense
+            fallback={
+                <MyProposalsPageSkeleton />
+            }
+        >
+            <MyProposalsScreen />
+        </Suspense>
     );
 }

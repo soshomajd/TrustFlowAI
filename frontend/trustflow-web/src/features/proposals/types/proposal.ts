@@ -38,3 +38,37 @@ export type CreatedProposal = {
   status: ProposalStatus;
   createdAt: string;
 };
+
+export type MyProposal = {
+  id: string;
+  projectId: string;
+  projectTitle: string;
+
+  coverLetter: string;
+  bidAmount: number;
+  estimatedDays: number;
+
+  status: ProposalStatus;
+  createdAt: string;
+};
+
+export type GetMyProposalsParams = {
+  page?: number;
+  pageSize?: number;
+};
+
+export type ProposalStatusResponse = {
+  id: string;
+  status: ProposalStatus;
+};
+
+import type { ProjectStatus } from "@/features/projects/types/project";
+
+export type AcceptProposalResponse = {
+  proposalId: string;
+  projectId: string;
+  freelancerId: string;
+
+  proposalStatus: ProposalStatus;
+  projectStatus: ProjectStatus;
+};

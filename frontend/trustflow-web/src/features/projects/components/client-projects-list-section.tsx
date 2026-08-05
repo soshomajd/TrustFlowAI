@@ -20,6 +20,7 @@ import { useClientProjectsSearchParams } from "@/features/projects/hooks/use-cli
 import type { ClientProject, ProjectStatus, } from "@/features/projects/types/project";
 import { getApiErrorMessage } from "@/lib/api/get-api-error-message";
 import { cn } from "@/lib/utils";
+import { ProjectProposalActivityBadge, } from "@/features/projects/components/project-proposal-activity-badge";
 import { StaggerContainer, StaggerItem, } from "@/components/motion/animation-primitives";
 
 const PAGE_SIZE = 10;
@@ -194,8 +195,18 @@ function ClientProjectListItem({
                 100,
             );
 
+    const hasProposalActivity =
+        project.pendingProposalCount > 0;
+
     return (
-        <article className="p-5 transition hover:bg-muted/20">
+        <article
+            className={cn(
+                "p-5 transition hover:bg-muted/20",
+
+                hasProposalActivity &&
+                "border-l-4 border-l-amber-400 bg-amber-500/4 shadow-[inset_12px_0_30px_-24px_rgba(245,158,11,0.8)]",
+            )}
+        >
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-3">
@@ -210,6 +221,12 @@ function ClientProjectListItem({
 
                         <ProjectStatusBadge
                             status={project.status}
+                        />
+
+                        <ProjectProposalActivityBadge
+                            count={
+                                project.pendingProposalCount
+                            }
                         />
                     </div>
 
@@ -230,7 +247,6 @@ function ClientProjectListItem({
                     </p>
                 </div>
             </div>
-
             <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <ProjectDetail
                     label="Deadline"
@@ -288,7 +304,7 @@ function ClientProjectListItem({
                     />
                 </div>
             </div>
-        </article>
+        </article >
     );
 }
 

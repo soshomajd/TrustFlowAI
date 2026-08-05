@@ -18,6 +18,9 @@ import { CreateMilestoneDialog } from "@/features/milestones/components/create-m
 import type { ProjectStatus } from "@/features/projects/types/project";
 import { DeleteMilestoneDialog } from "@/features/milestones/components/delete-milestone-dialog";
 import { EditMilestoneDialog } from "@/features/milestones/components/edit-milestone-dialog";
+import {
+    ClientMilestoneReviewActions,
+} from "@/features/milestones/components/client-milestone-review-actions";
 
 type ProjectMilestonesSectionProps = {
     projectId: string;
@@ -255,6 +258,11 @@ function MilestoneCard({
                         )}
                     />
                 </div>
+                <ClientMilestoneReviewActions
+                    projectId={projectId}
+                    milestoneId={milestone.id}
+                    status={milestone.status}
+                />
             </div>
         </article>
     );

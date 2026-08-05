@@ -1,16 +1,18 @@
-import { BriefcaseBusiness } from
-    "lucide-react";
+import { Suspense } from "react";
 
-import { SectionPlaceholder } from
-    "@/components/shared/section-placeholder";
+import {
+    AssignedProjectsPageSkeleton,
+    AssignedProjectsScreen,
+} from "@/features/projects/components/assigned-projects-screen";
 
-export default function AssignedProjectsPage() {
+export default function FreelancerProjectsPage() {
     return (
-        <SectionPlaceholder
-            eyebrow="Freelancer workspace"
-            title="Assigned projects"
-            description="Manage active projects and complete milestones in sequence."
-            icon={BriefcaseBusiness}
-        />
+        <Suspense
+            fallback={
+                <AssignedProjectsPageSkeleton />
+            }
+        >
+            <AssignedProjectsScreen />
+        </Suspense>
     );
 }

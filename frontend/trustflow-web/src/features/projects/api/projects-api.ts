@@ -5,6 +5,8 @@ import type {
   GetClientProjectsParams,
   CreateProjectRequest,
   CreatedProjectResponse,
+  GetAssignedProjectsParams,
+  AssignedProject,
 } from "@/features/projects/types/project";
 import { apiClient } from "@/lib/api/api-client";
 import type { PagedResponse } from "@/types/pagination";
@@ -46,6 +48,21 @@ export async function createProject(request: CreateProjectRequest) {
 export async function getProjectWorkspace(projectId: string) {
   const response = await apiClient.get<ProjectWorkspace>(
     `/projects/${projectId}/workspace`,
+  );
+
+  return response.data;
+}
+
+export async function getAssignedProjects(
+  params: Required<GetAssignedProjectsParams>,
+  signal?: AbortSignal,
+) {
+  const response = await apiClient.get<PagedResponse<AssignedProject>>(
+    "/projects/assigned-to-me",
+    {
+      params,
+      signal,
+    },
   );
 
   return response.data;
