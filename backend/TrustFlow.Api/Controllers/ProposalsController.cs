@@ -90,12 +90,27 @@ public class ProposalsController(AppDbContext dbContext)
                     );
 
                 var project = await dbContext.Projects
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(
-                        project =>
-                            project.Id == projectId,
-                        cancellationToken
-                    );
+    .AsNoTracking()
+    .Where(project =>
+        project.Id == projectId
+    )
+    .Select(project => new
+    {
+        project.Status,
+        project.Budget,
+
+        MilestoneCount =
+            project.Milestones.Count,
+
+        AllocatedAmount =
+            project.Milestones
+                .Sum(milestone =>
+                    (decimal?)milestone.Amount
+                ) ?? 0m
+    })
+    .FirstOrDefaultAsync(
+        cancellationToken
+    );
 
                 if (project is null)
                 {
@@ -112,6 +127,33 @@ public class ProposalsController(AppDbContext dbContext)
                         message =
                             "Proposals can only be submitted for open projects.",
                         currentProjectStatus = project.Status
+                    });
+                }
+                if (project.MilestoneCount == 0)
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "This project is not ready for proposals because it has no milestones."
+                    });
+                }
+
+                if (project.AllocatedAmount != project.Budget)
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "This project is not ready for proposals because its milestone amounts do not match the project budget.",
+
+                        projectBudget =
+                            project.Budget,
+
+                        allocatedAmount =
+                            project.AllocatedAmount,
+
+                        remainingAmount =
+                            project.Budget -
+                            project.AllocatedAmount
                     });
                 }
 
@@ -584,6 +626,53 @@ public class ProposalsController(AppDbContext dbContext)
                         message =
                             "This project already has an assigned freelancer.",
                         currentStatus = project.Status
+                    });
+                }
+                var milestoneCount =
+    await dbContext.Milestones
+        .CountAsync(
+            milestone =>
+                milestone.ProjectId ==
+                projectId,
+            cancellationToken
+        );
+
+                if (milestoneCount == 0)
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "A proposal cannot be accepted because this project has no milestones."
+                    });
+                }
+
+                var allocatedAmount =
+                    await dbContext.Milestones
+                        .Where(milestone =>
+                            milestone.ProjectId ==
+                            projectId
+                        )
+                        .SumAsync(
+                            milestone =>
+                                (decimal?)milestone.Amount,
+                            cancellationToken
+                        ) ?? 0m;
+
+                if (allocatedAmount != project.Budget)
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "A proposal cannot be accepted because the milestone amounts do not match the project budget.",
+
+                        projectBudget =
+                            project.Budget,
+
+                        allocatedAmount,
+
+                        remainingAmount =
+                            project.Budget -
+                            allocatedAmount
                     });
                 }
 

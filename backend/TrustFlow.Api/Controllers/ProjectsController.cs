@@ -76,9 +76,14 @@ namespace TrustFlow.Api.Controllers
        CancellationToken cancellationToken)
         {
             var query = dbContext.Projects
-                .AsNoTracking()
-                .Where(project =>
-                    project.Status == ProjectStatus.Open);
+      .AsNoTracking()
+      .Where(project =>
+          project.Status == ProjectStatus.Open &&
+          project.Milestones.Any() &&
+          project.Milestones.Sum(
+              milestone => milestone.Amount
+          ) == project.Budget
+      );
 
             if (!string.IsNullOrWhiteSpace(request.Search))
             {
@@ -228,8 +233,13 @@ namespace TrustFlow.Api.Controllers
             var project = await dbContext.Projects
                 .AsNoTracking()
                 .Where(project =>
-                    project.Id == id &&
-                    project.Status == ProjectStatus.Open)
+                project.Id == id &&
+                project.Status == ProjectStatus.Open &&
+                project.Milestones.Any() &&
+                 project.Milestones.Sum(
+        milestone => milestone.Amount
+    ) == project.Budget
+)
                 .Select(project =>
                     new PublicProjectDetailsResponse
                     {
