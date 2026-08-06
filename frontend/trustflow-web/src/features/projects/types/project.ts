@@ -14,6 +14,7 @@ export type ClientProject = {
 
   milestoneCount: number;
   approvedMilestoneCount: number;
+  submittedMilestoneCount: number;
 
   proposalCount: number;
   pendingProposalCount: number;

@@ -845,8 +845,7 @@ namespace TrustFlow.Api.Controllers
                     {
                         Id = project.Id,
 
-                        FreelancerId =
-                            project.FreelancerId,
+                        FreelancerId = project.FreelancerId,
 
                         FreelancerFullName =
                             project.Freelancer == null
@@ -874,6 +873,11 @@ namespace TrustFlow.Api.Controllers
                                     milestone.Status ==
                                     MileStoneStatus.Approved
                             ),
+                        SubmittedMilestoneCount =
+                            project.Milestones.Count(
+                                     milestone =>
+                                     milestone.Status == MileStoneStatus.Submitted
+    ),
 
                         ProposalCount =
                             project.Proposals.Count,

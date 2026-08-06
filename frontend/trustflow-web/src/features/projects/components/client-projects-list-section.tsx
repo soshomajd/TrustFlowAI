@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import {
     AlertCircle,
+    ClipboardCheck,
     CalendarDays,
     CheckCircle2,
     CircleDollarSign,
@@ -22,6 +23,7 @@ import { getApiErrorMessage } from "@/lib/api/get-api-error-message";
 import { cn } from "@/lib/utils";
 import { ProjectProposalActivityBadge, } from "@/features/projects/components/project-proposal-activity-badge";
 import { StaggerContainer, StaggerItem, } from "@/components/motion/animation-primitives";
+import { ProjectMilestoneReviewBadge, } from "@/features/projects/components/project-milestone-review-badge";
 
 const PAGE_SIZE = 10;
 
@@ -197,6 +199,8 @@ function ClientProjectListItem({
 
     const hasProposalActivity =
         project.pendingProposalCount > 0;
+    const hasMilestoneReviewActivity =
+        project.submittedMilestoneCount > 0;
 
     return (
         <article
@@ -205,7 +209,11 @@ function ClientProjectListItem({
 
                 hasProposalActivity &&
                 "border-l-4 border-l-amber-400 bg-amber-500/4 shadow-[inset_12px_0_30px_-24px_rgba(245,158,11,0.8)]",
+
+                hasMilestoneReviewActivity &&
+                "border-l-4 border-l-violet-400 bg-violet-500/5 shadow-[inset_12px_0_30px_-24px_rgba(139,92,246,0.9)]",
             )}
+
         >
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
@@ -226,6 +234,11 @@ function ClientProjectListItem({
                         <ProjectProposalActivityBadge
                             count={
                                 project.pendingProposalCount
+                            }
+                        />
+                        <ProjectMilestoneReviewBadge
+                            count={
+                                project.submittedMilestoneCount
                             }
                         />
                     </div>
@@ -304,6 +317,29 @@ function ClientProjectListItem({
                     />
                 </div>
             </div>
+            {hasMilestoneReviewActivity && (
+                <div className="mt-5 flex justify-end border-t pt-5">
+                    <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="border-violet-500/30 bg-violet-500/5 text-violet-300 hover:bg-violet-500/10 hover:text-violet-200"
+                    >
+                        <Link
+                            href={`/dashboard/client/projects/${project.id}#project-milestones`}
+                        >
+                            <ClipboardCheck className="size-4" />
+
+                            Review{" "}
+                            {project.submittedMilestoneCount}{" "}
+                            {project.submittedMilestoneCount ===
+                                1
+                                ? "milestone"
+                                : "milestones"}
+                        </Link>
+                    </Button>
+                </div>
+            )}
         </article >
     );
 }

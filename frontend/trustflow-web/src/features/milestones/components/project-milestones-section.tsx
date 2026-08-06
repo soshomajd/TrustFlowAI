@@ -85,8 +85,9 @@ export function ProjectMilestonesSection({
     return (
         <AnimatedSection>
             <section
+                id="project-milestones"
                 aria-labelledby="project-milestones-title"
-                className="rounded-2xl border bg-card/70 p-5 backdrop-blur sm:p-6"
+                className="scroll-mt-24 rounded-2xl border bg-card/70 p-5 backdrop-blur sm:p-6"
             >
                 <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>

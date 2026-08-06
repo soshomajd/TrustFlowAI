@@ -33,4 +33,6 @@ public sealed class ClientProjectResponse
     public ProjectStatus Status { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
+    
+    public int SubmittedMilestoneCount { get; set; }
 }

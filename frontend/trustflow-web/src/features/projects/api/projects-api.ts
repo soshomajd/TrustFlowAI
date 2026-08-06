@@ -13,15 +13,15 @@ import type { PagedResponse } from "@/types/pagination";
 import type { ClientDashboardSummary } from "@/features/projects/types/client-dashboard";
 import type { ProjectWorkspace } from "@/features/projects/types/project-workspace";
 
-export async function getClientProjects(params: GetClientProjectsParams = {}) {
+export async function getClientProjects(
+  params: GetClientProjectsParams,
+  signal?: AbortSignal,
+) {
   const response = await apiClient.get<PagedResponse<ClientProject>>(
     "/projects/mine",
     {
-      params: {
-        page: params.page ?? 1,
-        pageSize: params.pageSize ?? 10,
-        status: params.status,
-      },
+      params,
+      signal,
     },
   );
 
