@@ -24,6 +24,9 @@ namespace TrustFlow.Api.Models
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
         public ICollection<MileStone> Milestones { get; set; } = [];
         public ICollection<Proposal> Proposals { get; set; } = [];
+
+        [JsonIgnore]
+        public Escrow? Escrow { get; set; }
         public Guid? FreelancerId { get; set; }
         [JsonIgnore]
         public ApplicationUser? Freelancer { get; set; }

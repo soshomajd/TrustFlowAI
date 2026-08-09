@@ -26,9 +26,14 @@ public class AppDbContext(
     public DbSet<RefreshToken> RefreshTokens =>
         Set<RefreshToken>();
 
+    public DbSet<Escrow> Escrows =>
+        Set<Escrow>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
+
+
 
         base.OnModelCreating(modelBuilder);
 
@@ -37,6 +42,7 @@ public class AppDbContext(
         ConfigureProjects(modelBuilder);
         ConfigureMilestones(modelBuilder);
         ConfigureProposals(modelBuilder);
+        ConfigureEscrows(modelBuilder);
         ConfigureRefreshTokens(modelBuilder);
     }
 
@@ -84,6 +90,108 @@ public class AppDbContext(
         });
     }
 
+
+
+
+    private static void ConfigureEscrows(
+        ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Escrow>(escrow =>
+        {
+            escrow.Property(item => item.TotalAmount)
+                .HasPrecision(18, 2);
+
+            escrow.Property(item => item.ReleasedAmount)
+                .HasPrecision(18, 2);
+
+            escrow.Property(item => item.Status)
+                .HasConversion<string>()
+                .HasDefaultValue(
+                    EscrowStatus.PendingDeployment
+                );
+
+            escrow.Property(item => item.TokenAddress)
+                .HasMaxLength(42);
+
+            escrow.Property(item => item.ContractAddress)
+                .HasMaxLength(42);
+
+            escrow.Property(
+                    item => item.ClientWalletAddress)
+                .HasMaxLength(42);
+
+            escrow.Property(
+                    item => item.FreelancerWalletAddress)
+                .HasMaxLength(42);
+
+            escrow.Property(
+                    item =>
+                        item.DeploymentTransactionHash)
+                .HasMaxLength(66);
+
+            escrow.Property(
+                    item =>
+                        item.FundingTransactionHash)
+                .HasMaxLength(66);
+
+            escrow.Property(
+                    item =>
+                        item.CancellationTransactionHash)
+                .HasMaxLength(66);
+
+            escrow.HasOne(item => item.Project)
+                .WithOne(project => project.Escrow)
+                .HasForeignKey<Escrow>(
+                    item => item.ProjectId
+                )
+                .OnDelete(DeleteBehavior.Cascade);
+
+            escrow.HasIndex(item => item.ProjectId)
+                .IsUnique();
+
+            escrow.HasIndex(item =>
+                    item.ContractAddress)
+                .IsUnique()
+                .HasFilter(
+                    "\"ContractAddress\" IS NOT NULL"
+                )
+                .HasDatabaseName(
+                    "IX_Escrows_ContractAddress"
+                );
+
+            escrow.HasIndex(item => new
+            {
+                item.Status,
+                item.UpdatedAt
+            })
+                .HasDatabaseName(
+                    "IX_Escrows_Status_UpdatedAt"
+                );
+
+            escrow.ToTable(table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_Escrows_ChainId_Positive",
+                    "\"ChainId\" > 0"
+                );
+
+                table.HasCheckConstraint(
+                    "CK_Escrows_TotalAmount_Positive",
+                    "\"TotalAmount\" > 0"
+                );
+
+                table.HasCheckConstraint(
+                    "CK_Escrows_ReleasedAmount_NonNegative",
+                    "\"ReleasedAmount\" >= 0"
+                );
+
+                table.HasCheckConstraint(
+                    "CK_Escrows_ReleasedAmount_WithinTotal",
+                    "\"ReleasedAmount\" <= \"TotalAmount\""
+                );
+            });
+        });
+    }
     private static void ConfigureProjects(
         ModelBuilder modelBuilder)
     {
