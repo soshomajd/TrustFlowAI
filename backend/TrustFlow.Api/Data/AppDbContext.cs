@@ -44,6 +44,7 @@ public class AppDbContext(
         ConfigureProposals(modelBuilder);
         ConfigureEscrows(modelBuilder);
         ConfigureRefreshTokens(modelBuilder);
+        ConfigureWalletIdentity(modelBuilder);
     }
 
     private static void ConfigureRefreshTokens(
@@ -91,6 +92,43 @@ public class AppDbContext(
     }
 
 
+
+    private static void ConfigureWalletIdentity(
+        ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ApplicationUser>(
+            user =>
+            {
+                user.Property(item =>
+                        item.WalletAddress)
+                    .HasMaxLength(42);
+
+                user.Property(item =>
+                        item.WalletAddressNormalized)
+                    .HasMaxLength(42);
+
+                user.Property(item =>
+                        item.PendingWalletAddress)
+                    .HasMaxLength(42);
+
+                user.Property(item =>
+                        item.WalletVerificationNonce)
+                    .HasMaxLength(64);
+
+                user.HasIndex(item =>
+                        item.WalletAddressNormalized)
+                    .IsUnique()
+                    .HasFilter(
+                        "\"WalletAddressNormalized\" " +
+                        "IS NOT NULL"
+                    )
+                    .HasDatabaseName(
+                        "IX_AspNetUsers_" +
+                        "WalletAddressNormalized"
+                    );
+            }
+        );
+    }
 
 
     private static void ConfigureEscrows(

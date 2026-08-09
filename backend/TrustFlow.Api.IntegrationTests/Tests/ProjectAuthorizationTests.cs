@@ -69,6 +69,12 @@ public sealed class ProjectAuthorizationTests
             originalTitle
         );
 
+        await CreateMilestoneAsync(
+            clientAToken,
+                projectId
+);
+
+
         using var updateRequest =
             CreateAuthorizedJsonRequest(
                 HttpMethod.Put,
@@ -296,5 +302,39 @@ public sealed class ProjectAuthorizationTests
             );
 
         return request;
+    }
+    private async Task CreateMilestoneAsync(
+    string accessToken,
+    Guid projectId)
+    {
+        using var request =
+            CreateAuthorizedJsonRequest(
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/milestones",
+                accessToken,
+                new
+                {
+                    Title =
+                        "Authorization test milestone",
+
+                    Description =
+                        "Milestone used to make the project publicly available.",
+
+                    Amount = 2000.00m,
+
+                    SequenceNumber = 1,
+
+                    Deadline =
+                        DateTimeOffset.UtcNow.AddDays(20)
+                }
+            );
+
+        var response =
+            await _client.SendAsync(request);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            response.StatusCode
+        );
     }
 }

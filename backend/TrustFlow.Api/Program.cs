@@ -353,8 +353,10 @@ app.UseRouting();
 
 app.UseCors("Frontend");
 
-app.UseRateLimiter();
-
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    app.UseRateLimiter();
+}
 app.UseAuthentication();
 
 app.UseAuthorization();

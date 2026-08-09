@@ -32,4 +32,45 @@ public sealed class EscrowResponse
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
+    public string? DeploymentTransactionHash
+    {
+        get;
+        set;
+    }
+
+    public string? FundingTransactionHash
+    {
+        get;
+        set;
+    }
+
+    public string? CancellationTransactionHash
+    {
+        get;
+        set;
+    }
+
+    public DateTimeOffset? DeployedAt
+    {
+        get;
+        set;
+    }
+
+    public DateTimeOffset? FundedAt
+    {
+        get;
+        set;
+    }
+
+    public DateTimeOffset? CompletedAt
+    {
+        get;
+        set;
+    }
+
+    public DateTimeOffset? CancelledAt
+    {
+        get;
+        set;
+    }
 }

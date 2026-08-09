@@ -103,6 +103,72 @@ public sealed class EscrowsController(
                     "The project does not have an assigned freelancer."
             });
         }
+        var clientWallet =
+    await dbContext.Users
+        .AsNoTracking()
+        .Where(user =>
+            user.Id == clientId)
+        .Select(user => new
+        {
+            user.WalletAddress,
+            user.WalletAddressNormalized,
+            user.WalletVerifiedAt
+        })
+        .FirstOrDefaultAsync(
+            cancellationToken
+        );
+
+        if (
+            clientWallet is null ||
+            string.IsNullOrWhiteSpace(
+                clientWallet.WalletAddress
+            ) ||
+            string.IsNullOrWhiteSpace(
+                clientWallet.WalletAddressNormalized
+            ) ||
+            !clientWallet.WalletVerifiedAt.HasValue
+        )
+        {
+            return Conflict(new
+            {
+                message =
+                    "You must connect and verify your wallet before creating an escrow."
+            });
+        }
+
+        var freelancerWallet =
+            await dbContext.Users
+                .AsNoTracking()
+                .Where(user =>
+                    user.Id ==
+                    project.FreelancerId.Value)
+                .Select(user => new
+                {
+                    user.WalletAddress,
+                    user.WalletAddressNormalized,
+                    user.WalletVerifiedAt
+                })
+                .FirstOrDefaultAsync(
+                    cancellationToken
+                );
+
+        if (
+            freelancerWallet is null ||
+            string.IsNullOrWhiteSpace(
+                freelancerWallet.WalletAddress
+            ) ||
+            string.IsNullOrWhiteSpace(
+                freelancerWallet.WalletAddressNormalized
+            ) ||
+            !freelancerWallet.WalletVerifiedAt.HasValue
+        )
+        {
+            return Conflict(new
+            {
+                message =
+                    "The assigned freelancer must connect and verify a wallet before an escrow can be created."
+            });
+        }
 
         var escrowExists =
             await dbContext.Escrows
@@ -123,20 +189,35 @@ public sealed class EscrowsController(
             });
         }
 
+        var now =
+            DateTimeOffset.UtcNow;
+
         var escrow = new Escrow
         {
             ProjectId = project.Id,
+
             ChainId = request.ChainId,
+
             TokenAddress =
                 tokenAddress.ToLowerInvariant(),
-            TotalAmount = project.Budget,
+
+            ClientWalletAddress =
+                clientWallet.WalletAddress,
+
+            FreelancerWalletAddress =
+                freelancerWallet.WalletAddress,
+
+            TotalAmount =
+                project.Budget,
+
             ReleasedAmount = 0m,
+
             Status =
                 EscrowStatus.PendingDeployment,
-            CreatedAt =
-                DateTimeOffset.UtcNow,
-            UpdatedAt =
-                DateTimeOffset.UtcNow
+
+            CreatedAt = now,
+
+            UpdatedAt = now
         };
 
         dbContext.Escrows.Add(escrow);
@@ -164,6 +245,55 @@ public sealed class EscrowsController(
         );
     }
 
+    [Authorize]
+    [HttpGet]
+    public async Task<IActionResult> GetEscrow(
+    Guid projectId,
+    CancellationToken cancellationToken)
+    {
+        var userIdValue =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier
+            );
+
+        if (!Guid.TryParse(
+            userIdValue,
+            out var userId))
+        {
+            return Unauthorized(new
+            {
+                message =
+                    "Invalid user identity."
+            });
+        }
+
+        var escrow =
+            await dbContext.Escrows
+                .AsNoTracking()
+                .Where(item =>
+                    item.ProjectId == projectId &&
+                    (
+                        item.Project.ClientId ==
+                        userId ||
+                        item.Project.FreelancerId ==
+                        userId
+                    ))
+                .FirstOrDefaultAsync(
+                    cancellationToken
+                );
+
+        if (escrow is null)
+        {
+            return NotFound(new
+            {
+                message =
+                    "Escrow not found."
+            });
+        }
+
+        return Ok(ToResponse(escrow));
+    }
+
     private static EscrowResponse ToResponse(
         Escrow escrow)
     {
@@ -185,8 +315,18 @@ public sealed class EscrowsController(
             ReleasedAmount =
                 escrow.ReleasedAmount,
             Status = escrow.Status,
+            DeploymentTransactionHash =
+                escrow.DeploymentTransactionHash,
+            FundingTransactionHash =
+                escrow.FundingTransactionHash,
+            CancellationTransactionHash =
+                escrow.CancellationTransactionHash,
             CreatedAt = escrow.CreatedAt,
-            UpdatedAt = escrow.UpdatedAt
+            UpdatedAt = escrow.UpdatedAt,
+            DeployedAt = escrow.DeployedAt,
+            FundedAt = escrow.FundedAt,
+            CompletedAt = escrow.CompletedAt,
+            CancelledAt = escrow.CancelledAt
         };
     }
 

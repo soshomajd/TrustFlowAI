@@ -83,6 +83,10 @@ public sealed class ProposalAcceptanceTests
         var projectId = await CreateProjectAsync(
             clientToken
         );
+        await CreateMilestoneAsync(
+    projectId,
+    clientToken
+);
 
         var proposalAId = await CreateProposalAsync(
             projectId,
@@ -461,5 +465,39 @@ public sealed class ProposalAcceptanceTests
             );
 
         return request;
+    }
+    private async Task CreateMilestoneAsync(
+    Guid projectId,
+    string clientToken)
+    {
+        using var request =
+            CreateAuthorizedJsonRequest(
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/milestones",
+                clientToken,
+                new
+                {
+                    Title =
+                        "Proposal acceptance milestone",
+
+                    Description =
+                        "Complete project delivery for proposal testing.",
+
+                    Amount = 2000.00m,
+
+                    SequenceNumber = 1,
+
+                    Deadline =
+                        DateTimeOffset.UtcNow.AddDays(30)
+                }
+            );
+
+        var response =
+            await _client.SendAsync(request);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            response.StatusCode
+        );
     }
 }
