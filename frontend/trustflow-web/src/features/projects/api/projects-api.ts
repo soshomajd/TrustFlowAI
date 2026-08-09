@@ -1,17 +1,18 @@
 import "client-only";
 
 import type {
+  AssignedProject,
   ClientProject,
-  GetClientProjectsParams,
   CreateProjectRequest,
   CreatedProjectResponse,
   GetAssignedProjectsParams,
-  AssignedProject,
+  GetClientProjectsParams,
 } from "@/features/projects/types/project";
-import { apiClient } from "@/lib/api/api-client";
-import type { PagedResponse } from "@/types/pagination";
 import type { ClientDashboardSummary } from "@/features/projects/types/client-dashboard";
 import type { ProjectWorkspace } from "@/features/projects/types/project-workspace";
+import { apiClient } from "@/lib/api/api-client";
+import type { PagedResponse } from "@/types/pagination";
+import type { FreelancerDashboardSummary } from "@/features/projects/types/freelancer-dashboard";
 
 export async function getClientProjects(
   params: GetClientProjectsParams,
@@ -45,22 +46,55 @@ export async function createProject(request: CreateProjectRequest) {
   return response.data;
 }
 
-export async function getProjectWorkspace(projectId: string) {
+export async function updateProject(
+  projectId: string,
+  request: CreateProjectRequest,
+) {
+  const response = await apiClient.put<CreatedProjectResponse>(
+    `/projects/${projectId}`,
+    request,
+  );
+
+  return response.data;
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  await apiClient.delete(`/projects/${projectId}`);
+}
+
+export async function getProjectWorkspace(
+  projectId: string,
+  signal?: AbortSignal,
+) {
   const response = await apiClient.get<ProjectWorkspace>(
     `/projects/${projectId}/workspace`,
+    {
+      signal,
+    },
   );
 
   return response.data;
 }
 
 export async function getAssignedProjects(
-  params: Required<GetAssignedProjectsParams>,
+  params: GetAssignedProjectsParams,
   signal?: AbortSignal,
 ) {
   const response = await apiClient.get<PagedResponse<AssignedProject>>(
     "/projects/assigned-to-me",
     {
       params,
+      signal,
+    },
+  );
+
+  return response.data;
+}
+
+export async function getFreelancerDashboardSummary(signal?: AbortSignal) {
+  const response = await apiClient.get<FreelancerDashboardSummary>(
+    "/projects/freelancer-dashboard-summary",
+    {
       signal,
     },
   );

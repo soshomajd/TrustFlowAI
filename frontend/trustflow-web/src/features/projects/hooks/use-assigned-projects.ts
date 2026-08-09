@@ -23,7 +23,13 @@ export function useAssignedProjects(params: GetAssignedProjectsParams = {}) {
 
     placeholderData: (previousData) => previousData,
 
-    staleTime: 30_000,
+    staleTime: 15_000,
+
+    refetchInterval: 15_000,
+
+    refetchIntervalInBackground: false,
+
+    refetchOnWindowFocus: true,
 
     retry: 1,
   });

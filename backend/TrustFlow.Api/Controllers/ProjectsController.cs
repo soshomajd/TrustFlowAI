@@ -605,6 +605,13 @@ namespace TrustFlow.Api.Controllers
                         MilestoneCount =
                             project.Milestones.Count,
 
+                        RejectedMilestoneCount =
+                            project.Milestones.Count(
+                              milestone =>
+                                 milestone.Status ==
+                                  MileStoneStatus.Rejected
+                          ),
+
                         Deadline = project.Deadline,
 
                         Status = project.Status,
@@ -794,6 +801,81 @@ namespace TrustFlow.Api.Controllers
                             ProposalStatus.Pending,
                         cancellationToken
                     );
+
+            return Ok(summary);
+        }
+
+
+        [Authorize(Roles = AppRoles.Freelancer)]
+        [HttpGet("freelancer-dashboard-summary")]
+        public async Task<IActionResult>
+    GetFreelancerDashboardSummary(
+        CancellationToken cancellationToken)
+        {
+            var freelancerIdValue =
+                User.FindFirstValue(
+                    ClaimTypes.NameIdentifier
+                );
+
+            if (!Guid.TryParse(
+                freelancerIdValue,
+                out var freelancerId))
+            {
+                return Unauthorized(new
+                {
+                    message =
+                        "Invalid user identity."
+                });
+            }
+
+            var summary =
+                new FreelancerDashboardSummaryResponse
+                {
+                    TotalProposals =
+                        await dbContext.Proposals
+                            .AsNoTracking()
+                            .CountAsync(
+                                proposal =>
+                                    proposal.FreelancerId ==
+                                    freelancerId,
+                                cancellationToken
+                            ),
+
+                    PendingProposals =
+                        await dbContext.Proposals
+                            .AsNoTracking()
+                            .CountAsync(
+                                proposal =>
+                                    proposal.FreelancerId ==
+                                    freelancerId &&
+                                    proposal.Status ==
+                                    ProposalStatus.Pending,
+                                cancellationToken
+                            ),
+
+                    AssignedProjects =
+                        await dbContext.Projects
+                            .AsNoTracking()
+                            .CountAsync(
+                                project =>
+                                    project.FreelancerId ==
+                                    freelancerId,
+                                cancellationToken
+                            ),
+
+                    RejectedMilestones =
+                        await dbContext.Milestones
+                            .AsNoTracking()
+                            .CountAsync(
+                                milestone =>
+                                    milestone.Project
+                                        .FreelancerId ==
+                                    freelancerId &&
+                                    milestone.Status ==
+                                    MileStoneStatus.Rejected,
+                                cancellationToken
+                            )
+                };
 
             return Ok(summary);
         }

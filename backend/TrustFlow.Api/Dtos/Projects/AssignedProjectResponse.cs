@@ -13,7 +13,7 @@ public class AssignedProjectResponse
     public decimal Budget { get; set; }
     public decimal AllocatedAmount { get; set; }
     public int MilestoneCount { get; set; }
-
+    public int RejectedMilestoneCount { get; set; }
     public DateTimeOffset Deadline { get; set; }
     public ProjectStatus Status { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

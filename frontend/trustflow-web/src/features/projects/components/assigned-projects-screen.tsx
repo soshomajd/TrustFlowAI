@@ -14,6 +14,7 @@ import {
     UserRound,
 } from "lucide-react";
 import { useState } from "react";
+import { ProjectRejectedMilestoneBadge } from "@/features/projects/components/project-rejected-milestone-badge";
 
 import {
     AnimatedSection,
@@ -232,9 +233,18 @@ function AssignedProjectCard({
                     100,
                 ),
             );
+    const hasRejectedMilestones =
+        project.rejectedMilestoneCount > 0;
 
     return (
-        <article className="p-5 transition hover:bg-muted/20 sm:p-6">
+        <article
+            className={cn(
+                "rounded-2xl border bg-card/60 p-5 transition-colors hover:border-primary/40",
+
+                hasRejectedMilestones &&
+                "border-red-500/40 bg-red-500/5 shadow-[inset_12px_0_30px_-24px_rgba(239,68,68,0.9)] hover:border-red-500/50",
+            )}
+        >
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-3">
@@ -248,6 +258,11 @@ function AssignedProjectCard({
 
                         <ProjectStatusBadge
                             status={project.status}
+                        />
+                        <ProjectRejectedMilestoneBadge
+                            count={
+                                project.rejectedMilestoneCount
+                            }
                         />
                     </div>
 
@@ -351,11 +366,26 @@ function AssignedProjectCard({
                 <Button
                     asChild
                     variant="outline"
+                    className={cn(
+                        hasRejectedMilestones &&
+                        "border-red-500/30 bg-red-500/5 text-red-300 hover:bg-red-500/10 hover:text-red-200",
+                    )}
                 >
                     <Link
                         href={`/dashboard/freelancer/projects/${project.id}`}
                     >
-                        Open workspace
+                        {hasRejectedMilestones ? (
+                            <>
+                                <TriangleAlert className="size-4" />
+
+                                Fix rejected{" "}
+                                {project.rejectedMilestoneCount === 1
+                                    ? "milestone"
+                                    : "milestones"}
+                            </>
+                        ) : (
+                            "Open workspace"
+                        )}
                     </Link>
                 </Button>
             </div>

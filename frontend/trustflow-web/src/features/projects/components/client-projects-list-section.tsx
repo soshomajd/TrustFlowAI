@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
     AlertCircle,
     ClipboardCheck,
@@ -11,8 +11,20 @@ import {
     LoaderCircle,
     RefreshCw,
     Send,
+    Pencil,
+    Trash2,
     UserRound,
 } from "lucide-react";
+import {
+    AlertDialog,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ClientProjectsListSkeleton } from "@/features/projects/components/client-projects-list-skeleton";
@@ -24,6 +36,8 @@ import { cn } from "@/lib/utils";
 import { ProjectProposalActivityBadge, } from "@/features/projects/components/project-proposal-activity-badge";
 import { StaggerContainer, StaggerItem, } from "@/components/motion/animation-primitives";
 import { ProjectMilestoneReviewBadge, } from "@/features/projects/components/project-milestone-review-badge";
+import { toast } from "sonner";
+import { useDeleteProject } from "@/features/projects/hooks/use-delete-project";
 
 const PAGE_SIZE = 10;
 
@@ -188,6 +202,12 @@ type ClientProjectListItemProps = {
 function ClientProjectListItem({
     project,
 }: ClientProjectListItemProps) {
+    const deleteMutation =
+        useDeleteProject();
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen,] = useState(false);
+
+    const canManageProject =
+        project.status === "Open";
     const progress =
         project.milestoneCount === 0
             ? 0
@@ -201,6 +221,28 @@ function ClientProjectListItem({
         project.pendingProposalCount > 0;
     const hasMilestoneReviewActivity =
         project.submittedMilestoneCount > 0;
+
+    const handleDeleteProject =
+        async () => {
+            try {
+                await deleteMutation.mutateAsync(
+                    project.id,
+                );
+
+                setIsDeleteDialogOpen(false);
+
+                toast.success(
+                    "Project deleted successfully.",
+                );
+            } catch (error) {
+                toast.error(
+                    getApiErrorMessage(
+                        error,
+                        "Project could not be deleted.",
+                    ),
+                );
+            }
+        };
 
     return (
         <article
@@ -340,6 +382,105 @@ function ClientProjectListItem({
                     </Button>
                 </div>
             )}
+            <div className="mt-5 flex flex-wrap justify-end gap-2 border-t pt-5">
+                <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                >
+                    <Link
+                        href={`/dashboard/client/projects/${project.id}`}
+                    >
+                        Open project
+                    </Link>
+                </Button>
+
+                {canManageProject && (
+                    <>
+                        <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                        >
+                            <Link
+                                href={`/dashboard/client/projects/${project.id}/edit`}
+                            >
+                                <Pencil className="size-4" />
+                                Edit
+                            </Link>
+                        </Button>
+
+                        <AlertDialog
+                            open={isDeleteDialogOpen}
+                            onOpenChange={(open) => {
+                                if (!deleteMutation.isPending) {
+                                    setIsDeleteDialogOpen(open);
+                                }
+                            }}
+                        >
+                            <AlertDialogTrigger asChild>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                >
+                                    <Trash2 className="size-4" />
+                                    Delete
+                                </Button>
+                            </AlertDialogTrigger>
+
+                            <AlertDialogContent className="border-destructive/20">
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>
+                                        Delete project?
+                                    </AlertDialogTitle>
+
+                                    <AlertDialogDescription>
+                                        You are about to permanently
+                                        delete{" "}
+                                        <span className="font-medium text-foreground">
+                                            {project.title}
+                                        </span>
+                                        . This action cannot be undone.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel
+                                        disabled={
+                                            deleteMutation.isPending
+                                        }
+                                    >
+                                        Cancel
+                                    </AlertDialogCancel>
+
+                                    <Button
+                                        type="button"
+                                        variant="destructive"
+                                        disabled={
+                                            deleteMutation.isPending
+                                        }
+                                        onClick={() => {
+                                            void handleDeleteProject();
+                                        }}
+                                    >
+                                        {deleteMutation.isPending ? (
+                                            <LoaderCircle className="size-4 animate-spin" />
+                                        ) : (
+                                            <Trash2 className="size-4" />
+                                        )}
+
+                                        {deleteMutation.isPending
+                                            ? "Deleting..."
+                                            : "Delete project"}
+                                    </Button>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </>
+                )}
+            </div>
         </article >
     );
 }

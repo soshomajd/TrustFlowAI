@@ -157,7 +157,7 @@ export function MilestoneForm({
                     )}
             </div>
 
-            <div className="space-y-2">
+            <div className="min-w-0 max-w-full space-y-2">
                 <div className="flex items-center justify-between gap-3">
                     <Label htmlFor="milestone-description">
                         Description
@@ -172,14 +172,13 @@ export function MilestoneForm({
                     id="milestone-description"
                     placeholder="Describe what must be delivered."
                     rows={5}
+                    wrap="soft"
                     disabled={isSubmitting}
+                    className="w-full min-w-0 max-w-full resize-y overflow-x-hidden break-words [field-sizing:fixed]"
                     aria-invalid={Boolean(
-                        form.formState.errors
-                            .description,
+                        form.formState.errors.description,
                     )}
-                    {...form.register(
-                        "description",
-                    )}
+                    {...form.register("description")}
                 />
 
                 {form.formState.errors

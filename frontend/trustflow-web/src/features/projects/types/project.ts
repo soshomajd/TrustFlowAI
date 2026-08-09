@@ -49,17 +49,14 @@ export type CreatedProjectResponse = {
 
 export type AssignedProject = {
   id: string;
-
   clientId: string;
   clientFullName: string;
-
   title: string;
   description: string;
-
   budget: number;
   allocatedAmount: number;
   milestoneCount: number;
-
+  rejectedMilestoneCount: number;
   deadline: string;
   status: ProjectStatus;
   createdAt: string;

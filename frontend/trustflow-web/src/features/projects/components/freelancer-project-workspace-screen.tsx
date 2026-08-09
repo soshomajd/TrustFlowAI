@@ -267,6 +267,9 @@ function FreelancerMilestoneCard({
             milestone.id,
         );
 
+    const isRejected =
+        milestone.status === "Rejected";
+
     const blockingMilestone =
         milestones.find(
             (previousMilestone) =>
@@ -306,7 +309,13 @@ function FreelancerMilestoneCard({
                 : null;
 
     return (
-        <article className="rounded-xl border bg-background/30 p-5">
+        <article
+            className={cn(
+                "rounded-xl border bg-background/30 p-5 transition",
+                isRejected &&
+                "border-red-500/40 bg-red-500/6 shadow-[inset_12px_0_30px_-24px_rgba(239,68,68,0.9)]",
+            )}
+        >
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-3">
@@ -346,6 +355,19 @@ function FreelancerMilestoneCard({
                     />
                 </div>
             </div>
+
+            {isRejected && (
+                <div className="mt-5 flex gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-red-400" />
+
+                    <p>
+                        The client requested changes.
+                        Restart this milestone, make the
+                        required updates, and submit it
+                        again.
+                    </p>
+                </div>
+            )}
 
             {blockingMilestone &&
                 (
@@ -402,6 +424,15 @@ function FreelancerMilestoneCard({
                     {canStart && (
                         <Button
                             type="button"
+                            variant={
+                                isRejected
+                                    ? "outline"
+                                    : "default"
+                            }
+                            className={cn(
+                                isRejected &&
+                                "border-red-500/30 bg-red-500/10 text-red-200 hover:bg-red-500/20 hover:text-red-100",
+                            )}
                             disabled={isMutating}
                             onClick={() => {
                                 startMutation.reset();
