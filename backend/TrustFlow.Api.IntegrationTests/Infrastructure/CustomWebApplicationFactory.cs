@@ -1,7 +1,11 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using TrustFlow.Api.Blockchain;
 
 namespace TrustFlow.Api.IntegrationTests.Infrastructure;
 
@@ -50,7 +54,18 @@ public sealed class CustomWebApplicationFactory
                 ["Jwt:RefreshTokenExpirationDays"] = "30",
 
                 ["Cors:AllowedOrigins:0"] =
-                    "https://localhost"
+                    "https://localhost",
+
+                ["Blockchain:ChainId"] = "31337",
+
+                ["Blockchain:RpcUrl"] =
+                    "http://127.0.0.1:8545",
+
+                ["Blockchain:DeployerPrivateKey"] =
+                    // Well-known local Hardhat/Anvil test account #0 key.
+                    // Not a real secret; used only so config
+                    // validation passes when tests never call the chain.
+                    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
             };
 
         builder.ConfigureHostConfiguration(
@@ -73,6 +88,16 @@ public sealed class CustomWebApplicationFactory
         builder.UseContentRoot(
             FindApiProjectDirectory()
         );
+
+        builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IEscrowChainDeployer>();
+
+            services.AddScoped<
+                IEscrowChainDeployer,
+                FakeEscrowChainDeployer
+            >();
+        });
     }
 
     private static string FindApiProjectDirectory()

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
+using TrustFlow.Api.Blockchain;
 using TrustFlow.Api.Data;
 using TrustFlow.Api.Exceptions;
 using TrustFlow.Api.Models.Identity;
@@ -145,6 +146,40 @@ if (jwtSettings.RefreshTokenExpirationDays <= 0)
     );
 }
 
+builder.Services.Configure<BlockchainOptions>(
+    builder.Configuration.GetSection(
+        BlockchainOptions.SectionName
+    )
+);
+
+var blockchainOptions = builder.Configuration
+    .GetSection(BlockchainOptions.SectionName)
+    .Get<BlockchainOptions>()
+    ?? throw new InvalidOperationException(
+        "Blockchain settings are missing."
+    );
+
+if (blockchainOptions.ChainId <= 0)
+{
+    throw new InvalidOperationException(
+        "Blockchain chain id must be greater than zero."
+    );
+}
+
+if (string.IsNullOrWhiteSpace(blockchainOptions.RpcUrl))
+{
+    throw new InvalidOperationException(
+        "Blockchain RPC URL is missing."
+    );
+}
+
+if (string.IsNullOrWhiteSpace(blockchainOptions.DeployerPrivateKey))
+{
+    throw new InvalidOperationException(
+        "Blockchain deployer private key is missing."
+    );
+}
+
 var jwtKeyBytes = Encoding.UTF8.GetBytes(
     jwtSettings.Key
 );
@@ -207,6 +242,9 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+builder.Services.AddScoped<IEscrowChainDeployer, EscrowChainDeployer>();
+builder.Services.AddScoped<IEscrowDeploymentOrchestrator, EscrowDeploymentOrchestrator>();
+builder.Services.AddScoped<IEscrowFundingSyncOrchestrator, EscrowFundingSyncOrchestrator>();
 builder.Services.AddHostedService<RefreshTokenCleanupService>();
 
 builder.Services.AddRateLimiter(options =>

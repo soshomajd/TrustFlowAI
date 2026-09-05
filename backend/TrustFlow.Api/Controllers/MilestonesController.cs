@@ -640,6 +640,9 @@ public class MilestonesController(AppDbContext dbContext)
                 milestone.ProjectId == projectId &&
                 milestone.Project.FreelancerId == freelancerId &&
                 milestone.Project.Status == ProjectStatus.InProgress &&
+                milestone.Project.Escrow != null &&
+                milestone.Project.Escrow.Status ==
+                    EscrowStatus.Funded &&
                 (
                     milestone.Status == MileStoneStatus.Pending ||
                     milestone.Status == MileStoneStatus.Rejected
@@ -679,6 +682,9 @@ public class MilestonesController(AppDbContext dbContext)
             {
                 MilestoneStatus = milestone.Status,
                 ProjectStatus = milestone.Project.Status,
+                EscrowStatus = milestone.Project.Escrow == null
+                    ? (EscrowStatus?)null
+                    : milestone.Project.Escrow.Status,
                 milestone.SequenceNumber
             })
             .FirstOrDefaultAsync(cancellationToken);
@@ -700,6 +706,17 @@ public class MilestonesController(AppDbContext dbContext)
                     "Milestones can only be started when the project is in progress.",
                 currentProjectStatus =
                     milestoneInfo.ProjectStatus
+            });
+        }
+
+        if (milestoneInfo.EscrowStatus != EscrowStatus.Funded)
+        {
+            return Conflict(new
+            {
+                message =
+                    "Work cannot start until the project's escrow is funded.",
+                currentEscrowStatus =
+                    milestoneInfo.EscrowStatus
             });
         }
 

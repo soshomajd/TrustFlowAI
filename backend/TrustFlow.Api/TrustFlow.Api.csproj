@@ -17,8 +17,15 @@
     </PackageReference>
     <PackageReference Include="Microsoft.OpenApi" Version="2.10.0" />
     <PackageReference Include="Nethereum.Signer" Version="6.1.0" />
+    <PackageReference Include="Nethereum.Web3" Version="6.1.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.16.13" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Blockchain\Artifacts\TrustFlowEscrow.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

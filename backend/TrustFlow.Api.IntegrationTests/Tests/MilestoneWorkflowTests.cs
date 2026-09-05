@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Nethereum.Signer;
 using TrustFlow.Api.IntegrationTests.Infrastructure;
 
 namespace TrustFlow.Api.IntegrationTests.Tests;
@@ -105,6 +106,13 @@ public sealed class MilestoneWorkflowTests
         await AcceptProposalAsync(
             projectId,
             proposalId,
+            clientToken
+        );
+
+        await ConnectWalletAsync(clientToken);
+        await ConnectWalletAsync(freelancerToken);
+        await SetUpFundedEscrowAsync(
+            projectId,
             clientToken
         );
 
@@ -290,6 +298,115 @@ public sealed class MilestoneWorkflowTests
         );
 
         return accessToken!;
+    }
+
+    private async Task ConnectWalletAsync(
+        string accessToken)
+    {
+        var walletKey = EthECKey.GenerateKey();
+        var walletAddress = walletKey.GetPublicAddress();
+
+        using var challengeRequest =
+            CreateAuthorizedJsonRequest(
+                HttpMethod.Post,
+                "/api/wallet/challenge",
+                accessToken,
+                new { WalletAddress = walletAddress }
+            );
+
+        var challengeResponse =
+            await _client.SendAsync(challengeRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            challengeResponse.StatusCode
+        );
+
+        await using var challengeStream =
+            await challengeResponse.Content
+                .ReadAsStreamAsync();
+
+        using var challengeDocument =
+            await JsonDocument.ParseAsync(challengeStream);
+
+        var message = challengeDocument.RootElement
+            .GetProperty("message")
+            .GetString()!;
+
+        var signature = new EthereumMessageSigner()
+            .EncodeUTF8AndSign(message, walletKey);
+
+        using var verifyRequest =
+            CreateAuthorizedJsonRequest(
+                HttpMethod.Post,
+                "/api/wallet/verify",
+                accessToken,
+                new { Signature = signature }
+            );
+
+        var verifyResponse =
+            await _client.SendAsync(verifyRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            verifyResponse.StatusCode
+        );
+    }
+
+    private async Task SetUpFundedEscrowAsync(
+        Guid projectId,
+        string clientToken)
+    {
+        using var createRequest =
+            CreateAuthorizedJsonRequest(
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/escrow",
+                clientToken,
+                new
+                {
+                    ChainId = 31337,
+                    TokenAddress =
+                        "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+                }
+            );
+
+        var createResponse =
+            await _client.SendAsync(createRequest);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            createResponse.StatusCode
+        );
+
+        using var deployRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/escrow/deploy",
+                clientToken
+            );
+
+        var deployResponse =
+            await _client.SendAsync(deployRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            deployResponse.StatusCode
+        );
+
+        using var syncRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/escrow/sync",
+                clientToken
+            );
+
+        var syncResponse =
+            await _client.SendAsync(syncRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            syncResponse.StatusCode
+        );
     }
 
     private async Task<Guid> CreateProjectAsync(

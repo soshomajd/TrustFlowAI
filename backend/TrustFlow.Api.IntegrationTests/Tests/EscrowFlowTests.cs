@@ -178,6 +178,380 @@ public sealed class EscrowFlowTests
 
 
     [Fact]
+    public async Task Deploy_TransitionsPendingDeploymentToAwaitingFunding_AndPersistsContractDetails()
+    {
+        var clientAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Client",
+                fullName: "Deploy Test Client"
+            );
+
+        var freelancerAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Freelancer",
+                fullName: "Deploy Test Freelancer"
+            );
+
+        await ConnectWalletAsync(clientAccessToken);
+        await ConnectWalletAsync(freelancerAccessToken);
+
+        var projectId =
+            await CreateInProgressProjectAsync(
+                clientAccessToken,
+                freelancerAccessToken
+            );
+
+        await CreateEscrowAsync(
+            clientAccessToken,
+            projectId
+        );
+
+        using var deployRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/escrow/deploy",
+                clientAccessToken
+            );
+
+        var deployResponse =
+            await _client.SendAsync(deployRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            deployResponse.StatusCode
+        );
+
+        await using var responseStream =
+            await deployResponse.Content
+                .ReadAsStreamAsync();
+
+        using var document =
+            await JsonDocument.ParseAsync(
+                responseStream
+            );
+
+        var root = document.RootElement;
+
+        Assert.Equal(
+            "AwaitingFunding",
+            root.GetProperty("status").GetString()
+        );
+
+        Assert.False(
+            string.IsNullOrWhiteSpace(
+                root.GetProperty("contractAddress")
+                    .GetString()
+            )
+        );
+
+        Assert.False(
+            string.IsNullOrWhiteSpace(
+                root.GetProperty("deploymentTransactionHash")
+                    .GetString()
+            )
+        );
+
+        Assert.NotEqual(
+            JsonValueKind.Null,
+            root.GetProperty("deployedAt").ValueKind
+        );
+    }
+
+    [Fact]
+    public async Task Deploy_ReturnsConflict_WhenEscrowIsNotPendingDeployment()
+    {
+        var clientAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Client",
+                fullName: "Deploy Twice Client"
+            );
+
+        var freelancerAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Freelancer",
+                fullName: "Deploy Twice Freelancer"
+            );
+
+        await ConnectWalletAsync(clientAccessToken);
+        await ConnectWalletAsync(freelancerAccessToken);
+
+        var projectId =
+            await CreateInProgressProjectAsync(
+                clientAccessToken,
+                freelancerAccessToken
+            );
+
+        await CreateEscrowAsync(
+            clientAccessToken,
+            projectId
+        );
+
+        using var firstDeployRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/escrow/deploy",
+                clientAccessToken
+            );
+
+        var firstDeployResponse =
+            await _client.SendAsync(firstDeployRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            firstDeployResponse.StatusCode
+        );
+
+        using var secondDeployRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/escrow/deploy",
+                clientAccessToken
+            );
+
+        var secondDeployResponse =
+            await _client.SendAsync(secondDeployRequest);
+
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            secondDeployResponse.StatusCode
+        );
+    }
+
+    [Fact]
+    public async Task Deploy_ReturnsNotFound_WhenNoEscrowExistsForProject()
+    {
+        var clientAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Client",
+                fullName: "Deploy Missing Escrow Client"
+            );
+
+        var freelancerAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Freelancer",
+                fullName: "Deploy Missing Escrow Freelancer"
+            );
+
+        var projectId =
+            await CreateInProgressProjectAsync(
+                clientAccessToken,
+                freelancerAccessToken
+            );
+
+        using var deployRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/escrow/deploy",
+                clientAccessToken
+            );
+
+        var deployResponse =
+            await _client.SendAsync(deployRequest);
+
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            deployResponse.StatusCode
+        );
+    }
+
+    [Fact]
+    public async Task Sync_TransitionsAwaitingFundingToFunded()
+    {
+        var clientAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Client",
+                fullName: "Sync Test Client"
+            );
+
+        var freelancerAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Freelancer",
+                fullName: "Sync Test Freelancer"
+            );
+
+        await ConnectWalletAsync(clientAccessToken);
+        await ConnectWalletAsync(freelancerAccessToken);
+
+        var projectId =
+            await CreateInProgressProjectAsync(
+                clientAccessToken,
+                freelancerAccessToken
+            );
+
+        await CreateEscrowAsync(
+            clientAccessToken,
+            projectId
+        );
+
+        await DeployEscrowAsync(
+            clientAccessToken,
+            projectId
+        );
+
+        using var syncRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/escrow/sync",
+                freelancerAccessToken
+            );
+
+        var syncResponse =
+            await _client.SendAsync(syncRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            syncResponse.StatusCode
+        );
+
+        Assert.Equal(
+            "Funded",
+            await ReadStringPropertyAsync(
+                syncResponse,
+                "status"
+            )
+        );
+    }
+
+    [Fact]
+    public async Task StartMilestone_ReturnsConflict_WhenEscrowIsNotFunded()
+    {
+        var clientAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Client",
+                fullName: "Gate Test Client"
+            );
+
+        var freelancerAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Freelancer",
+                fullName: "Gate Test Freelancer"
+            );
+
+        await ConnectWalletAsync(clientAccessToken);
+        await ConnectWalletAsync(freelancerAccessToken);
+
+        var projectId =
+            await CreateInProgressProjectAsync(
+                clientAccessToken,
+                freelancerAccessToken
+            );
+
+        await CreateEscrowAsync(
+            clientAccessToken,
+            projectId
+        );
+
+        await DeployEscrowAsync(
+            clientAccessToken,
+            projectId
+        );
+
+        var milestoneId =
+            await GetFirstMilestoneIdAsync(
+                freelancerAccessToken,
+                projectId
+            );
+
+        using var startRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Patch,
+                $"/api/projects/{projectId}/milestones/{milestoneId}/start",
+                freelancerAccessToken
+            );
+
+        var startResponse =
+            await _client.SendAsync(startRequest);
+
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            startResponse.StatusCode
+        );
+
+        var responseBody =
+            await startResponse.Content
+                .ReadAsStringAsync();
+
+        Assert.Contains(
+            "escrow is funded",
+            responseBody,
+            StringComparison.OrdinalIgnoreCase
+        );
+    }
+
+    [Fact]
+    public async Task StartMilestone_Succeeds_AfterEscrowIsFunded()
+    {
+        var clientAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Client",
+                fullName: "Gate Success Client"
+            );
+
+        var freelancerAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Freelancer",
+                fullName: "Gate Success Freelancer"
+            );
+
+        await ConnectWalletAsync(clientAccessToken);
+        await ConnectWalletAsync(freelancerAccessToken);
+
+        var projectId =
+            await CreateInProgressProjectAsync(
+                clientAccessToken,
+                freelancerAccessToken
+            );
+
+        await CreateEscrowAsync(
+            clientAccessToken,
+            projectId
+        );
+
+        await DeployEscrowAsync(
+            clientAccessToken,
+            projectId
+        );
+
+        using var syncRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/escrow/sync",
+                clientAccessToken
+            );
+
+        await _client.SendAsync(syncRequest);
+
+        var milestoneId =
+            await GetFirstMilestoneIdAsync(
+                freelancerAccessToken,
+                projectId
+            );
+
+        using var startRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Patch,
+                $"/api/projects/{projectId}/milestones/{milestoneId}/start",
+                freelancerAccessToken
+            );
+
+        var startResponse =
+            await _client.SendAsync(startRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            startResponse.StatusCode
+        );
+
+        Assert.Equal(
+            "InProgress",
+            await ReadStringPropertyAsync(
+                startResponse,
+                "status"
+            )
+        );
+    }
+
+    [Fact]
     public async Task CreateEscrow_ReturnsConflict_WhenClientWalletIsNotVerified()
     {
         var clientAccessToken =
@@ -452,6 +826,90 @@ public sealed class EscrowFlowTests
         );
 
         return projectId;
+    }
+
+    private async Task<Guid> CreateEscrowAsync(
+        string clientAccessToken,
+        Guid projectId)
+    {
+        using var request =
+            CreateAuthorizedRequest(
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/escrow",
+                clientAccessToken,
+                new
+                {
+                    ChainId = 31337,
+                    TokenAddress =
+                        "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+                }
+            );
+
+        var response =
+            await _client.SendAsync(request);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            response.StatusCode
+        );
+
+        return await ReadGuidPropertyAsync(
+            response,
+            "id"
+        );
+    }
+
+    private async Task DeployEscrowAsync(
+        string clientAccessToken,
+        Guid projectId)
+    {
+        using var request =
+            CreateAuthorizedRequest(
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/escrow/deploy",
+                clientAccessToken
+            );
+
+        var response =
+            await _client.SendAsync(request);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode
+        );
+    }
+
+    private async Task<Guid> GetFirstMilestoneIdAsync(
+        string accessToken,
+        Guid projectId)
+    {
+        using var request =
+            CreateAuthorizedRequest(
+                HttpMethod.Get,
+                $"/api/projects/{projectId}/milestones",
+                accessToken
+            );
+
+        var response =
+            await _client.SendAsync(request);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode
+        );
+
+        await using var responseStream =
+            await response.Content
+                .ReadAsStreamAsync();
+
+        using var document =
+            await JsonDocument.ParseAsync(
+                responseStream
+            );
+
+        return document.RootElement[0]
+            .GetProperty("id")
+            .GetGuid();
     }
 
     private async Task<Guid> CreateProjectAsync(

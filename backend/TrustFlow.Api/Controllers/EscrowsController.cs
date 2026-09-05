@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using TrustFlow.Api.Blockchain;
 using TrustFlow.Api.Constants;
 using TrustFlow.Api.Data;
 using TrustFlow.Api.Dtos.Escrows;
@@ -14,7 +15,9 @@ namespace TrustFlow.Api.Controllers;
 [ApiController]
 [Route("api/projects/{projectId:guid}/escrow")]
 public sealed class EscrowsController(
-    AppDbContext dbContext)
+    AppDbContext dbContext,
+    IEscrowDeploymentOrchestrator deploymentOrchestrator,
+    IEscrowFundingSyncOrchestrator fundingSyncOrchestrator)
     : ControllerBase
 {
     [Authorize(Roles = AppRoles.Client)]
@@ -292,6 +295,143 @@ public sealed class EscrowsController(
         }
 
         return Ok(ToResponse(escrow));
+    }
+
+    [Authorize(Roles = AppRoles.Client)]
+    [HttpPost("deploy")]
+    public async Task<IActionResult> DeployEscrow(
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        var clientIdValue =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier
+            );
+
+        if (!Guid.TryParse(
+            clientIdValue,
+            out var clientId))
+        {
+            return Unauthorized(new
+            {
+                message =
+                    "Invalid user identity."
+            });
+        }
+
+        var escrow =
+            await dbContext.Escrows
+                .FirstOrDefaultAsync(
+                    item =>
+                        item.ProjectId == projectId &&
+                        item.Project.ClientId == clientId,
+                    cancellationToken
+                );
+
+        if (escrow is null)
+        {
+            return NotFound(new
+            {
+                message =
+                    "Escrow not found."
+            });
+        }
+
+        var deployed =
+            await deploymentOrchestrator.TryDeployAsync(
+                escrow.Id,
+                cancellationToken
+            );
+
+        if (!deployed)
+        {
+            var currentStatus =
+                await dbContext.Escrows
+                    .AsNoTracking()
+                    .Where(item => item.Id == escrow.Id)
+                    .Select(item => item.Status)
+                    .FirstAsync(cancellationToken);
+
+            return Conflict(new
+            {
+                message =
+                    "Escrow is not pending deployment.",
+                currentEscrowStatus =
+                    currentStatus
+            });
+        }
+
+        var deployedEscrow =
+            await dbContext.Escrows
+                .AsNoTracking()
+                .FirstAsync(
+                    item => item.Id == escrow.Id,
+                    cancellationToken
+                );
+
+        return Ok(ToResponse(deployedEscrow));
+    }
+
+    [Authorize]
+    [HttpPost("sync")]
+    public async Task<IActionResult> SyncEscrow(
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        var userIdValue =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier
+            );
+
+        if (!Guid.TryParse(
+            userIdValue,
+            out var userId))
+        {
+            return Unauthorized(new
+            {
+                message =
+                    "Invalid user identity."
+            });
+        }
+
+        var escrow =
+            await dbContext.Escrows
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    item =>
+                        item.ProjectId == projectId &&
+                        (
+                            item.Project.ClientId ==
+                            userId ||
+                            item.Project.FreelancerId ==
+                            userId
+                        ),
+                    cancellationToken
+                );
+
+        if (escrow is null)
+        {
+            return NotFound(new
+            {
+                message =
+                    "Escrow not found."
+            });
+        }
+
+        await fundingSyncOrchestrator.TrySyncFundingAsync(
+            escrow.Id,
+            cancellationToken
+        );
+
+        var currentEscrow =
+            await dbContext.Escrows
+                .AsNoTracking()
+                .FirstAsync(
+                    item => item.Id == escrow.Id,
+                    cancellationToken
+                );
+
+        return Ok(ToResponse(currentEscrow));
     }
 
     private static EscrowResponse ToResponse(
