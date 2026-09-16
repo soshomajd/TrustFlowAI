@@ -10,4 +10,7 @@ public static class RateLimitPolicies
 
     public const string PublicMarketplace =
         "public-marketplace";
+
+    public const string ResumeUpload = "resume-upload";
+    public const string IdentitySubmission = "identity-submission";
 }

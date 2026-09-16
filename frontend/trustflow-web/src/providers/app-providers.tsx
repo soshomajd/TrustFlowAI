@@ -4,7 +4,9 @@ import { QueryClient, QueryClientProvider, } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { MotionConfig } from "motion/react";
 import { type ReactNode, useState, } from "react";
+import { WagmiProvider } from "wagmi";
 import { AuthBootstrap } from "@/features/auth/components/auth-bootstrap";
+import { wagmiConfig } from "@/lib/wallet/wagmi-config";
 
 
 type AppProvidersProps = {
@@ -34,18 +36,20 @@ export function AppProviders({
 
     return (
         <MotionConfig reducedMotion="user">
-            <QueryClientProvider client={queryClient}>
-                <AuthBootstrap />
+            <WagmiProvider config={wagmiConfig}>
+                <QueryClientProvider client={queryClient}>
+                    <AuthBootstrap />
 
-                {children}
+                    {children}
 
-                {process.env.NODE_ENV ===
-                    "development" && (
-                        <ReactQueryDevtools
-                            initialIsOpen={false}
-                        />
-                    )}
-            </QueryClientProvider>
+                    {process.env.NODE_ENV ===
+                        "development" && (
+                            <ReactQueryDevtools
+                                initialIsOpen={false}
+                            />
+                        )}
+                </QueryClientProvider>
+            </WagmiProvider>
         </MotionConfig>
     );
 }

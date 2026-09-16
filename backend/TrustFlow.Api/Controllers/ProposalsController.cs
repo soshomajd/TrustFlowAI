@@ -701,6 +701,18 @@ public class ProposalsController(AppDbContext dbContext)
                         currentStatus = proposal.Status
                     });
                 }
+
+                if (proposal.BidAmount != project.Budget)
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "This proposal cannot be accepted because its bid amount does not match the current project budget. Update the project budget and milestones to the agreed amount before accepting.",
+                        projectBudget = project.Budget,
+                        proposalBidAmount = proposal.BidAmount
+                    });
+                }
+
                 proposal.Status = ProposalStatus.Accepted;
                 project.FreelancerId = proposal.FreelancerId;
                 project.Status = ProjectStatus.InProgress;

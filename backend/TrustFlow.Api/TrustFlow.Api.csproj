@@ -19,6 +19,7 @@
     <PackageReference Include="Nethereum.Signer" Version="6.1.0" />
     <PackageReference Include="Nethereum.Web3" Version="6.1.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.16.13" />
   </ItemGroup>
 

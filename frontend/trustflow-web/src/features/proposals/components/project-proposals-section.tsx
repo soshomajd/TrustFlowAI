@@ -31,6 +31,7 @@ import { useAcceptProposal } from "@/features/proposals/hooks/use-accept-proposa
 import { useRejectProposal } from "@/features/proposals/hooks/use-reject-proposal";
 
 import { useState } from "react";
+import Link from "next/link";
 
 import {
     AnimatedSection,
@@ -53,12 +54,14 @@ import { cn } from "@/lib/utils";
 
 type ProjectProposalsSectionProps = {
     projectId: string;
+    projectBudget: number;
 };
 
 const PAGE_SIZE = 5;
 
 export function ProjectProposalsSection({
     projectId,
+    projectBudget,
 }: ProjectProposalsSectionProps) {
     const [page, setPage] =
         useState(1);
@@ -158,7 +161,7 @@ export function ProjectProposalsSection({
                                                 proposal
                                             }
                                             projectId={projectId}
-
+                                            projectBudget={projectBudget}
                                         />
                                     </StaggerItem>
                                 ),
@@ -211,11 +214,16 @@ export function ProjectProposalsSection({
 
 function ProposalCard({
     projectId,
+    projectBudget,
     proposal,
 }: {
     projectId: string;
+    projectBudget: number;
     proposal: ClientProjectProposal;
 }) {
+    const bidMatchesProjectBudget =
+        proposal.bidAmount === projectBudget;
+
     return (
         <article className="rounded-xl border bg-background/40 p-4 transition hover:border-primary/40 hover:bg-background/70 sm:p-5">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -225,9 +233,9 @@ function ProposalCard({
                             <UserRound className="size-4 text-muted-foreground" />
 
                             <h3 className="font-semibold">
-                                {
-                                    proposal.freelancerFullName
-                                }
+                                <Link href={`/dashboard/freelancers/${proposal.freelancerId}`} className="hover:text-electric hover:underline">
+                                    {proposal.freelancerFullName}
+                                </Link>
                             </h3>
                         </div>
 
@@ -245,6 +253,12 @@ function ProposalCard({
                             {proposal.coverLetter}
                         </p>
                     </div>
+
+                    <Button asChild variant="outline" size="sm" className="mt-4">
+                        <Link href={`/dashboard/freelancers/${proposal.freelancerId}`}>
+                            <UserRound className="size-4" />View profile
+                        </Link>
+                    </Button>
 
                     <p className="mt-4 text-xs text-muted-foreground">
                         Submitted{" "}
@@ -277,16 +291,28 @@ function ProposalCard({
                 </div>
             </div>
             {proposal.status === "Pending" && (
-                <div className="mt-5 flex flex-col gap-3 border-t pt-5 sm:flex-row sm:justify-end">
-                    <RejectProposalDialog
-                        projectId={projectId}
-                        proposal={proposal}
-                    />
+                <div className="mt-5 space-y-3 border-t pt-5">
+                    {!bidMatchesProjectBudget && (
+                        <div className="flex gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 text-sm leading-6">
+                            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-400" />
+                            <p className="text-muted-foreground">
+                                This bid is {formatAmount(proposal.bidAmount)}, but the current project budget is {formatAmount(projectBudget)}. Update the project budget and milestone total to the agreed bid before accepting.
+                            </p>
+                        </div>
+                    )}
 
-                    <AcceptProposalDialog
-                        projectId={projectId}
-                        proposal={proposal}
-                    />
+                    <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                        <RejectProposalDialog
+                            projectId={projectId}
+                            proposal={proposal}
+                        />
+
+                        <AcceptProposalDialog
+                            projectId={projectId}
+                            projectBudget={projectBudget}
+                            proposal={proposal}
+                        />
+                    </div>
                 </div>
             )}
         </article>
@@ -294,9 +320,11 @@ function ProposalCard({
 }
 function AcceptProposalDialog({
     projectId,
+    projectBudget,
     proposal,
 }: {
     projectId: string;
+    projectBudget: number;
     proposal: ClientProjectProposal;
 }) {
     const [open, setOpen] =
@@ -310,6 +338,8 @@ function AcceptProposalDialog({
 
     const isAccepting =
         acceptMutation.isPending;
+    const bidMatchesProjectBudget =
+        proposal.bidAmount === projectBudget;
 
     const errorMessage =
         acceptMutation.isError
@@ -355,9 +385,11 @@ function AcceptProposalDialog({
                 <Button
                     type="button"
                     size="sm"
+                    disabled={!bidMatchesProjectBudget}
+                    title={!bidMatchesProjectBudget ? "The bid must match the current project budget." : undefined}
                 >
                     <CheckCircle2 className="size-4" />
-                    Accept proposal
+                    {bidMatchesProjectBudget ? "Accept proposal" : "Budget mismatch"}
                 </Button>
             </DialogTrigger>
 
@@ -390,6 +422,16 @@ function AcceptProposalDialog({
                             {formatAmount(
                                 proposal.bidAmount,
                             )}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4">
+                        <span className="text-muted-foreground">
+                            Project budget
+                        </span>
+
+                        <span className="font-medium">
+                            {formatAmount(projectBudget)}
                         </span>
                     </div>
 
@@ -449,7 +491,7 @@ function AcceptProposalDialog({
 
                     <Button
                         type="button"
-                        disabled={isAccepting}
+                        disabled={isAccepting || !bidMatchesProjectBudget}
                         onClick={handleAccept}
                     >
                         {isAccepting ? (

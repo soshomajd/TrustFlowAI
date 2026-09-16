@@ -8,12 +8,27 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
     public const int TokenDecimals = 6;
 
     // A new FakeEscrowChainDeployer is resolved per DI scope (per HTTP
-    // request), but a test's "deploy" and later "sync" calls are separate
-    // requests, so deployment details are tracked here so the fake can
-    // simulate a consistent, already-funded on-chain snapshot.
+    // request), but a test's "deploy", "sync", and "approve" calls are
+    // separate requests, so deployment/release state is tracked here so
+    // the fake can simulate a consistent on-chain contract across calls.
     private static readonly ConcurrentDictionary<
         string,
         EscrowDeploymentRequest> DeployedEscrows = new();
+
+    private static readonly ConcurrentDictionary<
+        (string ContractAddress, int MilestoneIndex),
+        bool> ReleasedMilestones = new();
+
+    // Test-only seam: the real contract only lets releaseMilestone() be
+    // called by the client's own wallet, so there is no backend endpoint
+    // that could ever do this. Tests call this directly to simulate that
+    // wallet transaction having already been confirmed on-chain.
+    public static void MarkMilestoneReleased(
+        string contractAddress,
+        int milestoneIndex)
+    {
+        ReleasedMilestones[(contractAddress, milestoneIndex)] = true;
+    }
 
     public Task<int> GetTokenDecimalsAsync(
         string tokenAddress,
@@ -55,6 +70,54 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
         string contractAddress,
         CancellationToken cancellationToken)
     {
+        var request = GetDeployedRequest(contractAddress);
+
+        var totalBaseUnits = request.MilestoneAmounts
+            .Aggregate((left, right) => left + right);
+
+        var allReleased = Enumerable
+            .Range(0, request.MilestoneAmounts.Count)
+            .All(index =>
+                ReleasedMilestones.ContainsKey(
+                    (contractAddress, index)
+                )
+            );
+
+        return Task.FromResult(
+            new OnChainEscrowSnapshot(
+                request.TokenAddress,
+                request.ClientAddress,
+                request.FreelancerAddress,
+                totalBaseUnits,
+                allReleased
+                    ? OnChainEscrowState.Completed
+                    : OnChainEscrowState.Funded
+            )
+        );
+    }
+
+    public Task<OnChainMilestone> GetMilestoneAsync(
+        string contractAddress,
+        int milestoneIndex,
+        CancellationToken cancellationToken)
+    {
+        var request = GetDeployedRequest(contractAddress);
+
+        var released = ReleasedMilestones.ContainsKey(
+            (contractAddress, milestoneIndex)
+        );
+
+        return Task.FromResult(
+            new OnChainMilestone(
+                request.MilestoneAmounts[milestoneIndex],
+                released
+            )
+        );
+    }
+
+    private static EscrowDeploymentRequest GetDeployedRequest(
+        string contractAddress)
+    {
         if (!DeployedEscrows.TryGetValue(
                 contractAddress,
                 out var request))
@@ -65,17 +128,6 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
             );
         }
 
-        var totalBaseUnits = request.MilestoneAmounts
-            .Aggregate((left, right) => left + right);
-
-        return Task.FromResult(
-            new OnChainEscrowSnapshot(
-                request.TokenAddress,
-                request.ClientAddress,
-                request.FreelancerAddress,
-                totalBaseUnits,
-                OnChainEscrowState.Funded
-            )
-        );
+        return request;
     }
 }

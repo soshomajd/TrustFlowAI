@@ -552,6 +552,195 @@ public sealed class EscrowFlowTests
     }
 
     [Fact]
+    public async Task ApproveMilestone_RequiresOnChainRelease_ThenCompletesEscrow()
+    {
+        var clientAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Client",
+                fullName: "Release Gate Client"
+            );
+
+        var freelancerAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Freelancer",
+                fullName: "Release Gate Freelancer"
+            );
+
+        await ConnectWalletAsync(clientAccessToken);
+        await ConnectWalletAsync(freelancerAccessToken);
+
+        var projectId =
+            await CreateInProgressProjectAsync(
+                clientAccessToken,
+                freelancerAccessToken
+            );
+
+        await CreateEscrowAsync(
+            clientAccessToken,
+            projectId
+        );
+
+        await DeployEscrowAsync(
+            clientAccessToken,
+            projectId
+        );
+
+        using var syncRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/escrow/sync",
+                clientAccessToken
+            );
+
+        var syncResponse =
+            await _client.SendAsync(syncRequest);
+
+        var contractAddress =
+            await ReadStringPropertyAsync(
+                syncResponse,
+                "contractAddress"
+            );
+
+        var milestoneId =
+            await GetFirstMilestoneIdAsync(
+                freelancerAccessToken,
+                projectId
+            );
+
+        using var startRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Patch,
+                $"/api/projects/{projectId}/milestones/{milestoneId}/start",
+                freelancerAccessToken
+            );
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await _client.SendAsync(startRequest))
+                .StatusCode
+        );
+
+        using var submitRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Patch,
+                $"/api/projects/{projectId}/milestones/{milestoneId}/submit",
+                freelancerAccessToken
+            );
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await _client.SendAsync(submitRequest))
+                .StatusCode
+        );
+
+        using var earlyApproveRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Patch,
+                $"/api/projects/{projectId}/milestones/{milestoneId}/approve",
+                clientAccessToken
+            );
+
+        var earlyApproveResponse =
+            await _client.SendAsync(earlyApproveRequest);
+
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            earlyApproveResponse.StatusCode
+        );
+
+        Assert.Contains(
+            "has not released this milestone on-chain",
+            await earlyApproveResponse.Content
+                .ReadAsStringAsync(),
+            StringComparison.OrdinalIgnoreCase
+        );
+
+        FakeEscrowChainDeployer.MarkMilestoneReleased(
+            contractAddress,
+            0
+        );
+
+        using var approveRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Patch,
+                $"/api/projects/{projectId}/milestones/{milestoneId}/approve",
+                clientAccessToken
+            );
+
+        var approveResponse =
+            await _client.SendAsync(approveRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            approveResponse.StatusCode
+        );
+
+        await using var approveStream =
+            await approveResponse.Content
+                .ReadAsStreamAsync();
+
+        using var approveDocument =
+            await JsonDocument.ParseAsync(
+                approveStream
+            );
+
+        Assert.Equal(
+            "Approved",
+            approveDocument.RootElement
+                .GetProperty("status")
+                .GetString()
+        );
+
+        Assert.Equal(
+            "Completed",
+            approveDocument.RootElement
+                .GetProperty("projectStatus")
+                .GetString()
+        );
+
+        using var escrowGetRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Get,
+                $"/api/projects/{projectId}/escrow",
+                clientAccessToken
+            );
+
+        var escrowGetResponse =
+            await _client.SendAsync(escrowGetRequest);
+
+        await using var escrowStream =
+            await escrowGetResponse.Content
+                .ReadAsStreamAsync();
+
+        using var escrowDocument =
+            await JsonDocument.ParseAsync(
+                escrowStream
+            );
+
+        Assert.Equal(
+            "Completed",
+            escrowDocument.RootElement
+                .GetProperty("status")
+                .GetString()
+        );
+
+        Assert.Equal(
+            10_000m,
+            escrowDocument.RootElement
+                .GetProperty("releasedAmount")
+                .GetDecimal()
+        );
+
+        Assert.False(
+            string.IsNullOrEmpty(
+                escrowDocument.RootElement
+                    .GetProperty("completedAt")
+                    .GetString()
+            )
+        );
+    }
+
+    [Fact]
     public async Task CreateEscrow_ReturnsConflict_WhenClientWalletIsNotVerified()
     {
         var clientAccessToken =

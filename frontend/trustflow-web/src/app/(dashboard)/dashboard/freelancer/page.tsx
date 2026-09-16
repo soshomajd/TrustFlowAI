@@ -28,6 +28,13 @@ type FreelancerAction = {
 
 const freelancerActions: FreelancerAction[] = [
     {
+        title: "My profile",
+        description: "Introduce your skills and share a few work samples so clients can get to know you.",
+        actionLabel: "Complete your profile",
+        href: "/dashboard/freelancer/profile",
+        icon: CodeXml,
+    },
+    {
         title: "Browse marketplace",
         description:
             "Discover open projects, review their milestones and submit proposals to clients.",
@@ -148,7 +155,7 @@ export default function FreelancerDashboardPage() {
                         </p>
                     </header>
 
-                    <StaggerContainer className="grid gap-4 lg:grid-cols-3">
+                    <StaggerContainer className="grid gap-4 md:grid-cols-2">
                         {freelancerActions.map((action) => (
                             <StaggerItem key={action.title}>
                                 <FreelancerActionCard

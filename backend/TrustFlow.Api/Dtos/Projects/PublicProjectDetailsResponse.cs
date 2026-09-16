@@ -7,6 +7,8 @@ namespace TrustFlow.Api.Dtos.Projects;
 public class PublicProjectDetailsResponse
 {
     public Guid Id { get; set; }
+    public Guid ClientId { get; set; }
+    public string ClientFullName { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public decimal Budget { get; set; }

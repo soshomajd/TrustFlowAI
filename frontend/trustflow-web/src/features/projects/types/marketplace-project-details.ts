@@ -11,6 +11,8 @@ export type PublicMarketplaceMilestone = {
 
 export type MarketplaceProjectDetails = {
   id: string;
+  clientId: string;
+  clientFullName: string;
   title: string;
   description: string;
   budget: number;

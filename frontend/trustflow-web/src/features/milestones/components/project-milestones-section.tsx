@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { AnimatedSection, StaggerContainer, StaggerItem, } from "@/components/motion/animation-primitives";
 import { Button } from "@/components/ui/button";
+import { useProjectEscrow } from "@/features/escrow/hooks/use-project-escrow";
 import { useProjectMilestones } from "@/features/milestones/hooks/use-project-milestones";
 import type { MilestoneStatus, ProjectMilestone, } from "@/features/milestones/types/milestone";
 import { getApiErrorMessage } from "@/lib/api/get-api-error-message";
@@ -38,6 +39,13 @@ export function ProjectMilestonesSection({
 }: ProjectMilestonesSectionProps) {
     const milestonesQuery =
         useProjectMilestones(projectId);
+
+    const escrowQuery =
+        useProjectEscrow(projectId);
+
+    const escrowContractAddress =
+        escrowQuery.data?.contractAddress ??
+        null;
 
     if (milestonesQuery.isLoading) {
         return (
@@ -163,6 +171,9 @@ export function ProjectMilestonesSection({
                                         existingSequenceNumbers={
                                             existingSequenceNumbers
                                         }
+                                        escrowContractAddress={
+                                            escrowContractAddress
+                                        }
                                         milestone={milestone}
                                     />
                                 </StaggerItem>
@@ -181,6 +192,7 @@ function MilestoneCard({
     projectDeadline,
     remainingBudget,
     existingSequenceNumbers,
+    escrowContractAddress,
     milestone,
 }: {
     projectId: string;
@@ -188,8 +200,16 @@ function MilestoneCard({
     projectDeadline: string;
     remainingBudget: number;
     existingSequenceNumbers: number[];
+    escrowContractAddress: string | null;
     milestone: ProjectMilestone;
 }) {
+    const onChainIndex =
+        existingSequenceNumbers.filter(
+            (sequenceNumber) =>
+                sequenceNumber <
+                milestone.sequenceNumber,
+        ).length;
+
     const canManageMilestone =
         projectStatus === "Open" &&
         milestone.status === "Pending";
@@ -263,6 +283,10 @@ function MilestoneCard({
                     projectId={projectId}
                     milestoneId={milestone.id}
                     status={milestone.status}
+                    contractAddress={
+                        escrowContractAddress
+                    }
+                    onChainIndex={onChainIndex}
                 />
             </div>
         </article>

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using TrustFlow.Api.Blockchain;
 using TrustFlow.Api.Constants;
 using TrustFlow.Api.Data;
 using TrustFlow.Api.Dtos.Milestones;
@@ -15,7 +16,9 @@ namespace TrustFlow.Api.Controllers;
 
 [ApiController]
 [Route("api/projects/{projectId:guid}/milestones")]
-public class MilestonesController(AppDbContext dbContext)
+public class MilestonesController(
+    AppDbContext dbContext,
+    IEscrowChainDeployer chainDeployer)
     : ControllerBase
 {
     private static bool IsSerializationFailure(Exception exception)
@@ -870,6 +873,127 @@ public class MilestonesController(AppDbContext dbContext)
             return Unauthorized();
         }
 
+        var preCheck = await dbContext.Milestones
+            .AsNoTracking()
+            .Where(milestone =>
+                milestone.Id == milestoneId &&
+                milestone.ProjectId == projectId &&
+                milestone.Project.ClientId == clientId)
+            .Select(milestone => new
+            {
+                milestone.Status,
+                milestone.Amount,
+                milestone.SequenceNumber,
+                ProjectStatus = milestone.Project.Status,
+                Escrow = milestone.Project.Escrow == null
+                    ? null
+                    : new
+                    {
+                        milestone.Project.Escrow.ContractAddress,
+                        milestone.Project.Escrow.TokenAddress
+                    }
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (preCheck is null)
+        {
+            return NotFound(new
+            {
+                message = "Milestone not found."
+            });
+        }
+
+        if (preCheck.ProjectStatus != ProjectStatus.InProgress)
+        {
+            return Conflict(new
+            {
+                message =
+                    "Milestones can only be approved when the project is in progress.",
+                currentProjectStatus = preCheck.ProjectStatus
+            });
+        }
+
+        if (preCheck.Status != MileStoneStatus.Submitted)
+        {
+            return Conflict(new
+            {
+                message =
+                    "Only a submitted milestone can be approved.",
+                currentStatus = preCheck.Status
+            });
+        }
+
+        if (preCheck.Escrow is null ||
+            string.IsNullOrWhiteSpace(
+                preCheck.Escrow.ContractAddress))
+        {
+            return Conflict(new
+            {
+                message =
+                    "The project's escrow has not been deployed."
+            });
+        }
+
+        var onChainIndex = await dbContext.Milestones
+            .Where(otherMilestone =>
+                otherMilestone.ProjectId == projectId &&
+                otherMilestone.SequenceNumber <
+                    preCheck.SequenceNumber)
+            .CountAsync(cancellationToken);
+
+        var tokenDecimals =
+            await chainDeployer.GetTokenDecimalsAsync(
+                preCheck.Escrow.TokenAddress,
+                cancellationToken
+            );
+
+        var expectedBaseUnits = TokenAmountConverter.ToBaseUnits(
+            preCheck.Amount,
+            tokenDecimals
+        );
+
+        var onChainMilestone =
+            await chainDeployer.GetMilestoneAsync(
+                preCheck.Escrow.ContractAddress,
+                onChainIndex,
+                cancellationToken
+            );
+
+        if (!onChainMilestone.Released)
+        {
+            return Conflict(new
+            {
+                message =
+                    "The client's wallet has not released this " +
+                    "milestone on-chain yet. Call the contract's " +
+                    "releaseMilestone() before approving.",
+                onChainMilestoneIndex = onChainIndex
+            });
+        }
+
+        if (onChainMilestone.Amount != expectedBaseUnits)
+        {
+            throw new InvalidOperationException(
+                $"On-chain milestone {onChainIndex} amount " +
+                $"{onChainMilestone.Amount} does not match the " +
+                $"expected {expectedBaseUnits} for milestone " +
+                $"{milestoneId}."
+            );
+        }
+
+        // On-chain "released" and escrow "Completed" are monotonic (the
+        // contract never un-releases a milestone or leaves Completed),
+        // so it is safe to have verified them above, outside any DB
+        // transaction, before performing the actual state transition.
+        var escrowSnapshot =
+            await chainDeployer.GetEscrowSnapshotAsync(
+                preCheck.Escrow.ContractAddress,
+                cancellationToken
+            );
+
+        var escrowCompletedOnChain =
+            escrowSnapshot.State == OnChainEscrowState.Completed;
+
         const int maxAttempts = 3;
 
         for (var attempt = 1;
@@ -938,6 +1062,21 @@ public class MilestonesController(AppDbContext dbContext)
                     });
                 }
 
+                var escrow = await dbContext.Escrows
+                    .FirstOrDefaultAsync(
+                        item => item.ProjectId == projectId,
+                        cancellationToken
+                    );
+
+                if (escrow is null)
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "The project's escrow has not been deployed."
+                    });
+                }
+
                 var hasOtherUnapprovedMilestones =
                     await dbContext.Milestones
                         .AnyAsync(
@@ -954,10 +1093,27 @@ public class MilestonesController(AppDbContext dbContext)
                 milestone.Status =
                     MileStoneStatus.Approved;
 
+                var now = DateTimeOffset.UtcNow;
+
+                escrow.ReleasedAmount += milestone.Amount;
+                escrow.UpdatedAt = now;
+
                 if (!hasOtherUnapprovedMilestones)
                 {
+                    if (!escrowCompletedOnChain)
+                    {
+                        throw new InvalidOperationException(
+                            $"Escrow {escrow.Id} is expected to " +
+                            "be Completed on-chain after its last " +
+                            "milestone released, but it was not."
+                        );
+                    }
+
                     project.Status =
                         ProjectStatus.Completed;
+
+                    escrow.Status = EscrowStatus.Completed;
+                    escrow.CompletedAt = now;
                 }
 
                 await dbContext.SaveChangesAsync(

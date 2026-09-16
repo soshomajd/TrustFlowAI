@@ -29,6 +29,11 @@ public class AppDbContext(
     public DbSet<Escrow> Escrows =>
         Set<Escrow>();
 
+    public DbSet<FreelancerProfile> FreelancerProfiles => Set<FreelancerProfile>();
+    public DbSet<FreelancerResume> FreelancerResumes => Set<FreelancerResume>();
+    public DbSet<ClientProfile> ClientProfiles => Set<ClientProfile>();
+    public DbSet<ClientIdentityVerification> ClientIdentityVerifications => Set<ClientIdentityVerification>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
@@ -45,6 +50,93 @@ public class AppDbContext(
         ConfigureEscrows(modelBuilder);
         ConfigureRefreshTokens(modelBuilder);
         ConfigureWalletIdentity(modelBuilder);
+        ConfigureFreelancerProfiles(modelBuilder);
+        ConfigureFreelancerResumes(modelBuilder);
+        ConfigureClientProfiles(modelBuilder);
+        ConfigureClientIdentityVerifications(modelBuilder);
+    }
+
+    private static void ConfigureClientProfiles(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ClientProfile>(profile =>
+        {
+            profile.HasKey(item => item.UserId);
+            profile.HasOne<ApplicationUser>().WithOne()
+                .HasForeignKey<ClientProfile>(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            profile.Property(item => item.AccountType).HasMaxLength(20);
+            profile.Property(item => item.CompanyName).HasMaxLength(120);
+            profile.Property(item => item.Overview).HasMaxLength(1000);
+            profile.Property(item => item.Industry).HasMaxLength(80);
+            profile.Property(item => item.Location).HasMaxLength(100);
+            profile.Property(item => item.Website).HasMaxLength(500);
+            profile.Property(item => item.CompanySize).HasMaxLength(20);
+            profile.ToTable(table =>
+            {
+                table.HasCheckConstraint("CK_ClientProfiles_AccountType", "\"AccountType\" IN ('Individual', 'Company')");
+                table.HasCheckConstraint("CK_ClientProfiles_CompanySize", "\"CompanySize\" IN ('NotSpecified', 'JustMe', '2-10', '11-50', '51-200', '201Plus')");
+            });
+        });
+    }
+
+    private static void ConfigureClientIdentityVerifications(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ClientIdentityVerification>(verification =>
+        {
+            verification.HasKey(item => item.ClientId);
+            verification.HasOne<ApplicationUser>().WithOne()
+                .HasForeignKey<ClientIdentityVerification>(item => item.ClientId)
+                .OnDelete(DeleteBehavior.Cascade);
+            verification.HasOne<ApplicationUser>().WithMany()
+                .HasForeignKey(item => item.ReviewedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            verification.Property(item => item.AccountType).HasMaxLength(20);
+            verification.Property(item => item.CountryCode).HasMaxLength(2);
+            verification.Property(item => item.DocumentSha256).HasMaxLength(64);
+            verification.Property(item => item.Status).HasMaxLength(20);
+            verification.Property(item => item.RejectionReason).HasMaxLength(300);
+            verification.ToTable(table =>
+            {
+                table.HasCheckConstraint("CK_ClientIdentityVerifications_AccountType", "\"AccountType\" IN ('Individual', 'Company')");
+                table.HasCheckConstraint("CK_ClientIdentityVerifications_Status", "\"Status\" IN ('Pending', 'Verified', 'Rejected')");
+                table.HasCheckConstraint("CK_ClientIdentityVerifications_PendingDocument", "\"Status\" <> 'Pending' OR (\"DocumentContentProtected\" IS NOT NULL AND \"DocumentFileSize\" BETWEEN 1 AND 5242880)");
+            });
+            verification.HasIndex(item => new { item.Status, item.SubmittedAt });
+        });
+    }
+
+    private static void ConfigureFreelancerResumes(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<FreelancerResume>(resume =>
+        {
+            resume.HasKey(item => item.UserId);
+            resume.HasOne<ApplicationUser>().WithOne()
+                .HasForeignKey<FreelancerResume>(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            resume.Property(item => item.Content).HasColumnType("bytea");
+            resume.Property(item => item.Sha256).HasMaxLength(64);
+            resume.ToTable(table => table.HasCheckConstraint(
+                "CK_FreelancerResumes_FileSize", "\"FileSize\" BETWEEN 1 AND 5242880"));
+        });
+    }
+
+    private static void ConfigureFreelancerProfiles(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<FreelancerProfile>(profile =>
+        {
+            profile.HasKey(item => item.UserId);
+            profile.HasOne<ApplicationUser>().WithOne()
+                .HasForeignKey<FreelancerProfile>(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            profile.Property(item => item.Headline).HasMaxLength(100);
+            profile.Property(item => item.About).HasMaxLength(1200);
+            profile.Property(item => item.Location).HasMaxLength(100);
+            profile.Property(item => item.Availability).HasMaxLength(20);
+            profile.Property(item => item.PortfolioItemsJson).HasColumnType("jsonb");
+            profile.ToTable(table => table.HasCheckConstraint(
+                "CK_FreelancerProfiles_YearsOfExperience",
+                "\"YearsOfExperience\" IS NULL OR \"YearsOfExperience\" BETWEEN 0 AND 60"));
+        });
     }
 
     private static void ConfigureRefreshTokens(

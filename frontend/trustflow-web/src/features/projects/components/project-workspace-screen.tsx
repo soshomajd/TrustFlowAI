@@ -35,6 +35,8 @@ import { ProjectMilestonesSection } from
     "@/features/milestones/components/project-milestones-section";
 import { ProjectProposalsSection } from
     "@/features/proposals/components/project-proposals-section";
+import { EscrowPanel } from
+    "@/features/escrow/components/escrow-panel";
 
 export function ProjectWorkspaceScreen({
     projectId,
@@ -187,6 +189,20 @@ export function ProjectWorkspaceScreen({
                     {project.freelancerFullName ??
                         "No freelancer assigned yet"}
                 </p>
+                {project.freelancerId && (
+                    <Button asChild variant="outline" size="sm" className="mt-4">
+                        <Link href={`/dashboard/freelancers/${project.freelancerId}`}>
+                            <UserRound className="size-4" />View freelancer profile
+                        </Link>
+                    </Button>
+                )}
+            </div>
+            <div className="mt-6">
+                <EscrowPanel
+                    projectId={project.id}
+                    projectStatus={project.status}
+                    viewerRole="Client"
+                />
             </div>
             <div className="mt-6">
                 <ProjectMilestonesSection
@@ -203,6 +219,7 @@ export function ProjectWorkspaceScreen({
             <div className="mt-6">
                 <ProjectProposalsSection
                     projectId={project.id}
+                    projectBudget={project.budget}
                 />
             </div>
         </AnimatedSection>

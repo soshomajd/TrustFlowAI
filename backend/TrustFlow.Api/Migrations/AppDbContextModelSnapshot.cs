@@ -153,6 +153,126 @@ namespace TrustFlow.Api.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("TrustFlow.Api.Models.ClientIdentityVerification", b =>
+                {
+                    b.Property<Guid>("ClientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccountType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)");
+
+                    b.Property<byte[]>("DocumentContentProtected")
+                        .HasColumnType("bytea");
+
+                    b.Property<int?>("DocumentFileSize")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DocumentSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<byte[]>("LegalNameProtected")
+                        .HasColumnType("bytea");
+
+                    b.Property<byte[]>("RegistrationNumberProtected")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("RejectionReason")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("ClientId");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("Status", "SubmittedAt");
+
+                    b.ToTable("ClientIdentityVerifications", t =>
+                        {
+                            t.HasCheckConstraint("CK_ClientIdentityVerifications_AccountType", "\"AccountType\" IN ('Individual', 'Company')");
+
+                            t.HasCheckConstraint("CK_ClientIdentityVerifications_PendingDocument", "\"Status\" <> 'Pending' OR (\"DocumentContentProtected\" IS NOT NULL AND \"DocumentFileSize\" BETWEEN 1 AND 5242880)");
+
+                            t.HasCheckConstraint("CK_ClientIdentityVerifications_Status", "\"Status\" IN ('Pending', 'Verified', 'Rejected')");
+                        });
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.ClientProfile", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccountType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("CompanyName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("CompanySize")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Industry")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Overview")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Website")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("ClientProfiles", t =>
+                        {
+                            t.HasCheckConstraint("CK_ClientProfiles_AccountType", "\"AccountType\" IN ('Individual', 'Company')");
+
+                            t.HasCheckConstraint("CK_ClientProfiles_CompanySize", "\"CompanySize\" IN ('NotSpecified', 'JustMe', '2-10', '11-50', '51-200', '201Plus')");
+                        });
+                });
+
             modelBuilder.Entity("TrustFlow.Api.Models.Escrow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -248,6 +368,85 @@ namespace TrustFlow.Api.Migrations
                             t.HasCheckConstraint("CK_Escrows_ReleasedAmount_WithinTotal", "\"ReleasedAmount\" <= \"TotalAmount\"");
 
                             t.HasCheckConstraint("CK_Escrows_TotalAmount_Positive", "\"TotalAmount\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.FreelancerProfile", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("About")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("character varying(1200)");
+
+                    b.Property<string>("Availability")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Headline")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.PrimitiveCollection<string[]>("Languages")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PortfolioItemsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.PrimitiveCollection<string[]>("Skills")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("YearsOfExperience")
+                        .HasColumnType("integer");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("FreelancerProfiles", t =>
+                        {
+                            t.HasCheckConstraint("CK_FreelancerProfiles_YearsOfExperience", "\"YearsOfExperience\" IS NULL OR \"YearsOfExperience\" BETWEEN 0 AND 60");
+                        });
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.FreelancerResume", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<int>("FileSize")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("FreelancerResumes", t =>
+                        {
+                            t.HasCheckConstraint("CK_FreelancerResumes_FileSize", "\"FileSize\" BETWEEN 1 AND 5242880");
                         });
                 });
 
@@ -619,6 +818,29 @@ namespace TrustFlow.Api.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TrustFlow.Api.Models.ClientIdentityVerification", b =>
+                {
+                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", null)
+                        .WithOne()
+                        .HasForeignKey("TrustFlow.Api.Models.ClientIdentityVerification", "ClientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.ClientProfile", b =>
+                {
+                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", null)
+                        .WithOne()
+                        .HasForeignKey("TrustFlow.Api.Models.ClientProfile", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TrustFlow.Api.Models.Escrow", b =>
                 {
                     b.HasOne("TrustFlow.Api.Models.Project", "Project")
@@ -628,6 +850,24 @@ namespace TrustFlow.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.FreelancerProfile", b =>
+                {
+                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", null)
+                        .WithOne()
+                        .HasForeignKey("TrustFlow.Api.Models.FreelancerProfile", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.FreelancerResume", b =>
+                {
+                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", null)
+                        .WithOne()
+                        .HasForeignKey("TrustFlow.Api.Models.FreelancerResume", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("TrustFlow.Api.Models.Identity.RefreshToken", b =>

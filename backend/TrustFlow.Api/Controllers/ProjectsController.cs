@@ -245,6 +245,10 @@ namespace TrustFlow.Api.Controllers
                     {
                         Id = project.Id,
 
+                        ClientId = project.ClientId!.Value,
+
+                        ClientFullName = project.Client!.FullName,
+
                         Title = project.Title,
 
                         Description = project.Description,

@@ -20,6 +20,14 @@ export function DashboardRedirect() {
             return;
         }
 
+        if (user.roles.includes("Admin")) {
+            router.replace(
+                "/dashboard/admin/client-verifications",
+            );
+
+            return;
+        }
+
         if (user.roles.includes("Client")) {
             router.replace(
                 "/dashboard/client",

@@ -10,6 +10,8 @@ import { usePathname } from
 
 import { Button } from
     "@/components/ui/button";
+import { WalletConnectButton } from
+    "@/features/wallet/components/wallet-connect-button";
 
 import { useAuthStore } from
     "@/stores/auth-store";
@@ -96,10 +98,14 @@ export function DashboardTopbar() {
                 </div>
             </div>
 
-            <div className="flex size-9 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-sm font-semibold text-electric">
-                {getInitials(
-                    user?.fullName,
-                )}
+            <div className="flex items-center gap-3">
+                <WalletConnectButton />
+
+                <div className="flex size-9 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-sm font-semibold text-electric">
+                    {getInitials(
+                        user?.fullName,
+                    )}
+                </div>
             </div>
         </header>
     );

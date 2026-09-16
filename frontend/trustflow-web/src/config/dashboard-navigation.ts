@@ -5,7 +5,9 @@ import {
   FolderKanban,
   LayoutDashboard,
   Search,
+  ShieldCheck,
   Send,
+  UserRound,
 } from "lucide-react";
 
 import type { AuthRole } from "@/features/auth/types/auth";
@@ -31,6 +33,12 @@ export const dashboardNavigationItems: DashboardNavigationItem[] = [
     roles: ["Client"],
   },
   {
+    label: "My profile",
+    href: "/dashboard/client/profile",
+    icon: UserRound,
+    roles: ["Client"],
+  },
+  {
     label: "Create project",
     href: "/dashboard/client/projects/new",
     icon: FilePlus2,
@@ -40,6 +48,12 @@ export const dashboardNavigationItems: DashboardNavigationItem[] = [
     label: "Overview",
     href: "/dashboard/freelancer",
     icon: LayoutDashboard,
+    roles: ["Freelancer"],
+  },
+  {
+    label: "My profile",
+    href: "/dashboard/freelancer/profile",
+    icon: UserRound,
     roles: ["Freelancer"],
   },
   {
@@ -59,6 +73,12 @@ export const dashboardNavigationItems: DashboardNavigationItem[] = [
     href: "/dashboard/freelancer/projects",
     icon: BriefcaseBusiness,
     roles: ["Freelancer"],
+  },
+  {
+    label: "Review clients",
+    href: "/dashboard/admin/client-verifications",
+    icon: ShieldCheck,
+    roles: ["Admin"],
   },
 ];
 

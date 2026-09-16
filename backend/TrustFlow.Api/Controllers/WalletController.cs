@@ -1,8 +1,11 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using TrustFlow.Api.Data;
 using TrustFlow.Api.Dtos.Wallets;
 using TrustFlow.Api.Services;
@@ -10,6 +13,7 @@ using TrustFlow.Api.Validation;
 using Nethereum.Signer;
 using Npgsql;
 using TrustFlow.Api.Models.Identity;
+using TrustFlow.Api.Options;
 
 namespace TrustFlow.Api.Controllers;
 
@@ -17,9 +21,233 @@ namespace TrustFlow.Api.Controllers;
 [Route("api/wallet")]
 [Authorize]
 public sealed class WalletController(
-    AppDbContext dbContext)
+    AppDbContext dbContext,
+    IHostEnvironment hostEnvironment,
+    IOptions<BlockchainOptions> blockchainOptions)
     : ControllerBase
 {
+    private static readonly HttpClient
+        LocalChainHttpClient = new();
+
+    private const long LocalHardhatChainId = 31_337;
+
+    private const string LocalFaucetGasBalanceHex =
+        "0x8ac7230489e80000";
+
+    [HttpGet("me")]
+    public async Task<IActionResult> GetMyWallet(
+        CancellationToken cancellationToken)
+    {
+        var userIdValue =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier
+            );
+
+        if (!Guid.TryParse(
+                userIdValue,
+                out var userId))
+        {
+            return Unauthorized(new
+            {
+                message =
+                    "Invalid user identity."
+            });
+        }
+
+        var wallet =
+            await dbContext.Users
+                .AsNoTracking()
+                .Where(user =>
+                    user.Id == userId)
+                .Select(user => new
+                {
+                    user.WalletAddress,
+                    user.WalletVerifiedAt
+                })
+                .FirstOrDefaultAsync(
+                    cancellationToken
+                );
+
+        if (wallet is null)
+        {
+            return Unauthorized(new
+            {
+                message =
+                    "User account could not be found."
+            });
+        }
+
+        var isVerified =
+            !string.IsNullOrWhiteSpace(
+                wallet.WalletAddress
+            ) &&
+            wallet.WalletVerifiedAt.HasValue;
+
+        return Ok(new WalletStatusResponse
+        {
+            WalletAddress = isVerified
+                ? wallet.WalletAddress
+                : null,
+
+            VerifiedAt = isVerified
+                ? wallet.WalletVerifiedAt
+                : null,
+
+            IsVerified = isVerified
+        });
+    }
+
+    [HttpPost("local-test-gas")]
+    public async Task<IActionResult> AddLocalTestGas(
+        CancellationToken cancellationToken)
+    {
+        var options = blockchainOptions.Value;
+
+        if (
+            !hostEnvironment.IsDevelopment() ||
+            options.ChainId != LocalHardhatChainId
+        )
+        {
+            return NotFound();
+        }
+
+        var userIdValue =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier
+            );
+
+        if (!Guid.TryParse(
+                userIdValue,
+                out var userId))
+        {
+            return Unauthorized(new
+            {
+                message =
+                    "Invalid user identity."
+            });
+        }
+
+        var wallet =
+            await dbContext.Users
+                .AsNoTracking()
+                .Where(user =>
+                    user.Id == userId)
+                .Select(user => new
+                {
+                    user.WalletAddress,
+                    user.WalletVerifiedAt
+                })
+                .FirstOrDefaultAsync(
+                    cancellationToken
+                );
+
+        if (
+            wallet is null ||
+            string.IsNullOrWhiteSpace(
+                wallet.WalletAddress
+            ) ||
+            !wallet.WalletVerifiedAt.HasValue
+        )
+        {
+            return Conflict(new
+            {
+                message =
+                    "Connect and verify your wallet before requesting local test gas."
+            });
+        }
+
+        using var rpcRequest =
+            JsonContent.Create(new
+            {
+                jsonrpc = "2.0",
+                id = 1,
+                method =
+                    "hardhat_setBalance",
+                @params = new[]
+                {
+                    wallet.WalletAddress,
+                    LocalFaucetGasBalanceHex
+                }
+            });
+
+        HttpResponseMessage rpcResponse;
+
+        try
+        {
+            rpcResponse =
+                await LocalChainHttpClient.PostAsync(
+                    options.RpcUrl,
+                    rpcRequest,
+                    cancellationToken
+                );
+        }
+        catch (HttpRequestException)
+        {
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    message =
+                        "The local Hardhat node is unavailable."
+                }
+            );
+        }
+
+        using (rpcResponse)
+        {
+            if (!rpcResponse.IsSuccessStatusCode)
+            {
+                return StatusCode(
+                    StatusCodes.Status502BadGateway,
+                    new
+                    {
+                        message =
+                            "The local Hardhat node rejected the gas request."
+                    }
+                );
+            }
+
+            await using var responseStream =
+                await rpcResponse.Content
+                    .ReadAsStreamAsync(
+                        cancellationToken
+                    );
+
+            using var responseDocument =
+                await JsonDocument.ParseAsync(
+                    responseStream,
+                    cancellationToken:
+                        cancellationToken
+                );
+
+            if (
+                responseDocument.RootElement
+                    .TryGetProperty(
+                        "error",
+                        out _
+                    )
+            )
+            {
+                return StatusCode(
+                    StatusCodes.Status502BadGateway,
+                    new
+                    {
+                        message =
+                            "The local Hardhat node could not add test gas."
+                    }
+                );
+            }
+        }
+
+        return Ok(new
+        {
+            walletAddress =
+                wallet.WalletAddress,
+            balanceWei =
+                "10000000000000000000"
+        });
+    }
+
     [HttpPost("challenge")]
     public async Task<IActionResult>
         CreateChallenge(
@@ -83,6 +311,20 @@ public sealed class WalletController(
             {
                 message =
                     "This wallet is already connected to your account."
+            });
+        }
+
+        if (
+            !string.IsNullOrWhiteSpace(
+                user.WalletAddressNormalized
+            ) &&
+            user.WalletVerifiedAt.HasValue
+        )
+        {
+            return Conflict(new
+            {
+                message =
+                    "A different wallet is already verified for your account. Wallet replacement requires a dedicated recovery flow."
             });
         }
 

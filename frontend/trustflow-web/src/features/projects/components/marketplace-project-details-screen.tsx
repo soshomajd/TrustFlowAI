@@ -11,6 +11,7 @@ import {
     Layers3,
     RefreshCw,
     TriangleAlert,
+    UserRound,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -199,6 +200,16 @@ export function MarketplaceProjectDetailsScreen({
                             project.deadline,
                         )}
                     />
+                </section>
+            </AnimatedSection>
+
+            <AnimatedSection className="mt-6">
+                <section className="flex flex-col gap-4 rounded-2xl border bg-card/60 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                    <div className="flex items-center gap-3">
+                        <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10"><UserRound className="size-5 text-electric" /></div>
+                        <div><p className="text-xs text-muted-foreground">Posted by</p><h2 className="mt-1 font-semibold">{project.clientFullName}</h2></div>
+                    </div>
+                    <Button asChild variant="outline"><Link href={`/dashboard/clients/${project.clientId}`}>View client profile</Link></Button>
                 </section>
             </AnimatedSection>
 

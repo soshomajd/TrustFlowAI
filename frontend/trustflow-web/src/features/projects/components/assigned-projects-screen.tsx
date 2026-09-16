@@ -274,8 +274,9 @@ function AssignedProjectCard({
                         <span className="flex items-center gap-2">
                             <UserRound className="size-3.5" />
                             Client:{" "}
-                            {project.clientFullName ||
-                                "Unknown client"}
+                            <Link className="font-medium text-foreground hover:text-electric hover:underline" href={`/dashboard/clients/${project.clientId}`}>
+                                {project.clientFullName || "Unknown client"}
+                            </Link>
                         </span>
 
                         <span className="flex items-center gap-2">

@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Nethereum.ABI.FunctionEncoding.Attributes;
+using Nethereum.Contracts;
 using Nethereum.Hex.HexTypes;
 using Nethereum.Web3;
 using Nethereum.Web3.Accounts;
@@ -35,6 +36,10 @@ public sealed record OnChainEscrowSnapshot(
     BigInteger TotalAmount,
     OnChainEscrowState State);
 
+public sealed record OnChainMilestone(
+    BigInteger Amount,
+    bool Released);
+
 public interface IEscrowChainDeployer
 {
     Task<int> GetTokenDecimalsAsync(
@@ -47,6 +52,11 @@ public interface IEscrowChainDeployer
 
     Task<OnChainEscrowSnapshot> GetEscrowSnapshotAsync(
         string contractAddress,
+        CancellationToken cancellationToken);
+
+    Task<OnChainMilestone> GetMilestoneAsync(
+        string contractAddress,
+        int milestoneIndex,
         CancellationToken cancellationToken);
 }
 
@@ -185,6 +195,30 @@ public sealed class EscrowChainDeployer(
         );
     }
 
+    public async Task<OnChainMilestone> GetMilestoneAsync(
+        string contractAddress,
+        int milestoneIndex,
+        CancellationToken cancellationToken)
+    {
+        var (web3, _) = CreateWeb3();
+
+        var contract = web3.Eth.GetContract(
+            Artifact.Value.Abi,
+            contractAddress
+        );
+
+        var output = await contract
+            .GetFunction("getMilestone")
+            .CallDeserializingToObjectAsync<MilestoneOutput>(
+                milestoneIndex
+            );
+
+        return new OnChainMilestone(
+            output.Amount,
+            output.Released
+        );
+    }
+
     private static (string Abi, string Bytecode) LoadArtifact()
     {
         var path = Path.Combine(
@@ -225,5 +259,15 @@ public sealed class EscrowChainDeployer(
 
         [Parameter("uint256[]", "milestoneAmounts_", 4)]
         public List<BigInteger> MilestoneAmounts { get; set; } = [];
+    }
+
+    [FunctionOutput]
+    private sealed class MilestoneOutput : IFunctionOutputDTO
+    {
+        [Parameter("uint256", "amount", 1)]
+        public BigInteger Amount { get; set; }
+
+        [Parameter("bool", "released", 2)]
+        public bool Released { get; set; }
     }
 }

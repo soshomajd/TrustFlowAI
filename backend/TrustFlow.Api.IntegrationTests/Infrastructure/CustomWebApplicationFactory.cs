@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using TrustFlow.Api.Blockchain;
+using TrustFlow.Api.Services.Files;
 
 namespace TrustFlow.Api.IntegrationTests.Infrastructure;
 
@@ -97,6 +98,9 @@ public sealed class CustomWebApplicationFactory
                 IEscrowChainDeployer,
                 FakeEscrowChainDeployer
             >();
+
+            services.RemoveAll<IMalwareScanner>();
+            services.AddSingleton<IMalwareScanner, FakeMalwareScanner>();
         });
     }
 

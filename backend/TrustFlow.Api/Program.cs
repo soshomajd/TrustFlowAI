@@ -13,6 +13,8 @@ using TrustFlow.Api.Exceptions;
 using TrustFlow.Api.Models.Identity;
 using TrustFlow.Api.Options;
 using TrustFlow.Api.Services.Auth;
+using TrustFlow.Api.Services.Files;
+using TrustFlow.Api.Services.Identity;
 using System.Globalization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
@@ -245,6 +247,12 @@ builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 builder.Services.AddScoped<IEscrowChainDeployer, EscrowChainDeployer>();
 builder.Services.AddScoped<IEscrowDeploymentOrchestrator, EscrowDeploymentOrchestrator>();
 builder.Services.AddScoped<IEscrowFundingSyncOrchestrator, EscrowFundingSyncOrchestrator>();
+builder.Services.Configure<MalwareScannerOptions>(
+    builder.Configuration.GetSection(MalwareScannerOptions.SectionName));
+builder.Services.AddScoped<IMalwareScanner, ClamAvMalwareScanner>();
+builder.Services.AddSingleton<PdfResumeValidator>();
+builder.Services.AddDataProtection();
+builder.Services.AddSingleton<IIdentityDataProtector, IdentityDataProtector>();
 builder.Services.AddHostedService<RefreshTokenCleanupService>();
 
 builder.Services.AddRateLimiter(options =>
@@ -359,6 +367,23 @@ builder.Services.AddRateLimiter(options =>
                     )
             )
     );
+
+    options.AddPolicy(
+        RateLimitPolicies.ResumeUpload,
+        httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: GetClientRateLimitKey(httpContext),
+                factory: _ => CreateFixedWindowOptions(
+                    permitLimit: 6,
+                    window: TimeSpan.FromMinutes(10))));
+
+    options.AddPolicy(
+        RateLimitPolicies.IdentitySubmission,
+        httpContext => RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetClientRateLimitKey(httpContext),
+            factory: _ => CreateFixedWindowOptions(
+                permitLimit: 4,
+                window: TimeSpan.FromMinutes(30))));
 });
 
 var app = builder.Build();

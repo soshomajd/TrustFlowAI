@@ -111,7 +111,7 @@ public sealed class MilestoneWorkflowTests
 
         await ConnectWalletAsync(clientToken);
         await ConnectWalletAsync(freelancerToken);
-        await SetUpFundedEscrowAsync(
+        var contractAddress = await SetUpFundedEscrowAsync(
             projectId,
             clientToken
         );
@@ -174,6 +174,37 @@ public sealed class MilestoneWorkflowTests
             "Submitted"
         );
 
+        using var earlyApproveRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Patch,
+                $"/api/projects/{projectId}" +
+                $"/milestones/{milestoneOneId}/approve",
+                clientToken
+            );
+
+        var earlyApproveResponse =
+            await _client.SendAsync(earlyApproveRequest);
+
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            earlyApproveResponse.StatusCode
+        );
+
+        var earlyApproveBody =
+            await earlyApproveResponse.Content
+                .ReadAsStringAsync();
+
+        Assert.Contains(
+            "has not released this milestone on-chain",
+            earlyApproveBody,
+            StringComparison.OrdinalIgnoreCase
+        );
+
+        FakeEscrowChainDeployer.MarkMilestoneReleased(
+            contractAddress,
+            0
+        );
+
         await ChangeMilestoneStatusAsync(
             projectId,
             milestoneOneId,
@@ -203,6 +234,11 @@ public sealed class MilestoneWorkflowTests
             "submit",
             freelancerToken,
             HttpStatusCode.OK
+        );
+
+        FakeEscrowChainDeployer.MarkMilestoneReleased(
+            contractAddress,
+            1
         );
 
         await ChangeMilestoneStatusAsync(
@@ -353,7 +389,7 @@ public sealed class MilestoneWorkflowTests
         );
     }
 
-    private async Task SetUpFundedEscrowAsync(
+    private async Task<string> SetUpFundedEscrowAsync(
         Guid projectId,
         string clientToken)
     {
@@ -407,6 +443,19 @@ public sealed class MilestoneWorkflowTests
             HttpStatusCode.OK,
             syncResponse.StatusCode
         );
+
+        await using var deployResponseStream =
+            await deployResponse.Content
+                .ReadAsStreamAsync();
+
+        using var deployDocument =
+            await JsonDocument.ParseAsync(
+                deployResponseStream
+            );
+
+        return deployDocument.RootElement
+            .GetProperty("contractAddress")
+            .GetString()!;
     }
 
     private async Task<Guid> CreateProjectAsync(
@@ -496,7 +545,7 @@ public sealed class MilestoneWorkflowTests
                     CoverLetter =
                         "I can complete both milestones.",
 
-                    BidAmount = 2400.00m,
+                    BidAmount = 2500.00m,
 
                     EstimatedDays = 55
                 }

@@ -92,7 +92,7 @@ public sealed class ProposalAcceptanceTests
             projectId,
             freelancerAToken,
             "Proposal from Freelancer A",
-            1800.00m,
+            2000.00m,
             20
         );
 
@@ -178,6 +178,47 @@ public sealed class ProposalAcceptanceTests
             HttpStatusCode.NotFound,
             publicProjectResponse.StatusCode
         );
+    }
+
+    [Fact]
+    public async Task AcceptProposal_RejectsBidThatDoesNotMatchCurrentProjectBudget()
+    {
+        var uniqueValue = Guid.NewGuid().ToString("N");
+        const string password = "Testpass1";
+        var clientEmail = $"mismatch-client-{uniqueValue}@trustflow.test";
+        var freelancerEmail = $"mismatch-freelancer-{uniqueValue}@trustflow.test";
+
+        await RegisterAsync(clientEmail, password, "Mismatch Client", "Client");
+        await RegisterAsync(freelancerEmail, password, "Mismatch Freelancer", "Freelancer");
+
+        var clientToken = await LoginAsync(clientEmail, password);
+        var freelancerToken = await LoginAsync(freelancerEmail, password);
+        var projectId = await CreateProjectAsync(clientToken);
+        await CreateMilestoneAsync(projectId, clientToken);
+        var proposalId = await CreateProposalAsync(
+            projectId,
+            freelancerToken,
+            "This bid no longer matches the project budget.",
+            1800.00m,
+            20
+        );
+
+        using var acceptRequest = CreateAuthorizedRequest(
+            HttpMethod.Patch,
+            $"/api/projects/{projectId}/proposals/{proposalId}/accept",
+            clientToken
+        );
+
+        var response = await _client.SendAsync(acceptRequest);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2000.00m, problem.GetProperty("projectBudget").GetDecimal());
+        Assert.Equal(1800.00m, problem.GetProperty("proposalBidAmount").GetDecimal());
+
+        var statuses = await GetProposalStatusesAsync(projectId, clientToken);
+        Assert.Equal("Pending", statuses[proposalId]);
+        Assert.Null(await GetAssignedProjectStatusAsync(projectId, freelancerToken));
     }
 
     private async Task RegisterAsync(

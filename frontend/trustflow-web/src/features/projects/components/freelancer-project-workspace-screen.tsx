@@ -22,6 +22,8 @@ import {
 } from "@/components/motion/animation-primitives";
 import { Button } from
     "@/components/ui/button";
+import { EscrowPanel } from
+    "@/features/escrow/components/escrow-panel";
 import { useStartMilestone } from
     "@/features/milestones/hooks/use-start-milestone";
 import { useSubmitMilestone } from
@@ -126,7 +128,7 @@ export function FreelancerProjectWorkspaceScreen({
                                 <span className="flex items-center gap-2">
                                     <UserRound className="size-4" />
                                     Client:{" "}
-                                    {workspace.clientFullName}
+                                    {workspace.clientId ? <Link className="font-medium text-foreground hover:text-electric hover:underline" href={`/dashboard/clients/${workspace.clientId}`}>{workspace.clientFullName}</Link> : workspace.clientFullName}
                                 </span>
 
                                 <span className="flex items-center gap-2">
@@ -177,6 +179,14 @@ export function FreelancerProjectWorkspaceScreen({
                         </div>
                     </div>
                 </section>
+            </AnimatedSection>
+
+            <AnimatedSection className="mt-6">
+                <EscrowPanel
+                    projectId={workspace.id}
+                    projectStatus={workspace.status}
+                    viewerRole="Freelancer"
+                />
             </AnimatedSection>
 
             <AnimatedSection className="mt-6">

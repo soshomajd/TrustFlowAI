@@ -37,6 +37,45 @@ public sealed class WalletFlowTests
         var accessToken =
             await RegisterAndLoginAsync();
 
+        using var initialStatusRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Get,
+                "/api/wallet/me",
+                accessToken
+            );
+
+        var initialStatusResponse =
+            await _client.SendAsync(
+                initialStatusRequest
+            );
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            initialStatusResponse.StatusCode
+        );
+
+        using (
+            var initialStatusDocument =
+                JsonDocument.Parse(
+                    await initialStatusResponse.Content
+                        .ReadAsStringAsync()
+                )
+        )
+        {
+            Assert.False(
+                initialStatusDocument.RootElement
+                    .GetProperty("isVerified")
+                    .GetBoolean()
+            );
+
+            Assert.Equal(
+                JsonValueKind.Null,
+                initialStatusDocument.RootElement
+                    .GetProperty("walletAddress")
+                    .ValueKind
+            );
+        }
+
         var walletKey =
             EthECKey.GenerateKey();
 
@@ -147,6 +186,57 @@ public sealed class WalletFlowTests
             DateTimeOffset.UtcNow
         );
 
+        using var persistedStatusRequest =
+            CreateAuthorizedRequest(
+                HttpMethod.Get,
+                "/api/wallet/me",
+                accessToken
+            );
+
+        var persistedStatusResponse =
+            await _client.SendAsync(
+                persistedStatusRequest
+            );
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            persistedStatusResponse.StatusCode
+        );
+
+        using (
+            var persistedStatusDocument =
+                JsonDocument.Parse(
+                    await persistedStatusResponse.Content
+                        .ReadAsStringAsync()
+                )
+        )
+        {
+            var persistedStatus =
+                persistedStatusDocument.RootElement;
+
+            Assert.True(
+                persistedStatus
+                    .GetProperty("isVerified")
+                    .GetBoolean()
+            );
+
+            Assert.Equal(
+                walletAddress,
+                persistedStatus
+                    .GetProperty("walletAddress")
+                    .GetString(),
+                ignoreCase: true
+            );
+
+            Assert.Equal(
+                verifiedAt.ToUnixTimeMilliseconds(),
+                persistedStatus
+                    .GetProperty("verifiedAt")
+                    .GetDateTimeOffset()
+                    .ToUnixTimeMilliseconds()
+            );
+        }
+
         using var replayRequest =
             CreateAuthorizedJsonRequest(
                 HttpMethod.Post,
@@ -175,6 +265,36 @@ public sealed class WalletFlowTests
         Assert.Contains(
             "No active wallet challenge",
             replayBody,
+            StringComparison.OrdinalIgnoreCase
+        );
+
+        using var replacementChallengeRequest =
+            CreateAuthorizedJsonRequest(
+                HttpMethod.Post,
+                "/api/wallet/challenge",
+                accessToken,
+                new
+                {
+                    WalletAddress =
+                        EthECKey.GenerateKey()
+                            .GetPublicAddress()
+                }
+            );
+
+        var replacementChallengeResponse =
+            await _client.SendAsync(
+                replacementChallengeRequest
+            );
+
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            replacementChallengeResponse.StatusCode
+        );
+
+        Assert.Contains(
+            "different wallet is already verified",
+            await replacementChallengeResponse.Content
+                .ReadAsStringAsync(),
             StringComparison.OrdinalIgnoreCase
         );
     }
@@ -302,6 +422,27 @@ public sealed class WalletFlowTests
 
         request.Content =
             JsonContent.Create(body);
+
+        return request;
+    }
+
+    private static HttpRequestMessage
+        CreateAuthorizedRequest(
+            HttpMethod method,
+            string requestUri,
+            string accessToken)
+    {
+        var request =
+            new HttpRequestMessage(
+                method,
+                requestUri
+            );
+
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                accessToken
+            );
 
         return request;
     }

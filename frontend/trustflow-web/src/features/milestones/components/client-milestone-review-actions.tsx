@@ -19,6 +19,8 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import { useReleaseMilestone } from
+    "@/features/escrow/hooks/use-release-milestone";
 import { useApproveMilestone } from
     "@/features/milestones/hooks/use-approve-milestone";
 import { useRejectMilestone } from
@@ -28,17 +30,23 @@ import type {
 } from "@/features/milestones/types/milestone";
 import { getApiErrorMessage } from
     "@/lib/api/get-api-error-message";
+import { getWalletErrorMessage } from
+    "@/lib/wallet/get-wallet-error-message";
 
 type ClientMilestoneReviewActionsProps = {
     projectId: string;
     milestoneId: string;
     status: MilestoneStatus;
+    contractAddress: string | null;
+    onChainIndex: number;
 };
 
 export function ClientMilestoneReviewActions({
     projectId,
     milestoneId,
     status,
+    contractAddress,
+    onChainIndex,
 }: ClientMilestoneReviewActionsProps) {
     if (status !== "Submitted") {
         return null;
@@ -54,6 +62,8 @@ export function ClientMilestoneReviewActions({
             <ApproveMilestoneDialog
                 projectId={projectId}
                 milestoneId={milestoneId}
+                contractAddress={contractAddress}
+                onChainIndex={onChainIndex}
             />
         </div>
     );
@@ -62,12 +72,22 @@ export function ClientMilestoneReviewActions({
 function ApproveMilestoneDialog({
     projectId,
     milestoneId,
+    contractAddress,
+    onChainIndex,
 }: {
     projectId: string;
     milestoneId: string;
+    contractAddress: string | null;
+    onChainIndex: number;
 }) {
     const [open, setOpen] =
         useState(false);
+
+    const [releaseErrorMessage, setReleaseErrorMessage] =
+        useState<string | null>(null);
+
+    const releaseMutation =
+        useReleaseMilestone(projectId);
 
     const approveMutation =
         useApproveMilestone(
@@ -76,14 +96,39 @@ function ApproveMilestoneDialog({
         );
 
     const errorMessage =
-        approveMutation.isError
+        releaseErrorMessage ??
+        (approveMutation.isError
             ? getApiErrorMessage(
                 approveMutation.error,
                 "Milestone could not be approved.",
             )
-            : null;
+            : null);
 
-    function handleApprove() {
+    const isBusy =
+        releaseMutation.isPending ||
+        approveMutation.isPending;
+
+    async function handleApprove() {
+        setReleaseErrorMessage(null);
+
+        if (contractAddress) {
+            try {
+                await releaseMutation.mutateAsync({
+                    contractAddress,
+                    onChainIndex,
+                });
+            } catch (error) {
+                setReleaseErrorMessage(
+                    getWalletErrorMessage(
+                        error,
+                        "The on-chain milestone release failed.",
+                    ),
+                );
+
+                return;
+            }
+        }
+
         approveMutation.mutate(
             undefined,
             {
@@ -98,13 +143,12 @@ function ApproveMilestoneDialog({
         <Dialog
             open={open}
             onOpenChange={(nextOpen) => {
-                if (
-                    approveMutation.isPending
-                ) {
+                if (isBusy) {
                     return;
                 }
 
                 if (nextOpen) {
+                    setReleaseErrorMessage(null);
                     approveMutation.reset();
                 }
 
@@ -125,10 +169,9 @@ function ApproveMilestoneDialog({
                     </DialogTitle>
 
                     <DialogDescription>
-                        The milestone will be marked
-                        as approved. The freelancer
-                        can then start the next
-                        milestone.
+                        {contractAddress
+                            ? "Your wallet will release this milestone's payment on-chain, then it will be marked as approved. The freelancer can then start the next milestone."
+                            : "The milestone will be marked as approved. The freelancer can then start the next milestone."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -149,9 +192,7 @@ function ApproveMilestoneDialog({
                     <Button
                         type="button"
                         variant="outline"
-                        disabled={
-                            approveMutation.isPending
-                        }
+                        disabled={isBusy}
                         onClick={() => {
                             setOpen(false);
                         }}
@@ -161,15 +202,17 @@ function ApproveMilestoneDialog({
 
                     <Button
                         type="button"
-                        disabled={
-                            approveMutation.isPending
-                        }
-                        onClick={handleApprove}
+                        disabled={isBusy}
+                        onClick={() => {
+                            void handleApprove();
+                        }}
                     >
-                        {approveMutation.isPending ? (
+                        {isBusy ? (
                             <>
                                 <LoaderCircle className="size-4 animate-spin" />
-                                Approving
+                                {releaseMutation.isPending
+                                    ? "Releasing on-chain"
+                                    : "Approving"}
                             </>
                         ) : (
                             <>
