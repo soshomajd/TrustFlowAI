@@ -7,6 +7,7 @@ import { submitMilestone } from "@/features/milestones/api/milestones-api";
 import { milestoneQueryKeys } from "@/features/milestones/queries/milestone-query-keys";
 import { projectQueryKeys } from "@/features/projects/queries/project-query-keys";
 import { getApiErrorMessage } from "@/lib/api/get-api-error-message";
+import type { SubmitMilestoneInput } from "@/features/milestones/types/milestone";
 
 export function useSubmitMilestone(projectId: string, milestoneId: string) {
   const queryClient = useQueryClient();
@@ -21,8 +22,8 @@ export function useSubmitMilestone(projectId: string, milestoneId: string) {
       normalizedMilestoneId,
     ),
 
-    mutationFn: () =>
-      submitMilestone(normalizedProjectId, normalizedMilestoneId),
+    mutationFn: (input: SubmitMilestoneInput) =>
+      submitMilestone(normalizedProjectId, normalizedMilestoneId, input),
 
     onSuccess: async () => {
       await Promise.all([
@@ -32,6 +33,10 @@ export function useSubmitMilestone(projectId: string, milestoneId: string) {
 
         queryClient.invalidateQueries({
           queryKey: projectQueryKeys.assignedLists(),
+        }),
+
+        queryClient.invalidateQueries({
+          queryKey: milestoneQueryKeys.submissions(normalizedProjectId, normalizedMilestoneId),
         }),
       ]);
 

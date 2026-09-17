@@ -10,6 +10,10 @@ import { useState } from "react";
 
 import { Button } from
     "@/components/ui/button";
+import { Textarea } from
+    "@/components/ui/textarea";
+import { Label } from
+    "@/components/ui/label";
 import {
     Dialog,
     DialogContent,
@@ -236,6 +240,8 @@ function RejectMilestoneDialog({
 }) {
     const [open, setOpen] =
         useState(false);
+    const [reason, setReason] =
+        useState("");
 
     const rejectMutation =
         useRejectMilestone(
@@ -252,11 +258,15 @@ function RejectMilestoneDialog({
             : null;
 
     function handleReject() {
+        if (reason.trim().length < 3) {
+            return;
+        }
         rejectMutation.mutate(
-            undefined,
+            reason.trim(),
             {
                 onSuccess: () => {
                     setOpen(false);
+                    setReason("");
                 },
             },
         );
@@ -274,6 +284,7 @@ function RejectMilestoneDialog({
 
                 if (nextOpen) {
                     rejectMutation.reset();
+                    setReason("");
                 }
 
                 setOpen(nextOpen);
@@ -285,24 +296,38 @@ function RejectMilestoneDialog({
                     variant="outline"
                 >
                     <XCircle className="size-4" />
-                    Reject
+                    Request changes
                 </Button>
             </DialogTrigger>
 
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>
-                        Reject this milestone?
+                        Request changes?
                     </DialogTitle>
 
                     <DialogDescription>
-                        The milestone will be
-                        returned to the freelancer
-                        with Rejected status. The
-                        freelancer can restart and
-                        submit it again.
+                        Your reason will be saved with this delivery. The freelancer can restart the milestone and submit a new version.
                     </DialogDescription>
                 </DialogHeader>
+
+                <div className="space-y-2">
+                    <Label htmlFor={`change-reason-${milestoneId}`}>
+                        What needs to change?
+                    </Label>
+                    <Textarea
+                        id={`change-reason-${milestoneId}`}
+                        value={reason}
+                        onChange={(event) => setReason(event.target.value)}
+                        maxLength={1000}
+                        rows={4}
+                        placeholder="Be clear and specific so the freelancer can fix the work."
+                        disabled={rejectMutation.isPending}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        {reason.length}/1000 characters
+                    </p>
+                </div>
 
                 {errorMessage && (
                     <div
@@ -322,7 +347,7 @@ function RejectMilestoneDialog({
                         type="button"
                         variant="outline"
                         disabled={
-                            rejectMutation.isPending
+                            rejectMutation.isPending || reason.trim().length < 3
                         }
                         onClick={() => {
                             setOpen(false);
@@ -342,12 +367,12 @@ function RejectMilestoneDialog({
                         {rejectMutation.isPending ? (
                             <>
                                 <LoaderCircle className="size-4 animate-spin" />
-                                Rejecting
+                                Sending request
                             </>
                         ) : (
                             <>
                                 <XCircle className="size-4" />
-                                Reject milestone
+                                Send request
                             </>
                         )}
                     </Button>

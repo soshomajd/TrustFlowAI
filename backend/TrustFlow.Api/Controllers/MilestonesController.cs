@@ -777,7 +777,7 @@ public class MilestonesController(
         });
     }
     [Authorize(Roles = AppRoles.Freelancer)]
-    [HttpPatch("{milestoneId:guid}/submit")]
+    [NonAction]
     public async Task<IActionResult> SubmitMilestone(
     Guid projectId,
     Guid milestoneId,
@@ -1167,7 +1167,7 @@ public class MilestonesController(
         });
     }
     [Authorize(Roles = AppRoles.Client)]
-    [HttpPatch("{milestoneId:guid}/reject")]
+    [NonAction]
     public async Task<IActionResult> RejectMilestone(
     Guid projectId,
     Guid milestoneId,

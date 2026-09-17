@@ -17,9 +17,12 @@ public sealed class PdfResumeValidator
     };
 
     public string? Validate(byte[] content)
+        => Validate(content, MaximumFileSize, "resume");
+
+    public string? Validate(byte[] content, int maximumFileSize, string fileLabel)
     {
-        if (content.Length == 0 || content.Length > MaximumFileSize)
-            return "The resume must be a PDF no larger than 5 MB.";
+        if (content.Length == 0 || content.Length > maximumFileSize)
+            return $"The {fileLabel} is too large.";
 
         if (content.Length < 8 || !content.AsSpan(0, 5).SequenceEqual("%PDF-"u8))
             return "The uploaded file is not a PDF.";

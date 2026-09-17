@@ -21,8 +21,8 @@ export function useRejectMilestone(projectId: string, milestoneId: string) {
       normalizedMilestoneId,
     ),
 
-    mutationFn: () =>
-      rejectMilestone(normalizedProjectId, normalizedMilestoneId),
+    mutationFn: (reason: string) =>
+      rejectMilestone(normalizedProjectId, normalizedMilestoneId, reason),
 
     onSuccess: async () => {
       await Promise.all([
@@ -41,14 +41,18 @@ export function useRejectMilestone(projectId: string, milestoneId: string) {
         queryClient.invalidateQueries({
           queryKey: projectQueryKeys.assignedLists(),
         }),
+
+        queryClient.invalidateQueries({
+          queryKey: milestoneQueryKeys.submissions(normalizedProjectId, normalizedMilestoneId),
+        }),
       ]);
 
-      toast.success("Milestone rejected and returned to the freelancer.");
+      toast.success("Changes requested from the freelancer.");
     },
 
     onError: (error) => {
       toast.error(
-        getApiErrorMessage(error, "Milestone could not be rejected."),
+        getApiErrorMessage(error, "The change request could not be sent."),
       );
     },
   });

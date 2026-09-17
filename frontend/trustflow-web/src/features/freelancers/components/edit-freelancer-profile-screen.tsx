@@ -93,6 +93,7 @@ function ProfileEditor({ profile }: { profile: FreelancerProfile }) {
                 <Input id="skills" {...form.register("skills")} maxLength={1000} placeholder="React, UI design, TypeScript" aria-describedby="skills-help" aria-invalid={Boolean(errors.skills)} />
               </Field>
               {splitEntries(skills).length > 0 && <div className="flex flex-wrap gap-2">{splitEntries(skills).slice(0, 10).map((skill) => <span key={skill} className="max-w-full break-words rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs">{skill}</span>)}</div>}
+              <SectionSaveAction isDirty={isDirty} isPending={mutation.isPending} />
             </EditorSection>
 
             <details className="rounded-2xl border bg-card/70 p-5 sm:p-6">
@@ -105,6 +106,7 @@ function ProfileEditor({ profile }: { profile: FreelancerProfile }) {
                 <Field id="availability" label="Availability" error={errors.availability?.message}>
                   <select id="availability" {...form.register("availability")} className="h-10 w-full rounded-lg border bg-background px-3 text-sm" aria-describedby="availability-help">{(Object.keys(availabilityLabels) as Availability[]).map((value) => <option key={value} value={value}>{availabilityLabels[value]}</option>)}</select>
                 </Field>
+                <SectionSaveAction isDirty={isDirty} isPending={mutation.isPending} />
               </div>
             </details>
 
@@ -120,13 +122,14 @@ function ProfileEditor({ profile }: { profile: FreelancerProfile }) {
               ))}
               {fields.length < 3 && <Button type="button" variant="outline" onClick={() => append({ title: "", description: "", url: "" })}><Plus className="size-4" />Add work sample</Button>}
               {errors.portfolioItems?.root?.message && <p role="alert" className="text-sm text-destructive">{errors.portfolioItems.root.message}</p>}
+              <SectionSaveAction isDirty={isDirty} isPending={mutation.isPending} />
             </EditorSection>
           </fieldset>
 
           {mutation.isError && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{getApiErrorMessage(mutation.error, "Your profile could not be saved. Your edits are still here; please try again.")}</p>}
           <div className="sticky bottom-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/95 p-4 shadow-lg backdrop-blur">
             <p role="status" className="text-xs text-muted-foreground">{mutation.isPending ? "Saving your profile…" : isDirty ? "You have unsaved changes" : profile.updatedAt ? "All changes saved" : "Save whenever you are ready"}</p>
-            <Button type="submit" disabled={mutation.isPending || !isDirty}>{mutation.isPending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{mutation.isPending ? "Saving…" : "Save profile"}</Button>
+            <SaveChangesButton isDirty={isDirty} isPending={mutation.isPending} />
           </div>
         </form>
 
@@ -147,6 +150,26 @@ function ProfileEditor({ profile }: { profile: FreelancerProfile }) {
 
 function EditorSection({ number, title, description, children }: { number: string; title: string; description: string; children: ReactNode }) {
   return <section className="space-y-5 rounded-2xl border bg-card/70 p-5 sm:p-6"><div><div className="flex items-center gap-3"><span className="text-xs font-semibold text-electric">{number}</span><h2 className="text-lg font-semibold">{title}</h2></div><p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p></div>{children}</section>;
+}
+
+function SectionSaveAction({ isDirty, isPending }: { isDirty: boolean; isPending: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-t pt-5">
+      <p className="text-xs text-muted-foreground">
+        {isDirty ? "Save your profile changes when you are ready." : "No unsaved changes"}
+      </p>
+      <SaveChangesButton isDirty={isDirty} isPending={isPending} />
+    </div>
+  );
+}
+
+function SaveChangesButton({ isDirty, isPending }: { isDirty: boolean; isPending: boolean }) {
+  return (
+    <Button type="submit" disabled={isPending || !isDirty} className="shrink-0">
+      {isPending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}
+      {isPending ? "Saving…" : "Save changes"}
+    </Button>
+  );
 }
 
 function Field({ id, label, hint, error, children }: { id: string; label: string; hint?: string; error?: string; children: ReactNode }) {

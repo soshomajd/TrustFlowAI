@@ -251,6 +251,7 @@ builder.Services.Configure<MalwareScannerOptions>(
     builder.Configuration.GetSection(MalwareScannerOptions.SectionName));
 builder.Services.AddScoped<IMalwareScanner, ClamAvMalwareScanner>();
 builder.Services.AddSingleton<PdfResumeValidator>();
+builder.Services.AddSingleton<MilestoneDeliveryFileValidator>();
 builder.Services.AddDataProtection();
 builder.Services.AddSingleton<IIdentityDataProtector, IdentityDataProtector>();
 builder.Services.AddHostedService<RefreshTokenCleanupService>();
@@ -384,6 +385,14 @@ builder.Services.AddRateLimiter(options =>
             factory: _ => CreateFixedWindowOptions(
                 permitLimit: 4,
                 window: TimeSpan.FromMinutes(30))));
+
+    options.AddPolicy(
+        RateLimitPolicies.MilestoneDelivery,
+        httpContext => RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetClientRateLimitKey(httpContext),
+            factory: _ => CreateFixedWindowOptions(
+                permitLimit: 10,
+                window: TimeSpan.FromMinutes(10))));
 });
 
 var app = builder.Build();

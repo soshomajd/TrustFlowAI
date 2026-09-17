@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BriefcaseBusiness,
+  CircleHelp,
   FilePlus2,
   FolderKanban,
   LayoutDashboard,
@@ -45,6 +46,12 @@ export const dashboardNavigationItems: DashboardNavigationItem[] = [
     roles: ["Client"],
   },
   {
+    label: "How to get started",
+    href: "/dashboard/client/get-started",
+    icon: CircleHelp,
+    roles: ["Client"],
+  },
+  {
     label: "Overview",
     href: "/dashboard/freelancer",
     icon: LayoutDashboard,
@@ -72,6 +79,12 @@ export const dashboardNavigationItems: DashboardNavigationItem[] = [
     label: "Assigned projects",
     href: "/dashboard/freelancer/projects",
     icon: BriefcaseBusiness,
+    roles: ["Freelancer"],
+  },
+  {
+    label: "How to get started",
+    href: "/dashboard/freelancer/get-started",
+    icon: CircleHelp,
     roles: ["Freelancer"],
   },
   {

@@ -7,6 +7,34 @@ export type MilestoneStatus =
   | "Approved"
   | "Rejected";
 
+export type MilestoneSubmissionAttachment = {
+  id: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  sha256: string;
+};
+
+export type MilestoneSubmission = {
+  id: string;
+  milestoneId: string;
+  version: number;
+  note: string;
+  previewLink: string | null;
+  sourceFilesLink: string | null;
+  clientFeedback: string | null;
+  submittedAt: string;
+  reviewedAt: string | null;
+  attachments: MilestoneSubmissionAttachment[];
+};
+
+export type SubmitMilestoneInput = {
+  note: string;
+  previewLink: string;
+  sourceFilesLink: string;
+  files: File[];
+};
+
 export type ProjectMilestone = {
   id: string;
   projectId: string;

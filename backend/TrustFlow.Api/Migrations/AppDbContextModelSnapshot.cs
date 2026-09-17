@@ -645,6 +645,98 @@ namespace TrustFlow.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TrustFlow.Api.Models.MilestoneSubmission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ClientFeedback")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("FreelancerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MilestoneId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("PreviewLink")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SourceFilesLink")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FreelancerId");
+
+                    b.HasIndex("MilestoneId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("MilestoneSubmissions", t =>
+                        {
+                            t.HasCheckConstraint("CK_MilestoneSubmissions_Version_Positive", "\"Version\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.MilestoneSubmissionAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("FileSize")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("SubmissionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubmissionId");
+
+                    b.ToTable("MilestoneSubmissionAttachments", t =>
+                        {
+                            t.HasCheckConstraint("CK_MilestoneSubmissionAttachments_FileSize", "\"FileSize\" BETWEEN 1 AND 26214400");
+                        });
+                });
+
             modelBuilder.Entity("TrustFlow.Api.Models.Project", b =>
                 {
                     b.Property<Guid>("Id")
@@ -892,6 +984,34 @@ namespace TrustFlow.Api.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("TrustFlow.Api.Models.MilestoneSubmission", b =>
+                {
+                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("FreelancerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TrustFlow.Api.Models.MileStone", "Milestone")
+                        .WithMany()
+                        .HasForeignKey("MilestoneId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Milestone");
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.MilestoneSubmissionAttachment", b =>
+                {
+                    b.HasOne("TrustFlow.Api.Models.MilestoneSubmission", "Submission")
+                        .WithMany("Attachments")
+                        .HasForeignKey("SubmissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Submission");
+                });
+
             modelBuilder.Entity("TrustFlow.Api.Models.Project", b =>
                 {
                     b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", "Client")
@@ -937,6 +1057,11 @@ namespace TrustFlow.Api.Migrations
                     b.Navigation("FreelancerProposals");
 
                     b.Navigation("RefreshTokens");
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.MilestoneSubmission", b =>
+                {
+                    b.Navigation("Attachments");
                 });
 
             modelBuilder.Entity("TrustFlow.Api.Models.Project", b =>

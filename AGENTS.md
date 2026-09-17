@@ -48,3 +48,8 @@
 
 - Before every new task, read this file and `docs/PROJECT_STATE.md`, then inspect only task-relevant files and any applicable nested `AGENTS.md`.
 - Patch `docs/PROJECT_STATE.md` only when implementation state, the active milestone, the next step, a known issue, or an important decision changes; do not rescan or rewrite it wholesale.
+
+## User guidance
+
+- Keep the Client and Freelancer `How to get started` pages current. When a user-facing feature changes either role's path, update the matching guide in the same change; update both guides when the feature affects both roles.
+- Guide copy must use short, simple English for beginners and cover only actions that are available in the product.

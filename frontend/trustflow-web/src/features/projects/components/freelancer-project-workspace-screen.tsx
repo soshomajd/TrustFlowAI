@@ -10,7 +10,6 @@ import {
     LoaderCircle,
     Play,
     RefreshCw,
-    Send,
     UserRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -26,8 +25,10 @@ import { EscrowPanel } from
     "@/features/escrow/components/escrow-panel";
 import { useStartMilestone } from
     "@/features/milestones/hooks/use-start-milestone";
-import { useSubmitMilestone } from
-    "@/features/milestones/hooks/use-submit-milestone";
+import { SubmitMilestoneDialog } from
+    "@/features/milestones/components/submit-milestone-dialog";
+import { MilestoneSubmissionsPanel } from
+    "@/features/milestones/components/milestone-submissions-panel";
 import { useProjectWorkspace } from
     "@/features/projects/hooks/use-project-workspace";
 import { getApiErrorMessage } from
@@ -271,12 +272,6 @@ function FreelancerMilestoneCard({
             milestone.id,
         );
 
-    const submitMutation =
-        useSubmitMilestone(
-            projectId,
-            milestone.id,
-        );
-
     const isRejected =
         milestone.status === "Rejected";
 
@@ -302,8 +297,7 @@ function FreelancerMilestoneCard({
         milestone.status === "InProgress";
 
     const isMutating =
-        startMutation.isPending ||
-        submitMutation.isPending;
+        startMutation.isPending;
 
     const mutationError =
         startMutation.isError
@@ -311,12 +305,7 @@ function FreelancerMilestoneCard({
                 startMutation.error,
                 "Milestone could not be started.",
             )
-            : submitMutation.isError
-                ? getApiErrorMessage(
-                    submitMutation.error,
-                    "Milestone could not be submitted.",
-                )
-                : null;
+            : null;
 
     return (
         <article
@@ -416,6 +405,13 @@ function FreelancerMilestoneCard({
                     </div>
                 )}
 
+            {milestone.status !== "Pending" && (
+                <MilestoneSubmissionsPanel
+                    projectId={projectId}
+                    milestoneId={milestone.id}
+                />
+            )}
+
             {mutationError && (
                 <div
                     role="alert"
@@ -446,7 +442,6 @@ function FreelancerMilestoneCard({
                             disabled={isMutating}
                             onClick={() => {
                                 startMutation.reset();
-                                submitMutation.reset();
                                 startMutation.mutate();
                             }}
                         >
@@ -464,23 +459,10 @@ function FreelancerMilestoneCard({
                     )}
 
                     {canSubmit && (
-                        <Button
-                            type="button"
-                            disabled={isMutating}
-                            onClick={() => {
-                                startMutation.reset();
-                                submitMutation.reset();
-                                submitMutation.mutate();
-                            }}
-                        >
-                            {submitMutation.isPending ? (
-                                <LoaderCircle className="size-4 animate-spin" />
-                            ) : (
-                                <Send className="size-4" />
-                            )}
-
-                            Submit for review
-                        </Button>
+                        <SubmitMilestoneDialog
+                            projectId={projectId}
+                            milestoneId={milestone.id}
+                        />
                     )}
                 </div>
             )}

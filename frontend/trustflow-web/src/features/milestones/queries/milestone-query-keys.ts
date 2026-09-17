@@ -24,6 +24,9 @@ export const milestoneQueryKeys = {
   submit: (projectId: string, milestoneId: string) =>
     [...milestoneQueryKeys.all, "submit", projectId, milestoneId] as const,
 
+  submissions: (projectId: string, milestoneId: string) =>
+    [...milestoneQueryKeys.all, "submissions", projectId, milestoneId] as const,
+
   approve: (projectId: string, milestoneId: string) =>
     [...milestoneQueryKeys.all, "approve", projectId, milestoneId] as const,
 

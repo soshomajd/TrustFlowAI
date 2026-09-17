@@ -622,10 +622,15 @@ public sealed class EscrowFlowTests
 
         using var submitRequest =
             CreateAuthorizedRequest(
-                HttpMethod.Patch,
-                $"/api/projects/{projectId}/milestones/{milestoneId}/submit",
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/milestones/{milestoneId}/submissions",
                 freelancerAccessToken
             );
+        submitRequest.Content = new MultipartFormDataContent
+        {
+            { new StringContent("Completed work for client review."), "note" },
+            { new StringContent("https://example.test/delivery"), "previewLink" }
+        };
 
         Assert.Equal(
             HttpStatusCode.OK,

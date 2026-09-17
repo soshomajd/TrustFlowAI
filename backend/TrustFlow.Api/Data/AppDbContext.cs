@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using TrustFlow.Api.Models;
 using TrustFlow.Api.Models.Enums;
 using TrustFlow.Api.Models.Identity;
+using TrustFlow.Api.Services.Files;
 
 namespace TrustFlow.Api.Data;
 
@@ -31,6 +32,8 @@ public class AppDbContext(
 
     public DbSet<FreelancerProfile> FreelancerProfiles => Set<FreelancerProfile>();
     public DbSet<FreelancerResume> FreelancerResumes => Set<FreelancerResume>();
+    public DbSet<MilestoneSubmission> MilestoneSubmissions => Set<MilestoneSubmission>();
+    public DbSet<MilestoneSubmissionAttachment> MilestoneSubmissionAttachments => Set<MilestoneSubmissionAttachment>();
     public DbSet<ClientProfile> ClientProfiles => Set<ClientProfile>();
     public DbSet<ClientIdentityVerification> ClientIdentityVerifications => Set<ClientIdentityVerification>();
 
@@ -54,6 +57,40 @@ public class AppDbContext(
         ConfigureFreelancerResumes(modelBuilder);
         ConfigureClientProfiles(modelBuilder);
         ConfigureClientIdentityVerifications(modelBuilder);
+        ConfigureMilestoneSubmissions(modelBuilder);
+    }
+
+    private static void ConfigureMilestoneSubmissions(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<MilestoneSubmission>(submission =>
+        {
+            submission.HasKey(item => item.Id);
+            submission.HasOne(item => item.Milestone).WithMany()
+                .HasForeignKey(item => item.MilestoneId).OnDelete(DeleteBehavior.Cascade);
+            submission.HasOne<ApplicationUser>().WithMany()
+                .HasForeignKey(item => item.FreelancerId).OnDelete(DeleteBehavior.Restrict);
+            submission.Property(item => item.Note).HasMaxLength(2000);
+            submission.Property(item => item.PreviewLink).HasMaxLength(1000);
+            submission.Property(item => item.SourceFilesLink).HasMaxLength(1000);
+            submission.Property(item => item.ClientFeedback).HasMaxLength(1000);
+            submission.HasIndex(item => new { item.MilestoneId, item.Version }).IsUnique();
+            submission.ToTable(table => table.HasCheckConstraint(
+                "CK_MilestoneSubmissions_Version_Positive", "\"Version\" > 0"));
+        });
+
+        modelBuilder.Entity<MilestoneSubmissionAttachment>(attachment =>
+        {
+            attachment.HasKey(item => item.Id);
+            attachment.HasOne(item => item.Submission).WithMany(item => item.Attachments)
+                .HasForeignKey(item => item.SubmissionId).OnDelete(DeleteBehavior.Cascade);
+            attachment.Property(item => item.OriginalFileName).HasMaxLength(200);
+            attachment.Property(item => item.ContentType).HasMaxLength(50);
+            attachment.Property(item => item.Sha256).HasMaxLength(64);
+            attachment.Property(item => item.Content).HasColumnType("bytea");
+            attachment.ToTable(table => table.HasCheckConstraint(
+                "CK_MilestoneSubmissionAttachments_FileSize",
+                $"\"FileSize\" BETWEEN 1 AND {MilestoneDeliveryFileValidator.MaximumFileSize}"));
+        });
     }
 
     private static void ConfigureClientProfiles(ModelBuilder modelBuilder)

@@ -174,6 +174,62 @@ public sealed class MilestoneWorkflowTests
             "Submitted"
         );
 
+        using (var submissionsRequest = CreateAuthorizedRequest(
+                   HttpMethod.Get,
+                   $"/api/projects/{projectId}/milestones/{milestoneOneId}/submissions",
+                   clientToken))
+        {
+            var submissionsResponse = await _client.SendAsync(submissionsRequest);
+            Assert.Equal(HttpStatusCode.OK, submissionsResponse.StatusCode);
+            using var submissionsJson = JsonDocument.Parse(
+                await submissionsResponse.Content.ReadAsStringAsync());
+            var firstSubmission = submissionsJson.RootElement[0];
+            Assert.Equal(1, firstSubmission.GetProperty("version").GetInt32());
+            Assert.Equal("Completed work for client review.",
+                firstSubmission.GetProperty("note").GetString());
+            var attachment = firstSubmission.GetProperty("attachments")[0];
+            using var downloadRequest = CreateAuthorizedRequest(
+                HttpMethod.Get,
+                $"/api/projects/{projectId}/milestones/{milestoneOneId}/submissions/" +
+                $"{firstSubmission.GetProperty("id").GetGuid()}/files/{attachment.GetProperty("id").GetGuid()}",
+                clientToken);
+            var downloadResponse = await _client.SendAsync(downloadRequest);
+            Assert.Equal(HttpStatusCode.OK, downloadResponse.StatusCode);
+            Assert.NotEmpty(await downloadResponse.Content.ReadAsByteArrayAsync());
+        }
+
+        using (var changesRequest = CreateAuthorizedRequest(
+                   HttpMethod.Patch,
+                   $"/api/projects/{projectId}/milestones/{milestoneOneId}/request-changes",
+                   clientToken))
+        {
+            changesRequest.Content = JsonContent.Create(new
+            {
+                reason = "Please update the final color and submit again."
+            });
+            Assert.Equal(HttpStatusCode.OK,
+                (await _client.SendAsync(changesRequest)).StatusCode);
+        }
+
+        await ChangeMilestoneStatusAsync(projectId, milestoneOneId, "start",
+            freelancerToken, HttpStatusCode.OK);
+        await ChangeMilestoneStatusAsync(projectId, milestoneOneId, "submit",
+            freelancerToken, HttpStatusCode.OK);
+
+        using (var versionsRequest = CreateAuthorizedRequest(
+                   HttpMethod.Get,
+                   $"/api/projects/{projectId}/milestones/{milestoneOneId}/submissions",
+                   clientToken))
+        {
+            var versionsResponse = await _client.SendAsync(versionsRequest);
+            using var versionsJson = JsonDocument.Parse(
+                await versionsResponse.Content.ReadAsStringAsync());
+            Assert.Equal(2, versionsJson.RootElement.GetArrayLength());
+            Assert.Equal(2, versionsJson.RootElement[0].GetProperty("version").GetInt32());
+            Assert.Contains("final color",
+                versionsJson.RootElement[1].GetProperty("clientFeedback").GetString());
+        }
+
         using var earlyApproveRequest =
             CreateAuthorizedRequest(
                 HttpMethod.Patch,
@@ -591,6 +647,26 @@ public sealed class MilestoneWorkflowTests
         string accessToken,
         HttpStatusCode expectedStatusCode)
     {
+        if (action == "submit")
+        {
+            using var submitRequest = CreateAuthorizedRequest(
+                HttpMethod.Post,
+                $"/api/projects/{projectId}/milestones/{milestoneId}/submissions",
+                accessToken);
+            submitRequest.Content = new MultipartFormDataContent
+            {
+                { new StringContent("Completed work for client review."), "note" },
+                { new StringContent("https://example.test/delivery"), "previewLink" }
+            };
+            var image = new ByteArrayContent(Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="));
+            image.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+            ((MultipartFormDataContent)submitRequest.Content).Add(image, "files", "delivery.png");
+            var submitResponse = await _client.SendAsync(submitRequest);
+            Assert.Equal(expectedStatusCode, submitResponse.StatusCode);
+            return;
+        }
+
         using var request =
             CreateAuthorizedRequest(
                 HttpMethod.Patch,

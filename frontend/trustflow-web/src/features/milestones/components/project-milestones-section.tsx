@@ -22,6 +22,8 @@ import { EditMilestoneDialog } from "@/features/milestones/components/edit-miles
 import {
     ClientMilestoneReviewActions,
 } from "@/features/milestones/components/client-milestone-review-actions";
+import { MilestoneSubmissionsPanel } from
+    "@/features/milestones/components/milestone-submissions-panel";
 
 type ProjectMilestonesSectionProps = {
     projectId: string;
@@ -289,6 +291,12 @@ function MilestoneCard({
                     onChainIndex={onChainIndex}
                 />
             </div>
+            {milestone.status !== "Pending" && milestone.status !== "InProgress" && (
+                <MilestoneSubmissionsPanel
+                    projectId={projectId}
+                    milestoneId={milestone.id}
+                />
+            )}
         </article>
     );
 }

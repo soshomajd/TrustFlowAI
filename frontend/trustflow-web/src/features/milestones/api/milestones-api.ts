@@ -6,6 +6,8 @@ import type {
   UpdateMilestoneRequest,
   MilestoneStatusResponse,
   ApproveMilestoneResponse,
+  MilestoneSubmission,
+  SubmitMilestoneInput,
 } from "@/features/milestones/types/milestone";
 import { apiClient } from "@/lib/api/api-client";
 
@@ -52,11 +54,38 @@ export async function startMilestone(projectId: string, milestoneId: string) {
   return response.data;
 }
 
-export async function submitMilestone(projectId: string, milestoneId: string) {
-  const response = await apiClient.patch<MilestoneStatusResponse>(
-    `/projects/${projectId}/milestones/${milestoneId}/submit`,
+export async function submitMilestone(projectId: string, milestoneId: string, input: SubmitMilestoneInput) {
+  const form = new FormData();
+  form.append("note", input.note);
+  if (input.previewLink.trim()) form.append("previewLink", input.previewLink.trim());
+  if (input.sourceFilesLink.trim()) form.append("sourceFilesLink", input.sourceFilesLink.trim());
+  input.files.forEach((file) => form.append("files", file));
+
+  const response = await apiClient.post<MilestoneSubmission>(
+    `/projects/${projectId}/milestones/${milestoneId}/submissions`,
+    form,
   );
 
+  return response.data;
+}
+
+export async function getMilestoneSubmissions(projectId: string, milestoneId: string) {
+  const response = await apiClient.get<MilestoneSubmission[]>(
+    `/projects/${projectId}/milestones/${milestoneId}/submissions`,
+  );
+  return response.data;
+}
+
+export async function downloadMilestoneSubmissionFile(
+  projectId: string,
+  milestoneId: string,
+  submissionId: string,
+  attachmentId: string,
+) {
+  const response = await apiClient.get<Blob>(
+    `/projects/${projectId}/milestones/${milestoneId}/submissions/${submissionId}/files/${attachmentId}`,
+    { responseType: "blob" },
+  );
   return response.data;
 }
 
@@ -68,9 +97,10 @@ export async function approveMilestone(projectId: string, milestoneId: string) {
   return response.data;
 }
 
-export async function rejectMilestone(projectId: string, milestoneId: string) {
+export async function rejectMilestone(projectId: string, milestoneId: string, reason: string) {
   const response = await apiClient.patch<MilestoneStatusResponse>(
-    `/projects/${projectId}/milestones/${milestoneId}/reject`,
+    `/projects/${projectId}/milestones/${milestoneId}/request-changes`,
+    { reason },
   );
 
   return response.data;
