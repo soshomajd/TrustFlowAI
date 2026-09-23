@@ -22,6 +22,13 @@ export const escrowAbi = [
   },
   {
     type: "function",
+    name: "cancelBeforeWorkStarts",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
     name: "workStarted",
     stateMutability: "view",
     inputs: [],

@@ -17,5 +17,10 @@ public class ProjectWorkspaceResponse
     public DateTimeOffset Deadline { get; set; }
     public ProjectStatus Status { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+
+    // Pending plus accepted only, matching the API rule: the workspace
+    // hides project and milestone editing while a proposal is still live,
+    // and shows it again once they are all rejected or withdrawn.
+    public int ActiveProposalCount { get; set; }
     public List<MilestoneResponse> Milestones { get; set; } = [];
 }

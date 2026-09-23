@@ -18,4 +18,7 @@ export const escrowQueryKeys = {
 
   startWork: (projectId: string) =>
     [...escrowQueryKeys.all, "start-work", projectId] as const,
+
+  cancel: (projectId: string) =>
+    [...escrowQueryKeys.all, "cancel", projectId] as const,
 };

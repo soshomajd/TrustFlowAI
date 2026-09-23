@@ -42,6 +42,7 @@ type ClientMilestoneReviewActionsProps = {
     milestoneId: string;
     status: MilestoneStatus;
     contractAddress: string | null;
+    chainId: number | null;
     onChainIndex: number;
 };
 
@@ -50,6 +51,7 @@ export function ClientMilestoneReviewActions({
     milestoneId,
     status,
     contractAddress,
+    chainId,
     onChainIndex,
 }: ClientMilestoneReviewActionsProps) {
     if (status !== "Submitted") {
@@ -67,6 +69,7 @@ export function ClientMilestoneReviewActions({
                 projectId={projectId}
                 milestoneId={milestoneId}
                 contractAddress={contractAddress}
+                chainId={chainId}
                 onChainIndex={onChainIndex}
             />
         </div>
@@ -77,11 +80,13 @@ function ApproveMilestoneDialog({
     projectId,
     milestoneId,
     contractAddress,
+    chainId,
     onChainIndex,
 }: {
     projectId: string;
     milestoneId: string;
     contractAddress: string | null;
+    chainId: number | null;
     onChainIndex: number;
 }) {
     const [open, setOpen] =
@@ -115,11 +120,12 @@ function ApproveMilestoneDialog({
     async function handleApprove() {
         setReleaseErrorMessage(null);
 
-        if (contractAddress) {
+        if (contractAddress && chainId) {
             try {
                 await releaseMutation.mutateAsync({
                     contractAddress,
                     onChainIndex,
+                    chainId,
                 });
             } catch (error) {
                 setReleaseErrorMessage(

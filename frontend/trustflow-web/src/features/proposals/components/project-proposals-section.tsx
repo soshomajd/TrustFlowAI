@@ -1,4 +1,6 @@
 "use client";
+import { MemberName } from "@/features/profile-photos/components/user-avatar";
+
 
 import {
     BriefcaseBusiness,
@@ -221,7 +223,9 @@ function ProposalCard({
     projectBudget: number;
     proposal: ClientProjectProposal;
 }) {
-    const bidMatchesProjectBudget =
+    // The freelancer applied at the price the project showed then, so a
+    // mismatch means the client edited the budget afterwards.
+    const agreedPriceMatchesBudget =
         proposal.bidAmount === projectBudget;
 
     return (
@@ -234,7 +238,7 @@ function ProposalCard({
 
                             <h3 className="font-semibold">
                                 <Link href={`/dashboard/freelancers/${proposal.freelancerId}`} className="hover:text-electric hover:underline">
-                                    {proposal.freelancerFullName}
+                                    <MemberName userId={proposal.freelancerId} name={proposal.freelancerFullName} />
                                 </Link>
                             </h3>
                         </div>
@@ -273,7 +277,7 @@ function ProposalCard({
                         icon={
                             CircleDollarSign
                         }
-                        label="Bid amount"
+                        label="Agreed price"
                         value={formatAmount(
                             proposal.bidAmount,
                         )}
@@ -292,11 +296,11 @@ function ProposalCard({
             </div>
             {proposal.status === "Pending" && (
                 <div className="mt-5 space-y-3 border-t pt-5">
-                    {!bidMatchesProjectBudget && (
+                    {!agreedPriceMatchesBudget && (
                         <div className="flex gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 text-sm leading-6">
                             <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-400" />
                             <p className="text-muted-foreground">
-                                This bid is {formatAmount(proposal.bidAmount)}, but the current project budget is {formatAmount(projectBudget)}. Update the project budget and milestone total to the agreed bid before accepting.
+                                This freelancer applied when the price was {formatAmount(proposal.bidAmount)}, but the budget is now {formatAmount(projectBudget)}. They have not agreed to the new price. Set the budget and milestone total back to {formatAmount(proposal.bidAmount)}, or ask them to apply again.
                             </p>
                         </div>
                     )}
@@ -338,7 +342,7 @@ function AcceptProposalDialog({
 
     const isAccepting =
         acceptMutation.isPending;
-    const bidMatchesProjectBudget =
+    const agreedPriceMatchesBudget =
         proposal.bidAmount === projectBudget;
 
     const errorMessage =
@@ -385,11 +389,11 @@ function AcceptProposalDialog({
                 <Button
                     type="button"
                     size="sm"
-                    disabled={!bidMatchesProjectBudget}
-                    title={!bidMatchesProjectBudget ? "The bid must match the current project budget." : undefined}
+                    disabled={!agreedPriceMatchesBudget}
+                    title={!agreedPriceMatchesBudget ? "The budget changed after this freelancer applied, so they have not agreed to the current price." : undefined}
                 >
                     <CheckCircle2 className="size-4" />
-                    {bidMatchesProjectBudget ? "Accept proposal" : "Budget mismatch"}
+                    {agreedPriceMatchesBudget ? "Accept proposal" : "Price changed"}
                 </Button>
             </DialogTrigger>
 
@@ -406,7 +410,7 @@ function AcceptProposalDialog({
                     <DialogDescription className="leading-6">
                         You are about to assign{" "}
                         <span className="font-medium text-foreground">
-                            {proposal.freelancerFullName}
+                            <MemberName userId={proposal.freelancerId} name={proposal.freelancerFullName} />
                         </span>{" "}
                         to this project.
                     </DialogDescription>
@@ -415,7 +419,7 @@ function AcceptProposalDialog({
                 <div className="space-y-3 rounded-xl border bg-card/50 p-4 text-sm">
                     <div className="flex items-center justify-between gap-4">
                         <span className="text-muted-foreground">
-                            Bid amount
+                            Agreed price
                         </span>
 
                         <span className="font-medium">
@@ -491,7 +495,7 @@ function AcceptProposalDialog({
 
                     <Button
                         type="button"
-                        disabled={isAccepting || !bidMatchesProjectBudget}
+                        disabled={isAccepting || !agreedPriceMatchesBudget}
                         onClick={handleAccept}
                     >
                         {isAccepting ? (
@@ -594,7 +598,7 @@ function RejectProposalDialog({
                     <DialogDescription className="leading-6">
                         The proposal submitted by{" "}
                         <span className="font-medium text-foreground">
-                            {proposal.freelancerFullName}
+                            <MemberName userId={proposal.freelancerId} name={proposal.freelancerFullName} />
                         </span>{" "}
                         will be changed from Pending
                         to Rejected.
@@ -667,7 +671,7 @@ function RejectProposalDialog({
 type ProposalMetaProps = {
     icon: typeof Clock3;
     label: string;
-    value: string;
+    value: React.ReactNode;
 };
 
 function ProposalMeta({

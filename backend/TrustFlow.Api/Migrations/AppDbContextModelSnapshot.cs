@@ -153,73 +153,6 @@ namespace TrustFlow.Api.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("TrustFlow.Api.Models.ClientIdentityVerification", b =>
-                {
-                    b.Property<Guid>("ClientId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AccountType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("CountryCode")
-                        .IsRequired()
-                        .HasMaxLength(2)
-                        .HasColumnType("character varying(2)");
-
-                    b.Property<byte[]>("DocumentContentProtected")
-                        .HasColumnType("bytea");
-
-                    b.Property<int?>("DocumentFileSize")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("DocumentSha256")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<byte[]>("LegalNameProtected")
-                        .HasColumnType("bytea");
-
-                    b.Property<byte[]>("RegistrationNumberProtected")
-                        .HasColumnType("bytea");
-
-                    b.Property<string>("RejectionReason")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
-
-                    b.Property<DateTimeOffset?>("ReviewedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("ReviewedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<DateTimeOffset>("SubmittedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("ClientId");
-
-                    b.HasIndex("ReviewedByUserId");
-
-                    b.HasIndex("Status", "SubmittedAt");
-
-                    b.ToTable("ClientIdentityVerifications", t =>
-                        {
-                            t.HasCheckConstraint("CK_ClientIdentityVerifications_AccountType", "\"AccountType\" IN ('Individual', 'Company')");
-
-                            t.HasCheckConstraint("CK_ClientIdentityVerifications_PendingDocument", "\"Status\" <> 'Pending' OR (\"DocumentContentProtected\" IS NOT NULL AND \"DocumentFileSize\" BETWEEN 1 AND 5242880)");
-
-                            t.HasCheckConstraint("CK_ClientIdentityVerifications_Status", "\"Status\" IN ('Pending', 'Verified', 'Rejected')");
-                        });
-                });
-
             modelBuilder.Entity("TrustFlow.Api.Models.ClientProfile", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -310,6 +243,9 @@ namespace TrustFlow.Api.Migrations
                         .HasMaxLength(66)
                         .HasColumnType("character varying(66)");
 
+                    b.Property<Guid>("FreelancerId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("FreelancerWalletAddress")
                         .HasMaxLength(42)
                         .HasColumnType("character varying(42)");
@@ -353,7 +289,9 @@ namespace TrustFlow.Api.Migrations
                         .HasDatabaseName("IX_Escrows_ContractAddress")
                         .HasFilter("\"ContractAddress\" IS NOT NULL");
 
-                    b.HasIndex("ProjectId")
+                    b.HasIndex("FreelancerId");
+
+                    b.HasIndex("ProjectId", "FreelancerId")
                         .IsUnique();
 
                     b.HasIndex("Status", "UpdatedAt")
@@ -617,6 +555,9 @@ namespace TrustFlow.Api.Migrations
                         .HasMaxLength(5000)
                         .HasColumnType("character varying(5000)");
 
+                    b.Property<Guid?>("FreelancerId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
@@ -633,6 +574,8 @@ namespace TrustFlow.Api.Migrations
                         .HasColumnType("character varying(200)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("FreelancerId");
 
                     b.HasIndex("ProjectId", "SequenceNumber")
                         .IsUnique();
@@ -735,6 +678,23 @@ namespace TrustFlow.Api.Migrations
                         {
                             t.HasCheckConstraint("CK_MilestoneSubmissionAttachments_FileSize", "\"FileSize\" BETWEEN 1 AND 26214400");
                         });
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.ProfilePhoto", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("ProfilePhotos");
                 });
 
             modelBuilder.Entity("TrustFlow.Api.Models.Project", b =>
@@ -859,6 +819,21 @@ namespace TrustFlow.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TrustFlow.Api.Models.ProposalMilestone", b =>
+                {
+                    b.Property<Guid>("ProposalId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MilestoneId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("ProposalId", "MilestoneId");
+
+                    b.HasIndex("MilestoneId");
+
+                    b.ToTable("ProposalMilestones");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", null)
@@ -910,20 +885,6 @@ namespace TrustFlow.Api.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("TrustFlow.Api.Models.ClientIdentityVerification", b =>
-                {
-                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", null)
-                        .WithOne()
-                        .HasForeignKey("TrustFlow.Api.Models.ClientIdentityVerification", "ClientId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("ReviewedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-                });
-
             modelBuilder.Entity("TrustFlow.Api.Models.ClientProfile", b =>
                 {
                     b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", null)
@@ -935,9 +896,15 @@ namespace TrustFlow.Api.Migrations
 
             modelBuilder.Entity("TrustFlow.Api.Models.Escrow", b =>
                 {
+                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("FreelancerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("TrustFlow.Api.Models.Project", "Project")
-                        .WithOne("Escrow")
-                        .HasForeignKey("TrustFlow.Api.Models.Escrow", "ProjectId")
+                        .WithMany("Escrows")
+                        .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -975,11 +942,18 @@ namespace TrustFlow.Api.Migrations
 
             modelBuilder.Entity("TrustFlow.Api.Models.MileStone", b =>
                 {
+                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", "Freelancer")
+                        .WithMany()
+                        .HasForeignKey("FreelancerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("TrustFlow.Api.Models.Project", "Project")
                         .WithMany("Milestones")
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Freelancer");
 
                     b.Navigation("Project");
                 });
@@ -1010,6 +984,15 @@ namespace TrustFlow.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Submission");
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.ProfilePhoto", b =>
+                {
+                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", null)
+                        .WithOne()
+                        .HasForeignKey("TrustFlow.Api.Models.ProfilePhoto", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("TrustFlow.Api.Models.Project", b =>
@@ -1048,6 +1031,25 @@ namespace TrustFlow.Api.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("TrustFlow.Api.Models.ProposalMilestone", b =>
+                {
+                    b.HasOne("TrustFlow.Api.Models.MileStone", "Milestone")
+                        .WithMany("ProposalMilestones")
+                        .HasForeignKey("MilestoneId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TrustFlow.Api.Models.Proposal", "Proposal")
+                        .WithMany("ProposalMilestones")
+                        .HasForeignKey("ProposalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Milestone");
+
+                    b.Navigation("Proposal");
+                });
+
             modelBuilder.Entity("TrustFlow.Api.Models.Identity.ApplicationUser", b =>
                 {
                     b.Navigation("ClientProjects");
@@ -1059,6 +1061,11 @@ namespace TrustFlow.Api.Migrations
                     b.Navigation("RefreshTokens");
                 });
 
+            modelBuilder.Entity("TrustFlow.Api.Models.MileStone", b =>
+                {
+                    b.Navigation("ProposalMilestones");
+                });
+
             modelBuilder.Entity("TrustFlow.Api.Models.MilestoneSubmission", b =>
                 {
                     b.Navigation("Attachments");
@@ -1066,11 +1073,16 @@ namespace TrustFlow.Api.Migrations
 
             modelBuilder.Entity("TrustFlow.Api.Models.Project", b =>
                 {
-                    b.Navigation("Escrow");
+                    b.Navigation("Escrows");
 
                     b.Navigation("Milestones");
 
                     b.Navigation("Proposals");
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.Proposal", b =>
+                {
+                    b.Navigation("ProposalMilestones");
                 });
 #pragma warning restore 612, 618
         }

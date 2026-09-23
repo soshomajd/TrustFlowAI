@@ -47,6 +47,10 @@ import { getApiErrorMessage } from
 
 const PAGE_SIZE = 12;
 
+// Mirrors the API rule, so the form explains the limit instead of
+// bouncing off a server validation error.
+const MINIMUM_SEARCH_LENGTH = 3;
+
 const sortOptions: Array<{
     value:
     ProjectMarketplaceSortOption;
@@ -178,6 +182,19 @@ export function MarketplaceProjectsScreen() {
                     ) ?? "",
                 ),
             );
+
+        // A one or two letter term matches almost everything, so it wastes
+        // the freelancer's time rather than narrowing the list.
+        if (
+            nextSearch.length > 0 &&
+            nextSearch.length < MINIMUM_SEARCH_LENGTH
+        ) {
+            setFilterError(
+                `Type at least ${MINIMUM_SEARCH_LENGTH} letters to search, or clear the box to see every project.`,
+            );
+
+            return;
+        }
 
         if (
             minBudgetResult === null ||
@@ -408,6 +425,11 @@ function MarketplaceFilters({
                             Search
                         </Label>
 
+                        <p className="text-xs text-muted-foreground">
+                            Any part of a word, in the project title,
+                            the details or any milestone.
+                        </p>
+
                         <div className="relative">
                             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
@@ -415,9 +437,10 @@ function MarketplaceFilters({
                                 id="marketplace-search"
                                 name="search"
                                 type="search"
+                                minLength={MINIMUM_SEARCH_LENGTH}
                                 maxLength={100}
                                 defaultValue={search}
-                                placeholder="Search projects"
+                                placeholder="3+ letters, e.g. React"
                                 className="pl-10"
                             />
                         </div>

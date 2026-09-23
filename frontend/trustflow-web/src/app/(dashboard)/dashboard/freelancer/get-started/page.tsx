@@ -21,7 +21,7 @@ const steps: GuideStep[] = [
     {
         title: "Build your profile",
         description:
-            "Add a short headline, your main skills and a simple introduction. Use Save changes in any section. Add work samples or one PDF resume if you have them.",
+            "Add a short headline, your main skills and a simple introduction. Use Save changes in any section. Add work samples or one PDF resume if you have them. Add a photo, adjust the round preview and click Save photo. You can change or remove it any time.",
         icon: FileUser,
         action: {
             label: "Open my profile",
@@ -37,7 +37,7 @@ const steps: GuideStep[] = [
     {
         title: "Find a project",
         description:
-            "Open the marketplace. Read the project details, full budget, deadline and milestones. Choose work that matches your skills and time.",
+            "Open the marketplace. Search by any word, such as React or design: it looks in the project title, the details and every milestone. Read the full budget, deadline and milestones, then choose work that matches your skills and time.",
         icon: Search,
         action: {
             label: "Browse marketplace",
@@ -47,7 +47,7 @@ const steps: GuideStep[] = [
     {
         title: "Send a clear proposal",
         description:
-            "Enter your price, delivery time and a short message. Explain how you will help. If it is still pending, you can withdraw it from My proposals.",
+            "The client sets the price, so you only enter your delivery time and a short message. Explain how you will help. If it is still pending, you can withdraw it from My proposals.",
         icon: Send,
         action: {
             label: "Open my proposals",
@@ -57,7 +57,7 @@ const steps: GuideStep[] = [
     {
         title: "Wait for secure funding",
         description:
-            "When a client accepts you, the project appears in Assigned projects. Do not start yet. Wait until the escrow status says Funded.",
+            "When a client accepts you, the project appears in Assigned projects. Do not start yet. Wait until the escrow status says Funded. Then use your verified wallet to start work on-chain.",
         icon: CircleDollarSign,
         action: {
             label: "Open assigned projects",
@@ -78,8 +78,11 @@ const steps: GuideStep[] = [
 
 const reminders = [
     "Use the same wallet that you verified on your account.",
+    "Disconnect in the top bar only signs the wallet out of this site. Your account keeps the address you verified.",
     "Do not start work until the escrow status says Funded.",
+    "The client can cancel the escrow until you start work on-chain.",
     "Finish milestones in order, one at a time.",
+    "You cannot offer a lower price. The project budget is the price you are paid.",
     "Keep your proposal and submitted work clear and short.",
 ];
 

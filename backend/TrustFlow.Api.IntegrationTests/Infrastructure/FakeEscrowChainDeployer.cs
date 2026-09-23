@@ -7,27 +7,48 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
 {
     public const int TokenDecimals = 6;
 
-    // A new FakeEscrowChainDeployer is resolved per DI scope (per HTTP
-    // request), but a test's "deploy", "sync", and "approve" calls are
-    // separate requests, so deployment/release state is tracked here so
-    // the fake can simulate a consistent on-chain contract across calls.
     private static readonly ConcurrentDictionary<
         string,
         EscrowDeploymentRequest> DeployedEscrows = new();
 
     private static readonly ConcurrentDictionary<
+        string,
+        EscrowDeploymentResult> DeploymentResults = new();
+
+    private static readonly ConcurrentDictionary<
         (string ContractAddress, int MilestoneIndex),
         bool> ReleasedMilestones = new();
 
-    // Test-only seam: the real contract only lets releaseMilestone() be
-    // called by the client's own wallet, so there is no backend endpoint
-    // that could ever do this. Tests call this directly to simulate that
-    // wallet transaction having already been confirmed on-chain.
+    private static readonly ConcurrentDictionary<string, bool>
+        AwaitingDeploymentValidation = new();
+
+    private static readonly ConcurrentDictionary<string, bool>
+        StartedEscrows = new();
+
+    private static readonly ConcurrentDictionary<string, bool>
+        CancelledEscrows = new();
+
     public static void MarkMilestoneReleased(
         string contractAddress,
         int milestoneIndex)
     {
         ReleasedMilestones[(contractAddress, milestoneIndex)] = true;
+    }
+
+    public static void MarkWorkStarted(string contractAddress)
+    {
+        StartedEscrows[contractAddress] = true;
+    }
+
+    public static void MarkCancelled(string contractAddress)
+    {
+        CancelledEscrows[contractAddress] = true;
+    }
+
+    public Task<long> GetChainIdAsync(
+        CancellationToken cancellationToken)
+    {
+        return Task.FromResult(31_337L);
     }
 
     public Task<int> GetTokenDecimalsAsync(
@@ -37,12 +58,10 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
         return Task.FromResult(TokenDecimals);
     }
 
-    public Task<EscrowDeploymentResult> DeployAsync(
+    public Task<EscrowDeploymentSubmission> SubmitDeploymentAsync(
         EscrowDeploymentRequest request,
         CancellationToken cancellationToken)
     {
-        // Real addresses/hashes are 20/32 raw bytes; build fake hex
-        // strings of the exact same length from random bytes.
         var addressBytes = new byte[20];
         var hashBytes = new byte[32];
 
@@ -55,15 +74,36 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
         var transactionHash =
             "0x" + Convert.ToHexStringLower(hashBytes);
 
+        var now = DateTimeOffset.UtcNow;
+
         DeployedEscrows[contractAddress] = request;
+        DeploymentResults[transactionHash] = new EscrowDeploymentResult(
+            contractAddress,
+            transactionHash,
+            now
+        );
 
         return Task.FromResult(
-            new EscrowDeploymentResult(
-                contractAddress,
-                transactionHash,
-                DateTimeOffset.UtcNow
-            )
+            new EscrowDeploymentSubmission(transactionHash, now)
         );
+    }
+
+    public Task<EscrowDeploymentResult> WaitForDeploymentAsync(
+        string transactionHash,
+        CancellationToken cancellationToken)
+    {
+        if (!DeploymentResults.TryGetValue(
+                transactionHash,
+                out var result))
+        {
+            throw new InvalidOperationException(
+                $"No fake deployment transaction recorded for " +
+                $"{transactionHash}."
+            );
+        }
+
+        AwaitingDeploymentValidation[result.ContractAddress] = true;
+        return Task.FromResult(result);
     }
 
     public Task<OnChainEscrowSnapshot> GetEscrowSnapshotAsync(
@@ -83,15 +123,26 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
                 )
             );
 
+        var isDeploymentValidation =
+            AwaitingDeploymentValidation.TryRemove(
+                contractAddress,
+                out _
+            );
+
         return Task.FromResult(
             new OnChainEscrowSnapshot(
                 request.TokenAddress,
                 request.ClientAddress,
                 request.FreelancerAddress,
                 totalBaseUnits,
-                allReleased
-                    ? OnChainEscrowState.Completed
-                    : OnChainEscrowState.Funded
+                CancelledEscrows.ContainsKey(contractAddress)
+                    ? OnChainEscrowState.Cancelled
+                    : allReleased
+                        ? OnChainEscrowState.Completed
+                        : isDeploymentValidation
+                            ? OnChainEscrowState.AwaitingFunding
+                            : OnChainEscrowState.Funded,
+                StartedEscrows.ContainsKey(contractAddress)
             )
         );
     }

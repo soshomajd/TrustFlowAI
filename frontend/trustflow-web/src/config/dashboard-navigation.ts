@@ -6,7 +6,6 @@ import {
   FolderKanban,
   LayoutDashboard,
   Search,
-  ShieldCheck,
   Send,
   UserRound,
 } from "lucide-react";
@@ -86,12 +85,6 @@ export const dashboardNavigationItems: DashboardNavigationItem[] = [
     href: "/dashboard/freelancer/get-started",
     icon: CircleHelp,
     roles: ["Freelancer"],
-  },
-  {
-    label: "Review clients",
-    href: "/dashboard/admin/client-verifications",
-    icon: ShieldCheck,
-    roles: ["Admin"],
   },
 ];
 

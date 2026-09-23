@@ -1,5 +1,7 @@
 using System.Data;
 using System.Security.Claims;
+using Google.Apis.Auth;
+using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -8,6 +10,7 @@ using TrustFlow.Api.Constants;
 using TrustFlow.Api.Data;
 using TrustFlow.Api.Dtos.Auth;
 using TrustFlow.Api.Models.Identity;
+using TrustFlow.Api.Options;
 using TrustFlow.Api.Services.Auth;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -21,11 +24,14 @@ public class AuthController(
     IJwtTokenService jwtTokenService,
     IRefreshTokenService refreshTokenService,
     AppDbContext dbContext,
-    IWebHostEnvironment environment)
+    IWebHostEnvironment environment,
+    IOptions<GoogleAuthOptions> googleAuthOptions)
     : ControllerBase
 {
     private const string RefreshTokenCookieName =
         "trustflow_refresh_token";
+
+    private const string GoogleLoginProvider = "Google";
 
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.Register)]
@@ -150,44 +156,215 @@ public class AuthController(
             });
         }
 
-        var roles =
-            await userManager.GetRolesAsync(user);
-
-        var accessTokenResult =
-            jwtTokenService.CreateToken(
-                user,
-                roles
-            );
-
-        var refreshTokenResult =
-            refreshTokenService.Create(user.Id);
-
-        dbContext.RefreshTokens.Add(
-            refreshTokenResult.RefreshToken
-        );
-
-        await dbContext.SaveChangesAsync(
+        return await IssueSessionAsync(
+            user,
             cancellationToken
         );
+    }
 
-        AppendRefreshTokenCookie(
-            refreshTokenResult.RawToken,
-            refreshTokenResult.RefreshToken.ExpiresAt
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Login)]
+    [HttpPost("google")]
+    public async Task<IActionResult> GoogleSignIn(
+        GoogleSignInRequest request,
+        CancellationToken cancellationToken)
+    {
+        var googleOptions = googleAuthOptions.Value;
+
+        if (!googleOptions.IsConfigured)
+        {
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    message =
+                        "Google sign-in is not configured " +
+                        "on this server."
+                }
+            );
+        }
+
+        GoogleJsonWebSignature.Payload payload;
+
+        try
+        {
+            payload =
+                await GoogleJsonWebSignature.ValidateAsync(
+                    request.Credential,
+                    new GoogleJsonWebSignature
+                        .ValidationSettings
+                    {
+                        Audience = [googleOptions.ClientId]
+                    }
+                );
+        }
+        catch (InvalidJwtException)
+        {
+            return Unauthorized(new
+            {
+                message =
+                    "Google sign-in could not be verified. " +
+                    "Try again."
+            });
+        }
+
+        // Google only proves ownership of an address it verified itself.
+        // Without that, a stranger could claim an existing account's email.
+        if (!payload.EmailVerified ||
+            string.IsNullOrWhiteSpace(payload.Email))
+        {
+            return Unauthorized(new
+            {
+                message =
+                    "This Google account has no verified " +
+                    "email address."
+            });
+        }
+
+        var user = await userManager.FindByLoginAsync(
+            GoogleLoginProvider,
+            payload.Subject
         );
 
-        return Ok(new
+        if (user is null)
         {
-            accessTokenResult.AccessToken,
-            accessTokenResult.ExpiresAtUtc,
+            var existingUser =
+                await userManager.FindByEmailAsync(
+                    payload.Email
+                );
 
-            User = new
+            if (existingUser is not null)
             {
-                user.Id,
-                user.FullName,
-                user.Email,
-                Roles = roles
+                // Same verified address: one person adding a second way
+                // to sign in, not a new account.
+                var linkResult =
+                    await userManager.AddLoginAsync(
+                        existingUser,
+                        new UserLoginInfo(
+                            GoogleLoginProvider,
+                            payload.Subject,
+                            GoogleLoginProvider
+                        )
+                    );
+
+                if (!linkResult.Succeeded)
+                {
+                    return BadRequest(new
+                    {
+                        errors = linkResult.Errors
+                            .Select(error =>
+                                error.Description)
+                    });
+                }
+
+                user = existingUser;
             }
-        });
+        }
+
+        if (user is null)
+        {
+            var role = request.Role?.Trim();
+
+            if (role != AppRoles.Client &&
+                role != AppRoles.Freelancer)
+            {
+                // First sign-in for this Google account. The frontend
+                // shows a role picker and calls this endpoint again.
+                return Conflict(new
+                {
+                    code = "role_required",
+
+                    message =
+                        "Choose whether you want to hire or " +
+                        "work before continuing.",
+
+                    email = payload.Email,
+                    fullName = payload.Name
+                });
+            }
+
+            var fullName =
+                string.IsNullOrWhiteSpace(payload.Name)
+                    ? payload.Email.Split('@')[0]
+                    : payload.Name.Trim();
+
+            if (fullName.Length > 100)
+            {
+                fullName = fullName[..100];
+            }
+
+            var newUser = new ApplicationUser
+            {
+                FullName = fullName,
+                Email = payload.Email,
+                UserName = payload.Email,
+
+                // Google already verified it; asking for a second
+                // confirmation would strand the account.
+                EmailConfirmed = true
+            };
+
+            // No password is set: this account signs in through Google
+            // only, so the password login path keeps failing for it.
+            var createUserResult =
+                await userManager.CreateAsync(newUser);
+
+            if (!createUserResult.Succeeded)
+            {
+                return BadRequest(new
+                {
+                    errors = createUserResult.Errors
+                        .Select(error => error.Description)
+                });
+            }
+
+            var addRoleResult =
+                await userManager.AddToRoleAsync(
+                    newUser,
+                    role
+                );
+
+            if (!addRoleResult.Succeeded)
+            {
+                await userManager.DeleteAsync(newUser);
+
+                return BadRequest(new
+                {
+                    errors = addRoleResult.Errors
+                        .Select(error => error.Description)
+                });
+            }
+
+            var addLoginResult =
+                await userManager.AddLoginAsync(
+                    newUser,
+                    new UserLoginInfo(
+                        GoogleLoginProvider,
+                        payload.Subject,
+                        GoogleLoginProvider
+                    )
+                );
+
+            if (!addLoginResult.Succeeded)
+            {
+                // Without the link this account could never be reached
+                // again, so do not leave a half-created user behind.
+                await userManager.DeleteAsync(newUser);
+
+                return BadRequest(new
+                {
+                    errors = addLoginResult.Errors
+                        .Select(error => error.Description)
+                });
+            }
+
+            user = newUser;
+        }
+
+        return await IssueSessionAsync(
+            user,
+            cancellationToken
+        );
     }
 
     [AllowAnonymous]
@@ -566,6 +743,50 @@ public class AuthController(
                 ),
                 cancellationToken
             );
+    }
+
+    private async Task<IActionResult> IssueSessionAsync(
+        ApplicationUser user,
+        CancellationToken cancellationToken)
+    {
+        var roles =
+            await userManager.GetRolesAsync(user);
+
+        var accessTokenResult =
+            jwtTokenService.CreateToken(
+                user,
+                roles
+            );
+
+        var refreshTokenResult =
+            refreshTokenService.Create(user.Id);
+
+        dbContext.RefreshTokens.Add(
+            refreshTokenResult.RefreshToken
+        );
+
+        await dbContext.SaveChangesAsync(
+            cancellationToken
+        );
+
+        AppendRefreshTokenCookie(
+            refreshTokenResult.RawToken,
+            refreshTokenResult.RefreshToken.ExpiresAt
+        );
+
+        return Ok(new
+        {
+            accessTokenResult.AccessToken,
+            accessTokenResult.ExpiresAtUtc,
+
+            User = new
+            {
+                user.Id,
+                user.FullName,
+                user.Email,
+                Roles = roles
+            }
+        });
     }
 
     private void AppendRefreshTokenCookie(

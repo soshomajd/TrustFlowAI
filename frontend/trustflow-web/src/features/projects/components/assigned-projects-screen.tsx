@@ -1,4 +1,6 @@
 "use client";
+import { MemberName } from "@/features/profile-photos/components/user-avatar";
+
 
 import {
     BriefcaseBusiness,
@@ -275,7 +277,7 @@ function AssignedProjectCard({
                             <UserRound className="size-3.5" />
                             Client:{" "}
                             <Link className="font-medium text-foreground hover:text-electric hover:underline" href={`/dashboard/clients/${project.clientId}`}>
-                                {project.clientFullName || "Unknown client"}
+                                <MemberName userId={project.clientId} name={project.clientFullName} />
                             </Link>
                         </span>
 
@@ -397,7 +399,7 @@ function AssignedProjectCard({
 type ProjectMetaProps = {
     icon: typeof CalendarDays;
     label: string;
-    value: string;
+    value: React.ReactNode;
 };
 
 function ProjectMeta({

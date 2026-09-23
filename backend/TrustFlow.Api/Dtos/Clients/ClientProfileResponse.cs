@@ -13,11 +13,6 @@ public sealed class ClientProfileResponse
     public string CompanySize { get; init; } = "NotSpecified";
     public DateTimeOffset MemberSince { get; init; }
     public bool WalletVerified { get; init; }
-    public bool IdentityVerified { get; init; }
-    public DateTimeOffset? IdentityVerifiedAt { get; init; }
-    public string VerificationStatus { get; init; } = "NotSubmitted";
-    public DateTimeOffset? VerificationSubmittedAt { get; init; }
-    public string VerificationRejectionReason { get; init; } = string.Empty;
     public int ProjectsPosted { get; init; }
     public int ActiveProjects { get; init; }
     public int CompletedProjects { get; init; }

@@ -509,9 +509,13 @@ public sealed class MilestoneWorkflowTests
                 deployResponseStream
             );
 
-        return deployDocument.RootElement
+        var contractAddress = deployDocument.RootElement
             .GetProperty("contractAddress")
             .GetString()!;
+
+        FakeEscrowChainDeployer.MarkWorkStarted(contractAddress);
+
+        return contractAddress;
     }
 
     private async Task<Guid> CreateProjectAsync(

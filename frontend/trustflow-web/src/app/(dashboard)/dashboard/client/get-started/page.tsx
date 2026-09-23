@@ -21,7 +21,7 @@ const steps: GuideStep[] = [
     {
         title: "Complete your profile",
         description:
-            "Add the basic details that freelancers need to trust you. Choose Individual or Company. You can also send one identity PDF for review.",
+            "Choose Individual or Company and add a short introduction. Add a profile photo, adjust the round preview and click Save photo. You can change or remove it any time.",
         icon: UserRoundCheck,
         action: {
             label: "Open my profile",
@@ -41,7 +41,7 @@ const steps: GuideStep[] = [
     {
         title: "Add milestones",
         description:
-            "Split the work into small steps. Give each step an amount and a deadline. All milestone amounts must add up to the project budget.",
+            "Split the work into small steps. Give each step an amount and a deadline. All milestone amounts must add up to the project budget. Until they match it exactly, freelancers cannot see your project and cannot send a proposal.",
         icon: ListChecks,
         action: {
             label: "Open my projects",
@@ -51,7 +51,7 @@ const steps: GuideStep[] = [
     {
         title: "Choose a freelancer",
         description:
-            "Read each proposal and open the freelancer profile. Check the price, delivery time, skills and work samples before you accept.",
+            "You already set the price, so freelancers compete on skill and delivery time, not on cost. Read each proposal and open the freelancer profile before you accept.",
         icon: BadgeCheck,
         action: {
             label: "Review my projects",
@@ -61,7 +61,7 @@ const steps: GuideStep[] = [
     {
         title: "Fund the secure payment",
         description:
-            "Connect and verify your wallet. Create and deploy the escrow. On the local test network, get test funds, then use Approve and fund escrow.",
+            "Connect and verify your wallet. Create and deploy the escrow. Switch to the shown test network, get test ETH and test tokens, then use Approve and fund escrow.",
         icon: CircleDollarSign,
         action: {
             label: "Open assigned project",
@@ -82,8 +82,11 @@ const steps: GuideStep[] = [
 
 const reminders = [
     "Use the same wallet that you verified on your account.",
-    "Check the full project price before you accept a proposal.",
+    "Disconnect in the top bar only signs the wallet out of this site. Your account keeps the address you verified.",
+    "A new project stays hidden until its milestone amounts add up to the budget.",
+    "Changing the budget after a freelancer applies blocks their proposal until they agree again.",
     "Fund the escrow before the freelancer starts work.",
+    "You can cancel and get a refund only before work starts.",
     "Release payment only after you check the submitted work.",
 ];
 

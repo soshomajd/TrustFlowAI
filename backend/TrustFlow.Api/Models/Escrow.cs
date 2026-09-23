@@ -14,6 +14,11 @@ public class Escrow
     public Project Project { get; set; } =
         null!;
 
+    // One escrow per freelancer on a project: the contract pays a single
+    // immutable address, so each freelancer needs their own, covering only
+    // the milestones assigned to them.
+    public Guid FreelancerId { get; set; }
+
     public long ChainId { get; set; }
 
     public string TokenAddress { get; set; } =

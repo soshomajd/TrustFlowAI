@@ -1,4 +1,6 @@
 "use client";
+import { MemberName } from "@/features/profile-photos/components/user-avatar";
+
 
 import {
     AlertTriangle,
@@ -129,7 +131,7 @@ export function FreelancerProjectWorkspaceScreen({
                                 <span className="flex items-center gap-2">
                                     <UserRound className="size-4" />
                                     Client:{" "}
-                                    {workspace.clientId ? <Link className="font-medium text-foreground hover:text-electric hover:underline" href={`/dashboard/clients/${workspace.clientId}`}>{workspace.clientFullName}</Link> : workspace.clientFullName}
+                                    {workspace.clientId ? <Link className="font-medium text-foreground hover:text-electric hover:underline" href={`/dashboard/clients/${workspace.clientId}`}><MemberName userId={workspace.clientId} name={workspace.clientFullName} /></Link> : workspace.clientFullName}
                                 </span>
 
                                 <span className="flex items-center gap-2">
@@ -477,7 +479,7 @@ function WorkspaceMeta({
 }: {
     icon: typeof CalendarDays;
     label: string;
-    value: string;
+    value: React.ReactNode;
 }) {
     return (
         <div className="rounded-xl border bg-card/40 px-4 py-3">

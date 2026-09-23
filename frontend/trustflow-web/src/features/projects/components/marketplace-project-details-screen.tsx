@@ -1,4 +1,6 @@
 "use client";
+import { MemberName } from "@/features/profile-photos/components/user-avatar";
+
 
 import type { LucideIcon } from
     "lucide-react";
@@ -154,6 +156,9 @@ export function MarketplaceProjectDetailsScreen({
                                 projectBudget={
                                     project.budget
                                 }
+                                milestones={
+                                    project.milestones
+                                }
                                 disabled={
                                     project.status !==
                                     "Open"
@@ -207,7 +212,7 @@ export function MarketplaceProjectDetailsScreen({
                 <section className="flex flex-col gap-4 rounded-2xl border bg-card/60 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
                     <div className="flex items-center gap-3">
                         <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10"><UserRound className="size-5 text-electric" /></div>
-                        <div><p className="text-xs text-muted-foreground">Posted by</p><h2 className="mt-1 font-semibold">{project.clientFullName}</h2></div>
+                        <div><p className="text-xs text-muted-foreground">Posted by</p><h2 className="mt-1 font-semibold"><MemberName userId={project.clientId} name={project.clientFullName} /></h2></div>
                     </div>
                     <Button asChild variant="outline"><Link href={`/dashboard/clients/${project.clientId}`}>View client profile</Link></Button>
                 </section>
@@ -279,7 +284,7 @@ export function MarketplaceProjectDetailsScreen({
 type ProjectSummaryCardProps = {
     icon: LucideIcon;
     label: string;
-    value: string;
+    value: React.ReactNode;
 };
 
 function ProjectSummaryCard({

@@ -1,3 +1,4 @@
+import { UserAvatar } from "@/features/profile-photos/components/user-avatar";
 import {
   Building2,
   CalendarDays,
@@ -15,7 +16,6 @@ import { companySizeLabels, type ClientProfile } from "@/features/clients/types/
 const panelClass = "rounded-2xl border bg-card/70 p-5 sm:p-7";
 
 export function ClientProfileView({ profile }: { profile: ClientProfile }) {
-  const initials = profile.displayName.trim().split(/\s+/).slice(0, 2).map((word) => word[0]).join("");
   const publicName = profile.accountType === "Company" && profile.companyName
     ? profile.companyName
     : profile.displayName;
@@ -25,13 +25,10 @@ export function ClientProfileView({ profile }: { profile: ClientProfile }) {
       <section className="relative overflow-hidden rounded-2xl border bg-card/80 p-6 sm:p-8">
         <div className="pointer-events-none absolute -right-16 -top-20 size-72 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center">
-          <div className="flex size-20 shrink-0 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10 text-2xl font-semibold text-electric" aria-hidden="true">
-            {profile.accountType === "Company" ? <Building2 className="size-9" /> : initials}
-          </div>
+          <UserAvatar userId={profile.userId} name={profile.displayName} className="size-24 sm:size-28" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-xs font-medium uppercase tracking-[0.2em] text-electric">Client profile</p>
-              {profile.identityVerified && <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-400"><ShieldCheck className="size-3" />Identity reviewed</span>}
             </div>
             <h1 className="mt-3 break-words text-3xl font-semibold">{publicName}</h1>
             {profile.accountType === "Company" && <p className="mt-2 text-sm text-muted-foreground">Company account · represented by {profile.displayName}</p>}
@@ -72,12 +69,11 @@ export function ClientProfileView({ profile }: { profile: ClientProfile }) {
             <h2 className="font-semibold">Account details</h2>
             <dl className="mt-5 space-y-5 text-sm">
               <div><dt className="flex items-center gap-2 text-muted-foreground"><UsersRound className="size-4" />Team size</dt><dd className="mt-1 font-medium">{profile.accountType === "Individual" ? "Individual client" : companySizeLabels[profile.companySize]}</dd></div>
-              <TrustRow icon={ShieldCheck} label="Identity document" active={profile.identityVerified} activeText="Reviewed by TrustFlow" inactiveText="Not reviewed" />
               <TrustRow icon={WalletCards} label="Wallet ownership" active={profile.walletVerified} activeText="Verified" inactiveText="Not verified" />
             </dl>
           </section>
           <section className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
-            <div className="flex gap-3"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-electric" /><div><h2 className="text-sm font-semibold">Know what the badges mean</h2><p className="mt-2 text-xs leading-5 text-muted-foreground">Identity review confirms that TrustFlow reviewed an identity or business document. It does not guarantee payment, project quality, or future conduct.</p></div></div>
+            <div className="flex gap-3"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-electric" /><div><h2 className="text-sm font-semibold">Know what the badges mean</h2><p className="mt-2 text-xs leading-5 text-muted-foreground">Wallet ownership means this member proved control of a wallet. It does not confirm their identity or guarantee payment.</p></div></div>
           </section>
         </aside>
       </div>

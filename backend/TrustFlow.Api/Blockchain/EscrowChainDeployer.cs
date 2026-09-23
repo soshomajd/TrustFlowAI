@@ -16,6 +16,10 @@ public sealed record EscrowDeploymentRequest(
     string FreelancerAddress,
     IReadOnlyList<BigInteger> MilestoneAmounts);
 
+public sealed record EscrowDeploymentSubmission(
+    string TransactionHash,
+    DateTimeOffset SubmittedAt);
+
 public sealed record EscrowDeploymentResult(
     string ContractAddress,
     string TransactionHash,
@@ -34,7 +38,8 @@ public sealed record OnChainEscrowSnapshot(
     string Client,
     string Freelancer,
     BigInteger TotalAmount,
-    OnChainEscrowState State);
+    OnChainEscrowState State,
+    bool WorkStarted);
 
 public sealed record OnChainMilestone(
     BigInteger Amount,
@@ -42,12 +47,19 @@ public sealed record OnChainMilestone(
 
 public interface IEscrowChainDeployer
 {
+    Task<long> GetChainIdAsync(
+        CancellationToken cancellationToken);
+
     Task<int> GetTokenDecimalsAsync(
         string tokenAddress,
         CancellationToken cancellationToken);
 
-    Task<EscrowDeploymentResult> DeployAsync(
+    Task<EscrowDeploymentSubmission> SubmitDeploymentAsync(
         EscrowDeploymentRequest request,
+        CancellationToken cancellationToken);
+
+    Task<EscrowDeploymentResult> WaitForDeploymentAsync(
+        string transactionHash,
         CancellationToken cancellationToken);
 
     Task<OnChainEscrowSnapshot> GetEscrowSnapshotAsync(
@@ -72,6 +84,14 @@ public sealed class EscrowChainDeployer(
     private static readonly Lazy<(string Abi, string Bytecode)> Artifact =
         new(LoadArtifact);
 
+    public async Task<long> GetChainIdAsync(
+        CancellationToken cancellationToken)
+    {
+        var (web3, _) = CreateWeb3();
+        var chainId = await web3.Eth.ChainId.SendRequestAsync();
+        return (long)chainId.Value;
+    }
+
     public async Task<int> GetTokenDecimalsAsync(
         string tokenAddress,
         CancellationToken cancellationToken)
@@ -88,7 +108,7 @@ public sealed class EscrowChainDeployer(
         return await decimalsFunction.CallAsync<byte>();
     }
 
-    public async Task<EscrowDeploymentResult> DeployAsync(
+    public async Task<EscrowDeploymentSubmission> SubmitDeploymentAsync(
         EscrowDeploymentRequest request,
         CancellationToken cancellationToken)
     {
@@ -112,13 +132,30 @@ public sealed class EscrowChainDeployer(
             estimatedGas.Value * 120 / 100
         );
 
-        var receipt = await web3.Eth.DeployContract
-            .SendRequestAndWaitForReceiptAsync(
+        var transactionHash = await web3.Eth.DeployContract
+            .SendRequestAsync(
                 Artifact.Value.Bytecode,
                 deployerAddress,
                 gasWithMargin,
-                constructorParams,
-                new CancellationTokenSource()
+                constructorParams
+            );
+
+        return new EscrowDeploymentSubmission(
+            transactionHash,
+            DateTimeOffset.UtcNow
+        );
+    }
+
+    public async Task<EscrowDeploymentResult> WaitForDeploymentAsync(
+        string transactionHash,
+        CancellationToken cancellationToken)
+    {
+        var (web3, _) = CreateWeb3();
+
+        var receipt = await web3.TransactionReceiptPolling
+            .PollForReceiptAsync(
+                transactionHash,
+                cancellationToken
             );
 
         if (receipt.Status is null ||
@@ -126,7 +163,7 @@ public sealed class EscrowChainDeployer(
         {
             throw new InvalidOperationException(
                 $"Escrow deployment transaction " +
-                $"{receipt.TransactionHash} reverted."
+                $"{transactionHash} reverted."
             );
         }
 
@@ -134,7 +171,7 @@ public sealed class EscrowChainDeployer(
         {
             throw new InvalidOperationException(
                 $"Escrow deployment transaction " +
-                $"{receipt.TransactionHash} did not " +
+                $"{transactionHash} did not " +
                 "produce a contract address."
             );
         }
@@ -145,7 +182,6 @@ public sealed class EscrowChainDeployer(
             DateTimeOffset.UtcNow
         );
     }
-
     private (Web3 Web3, string DeployerAddress) CreateWeb3()
     {
         var options = blockchainOptions.Value;
@@ -186,12 +222,16 @@ public sealed class EscrowChainDeployer(
         var state = await contract.GetFunction("escrowState")
             .CallAsync<byte>();
 
+        var workStarted = await contract.GetFunction("workStarted")
+            .CallAsync<bool>();
+
         return new OnChainEscrowSnapshot(
             token,
             client,
             freelancer,
             totalAmount,
-            (OnChainEscrowState)state
+            (OnChainEscrowState)state,
+            workStarted
         );
     }
 

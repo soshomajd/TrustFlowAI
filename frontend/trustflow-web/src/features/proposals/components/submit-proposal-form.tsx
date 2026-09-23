@@ -29,13 +29,17 @@ import {
 } from
     "@/features/proposals/schemas/create-proposal-schema";
 import { TriangleAlert, } from "lucide-react";
+import type { PublicMarketplaceMilestone } from "@/features/projects/types/marketplace-project-details";
 import { getApiErrorMessage } from "@/lib/api/get-api-error-message";
+import { cn } from "@/lib/utils";
 
 type SubmitProposalFormProps = {
     projectId: string;
 
     projectBudget?: number;
     projectTitle?: string;
+
+    milestones: PublicMarketplaceMilestone[];
 
     onSubmitted: () => void;
     onCancel: () => void;
@@ -45,6 +49,7 @@ export function SubmitProposalForm({
     projectId,
     projectBudget,
     projectTitle,
+    milestones,
     onSubmitted,
     onCancel,
 }: SubmitProposalFormProps) {
@@ -70,8 +75,8 @@ export function SubmitProposalForm({
 
         defaultValues: {
             coverLetter: "",
-            bidAmount: "",
             estimatedDays: "",
+            milestoneIds: [],
         },
     });
 
@@ -80,6 +85,35 @@ export function SubmitProposalForm({
             control: form.control,
             name: "coverLetter",
         }) ?? "";
+
+    const selectedMilestoneIds =
+        useWatch({
+            control: form.control,
+            name: "milestoneIds",
+        }) ?? [];
+
+    const availableMilestones = milestones.filter(
+        (milestone) => !milestone.isTaken,
+    );
+
+    // The client fixes each stage's price, so the total is simply the sum
+    // of the stages this freelancer is offering to deliver.
+    const selectedTotal = milestones
+        .filter((milestone) =>
+            selectedMilestoneIds.includes(milestone.id),
+        )
+        .reduce((total, milestone) => total + milestone.amount, 0);
+
+    function toggleMilestone(milestoneId: string) {
+        const next = selectedMilestoneIds.includes(milestoneId)
+            ? selectedMilestoneIds.filter((id) => id !== milestoneId)
+            : [...selectedMilestoneIds, milestoneId];
+
+        form.setValue("milestoneIds", next, {
+            shouldDirty: true,
+            shouldValidate: true,
+        });
+    }
 
     const isSubmitting =
         createProposalMutation.isPending;
@@ -129,18 +163,102 @@ export function SubmitProposalForm({
                                     <CircleDollarSign className="size-4 text-muted-foreground" />
 
                                     <span className="text-muted-foreground">
-                                        Project budget
+                                        Whole project budget
                                     </span>
 
                                     <span className="ml-auto font-semibold">
-                                        {formatAmount(
-                                            projectBudget,
-                                        )}
+                                        {formatAmount(projectBudget)}
                                     </span>
                                 </div>
                             )}
                     </div>
                 )}
+
+            <div className="space-y-3">
+                <div>
+                    <Label>Which stages do you want?</Label>
+
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        Pick only the milestones you will deliver. Other
+                        freelancers can take the rest. The client sets each
+                        price, so you cannot change it.
+                    </p>
+                </div>
+
+                {availableMilestones.length === 0 ? (
+                    <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                        Every milestone on this project has already been
+                        given to a freelancer.
+                    </p>
+                ) : (
+                    <div className="space-y-2">
+                        {availableMilestones.map((milestone) => {
+                            const isSelected =
+                                selectedMilestoneIds.includes(
+                                    milestone.id,
+                                );
+
+                            return (
+                                <label
+                                    key={milestone.id}
+                                    className={cn(
+                                        "flex cursor-pointer gap-3 rounded-xl border p-3 transition",
+                                        isSelected
+                                            ? "border-primary/50 bg-primary/5"
+                                            : "hover:border-primary/30",
+                                    )}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        className="mt-1 size-4 accent-blue-500"
+                                        checked={isSelected}
+                                        disabled={isSubmitting}
+                                        onChange={() => {
+                                            toggleMilestone(milestone.id);
+                                        }}
+                                    />
+
+                                    <span className="min-w-0 flex-1">
+                                        <span className="flex flex-wrap items-baseline justify-between gap-2">
+                                            <span className="font-medium">
+                                                {milestone.title}
+                                            </span>
+
+                                            <span className="font-semibold">
+                                                {formatAmount(milestone.amount)}
+                                            </span>
+                                        </span>
+
+                                        <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                                            {milestone.description}
+                                        </span>
+                                    </span>
+                                </label>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {form.formState.errors.milestoneIds?.message && (
+                    <p className="text-sm text-destructive">
+                        {form.formState.errors.milestoneIds.message}
+                    </p>
+                )}
+
+                {selectedMilestoneIds.length > 0 && (
+                    <div className="flex items-center gap-2 rounded-xl border border-primary/25 bg-primary/5 p-3 text-sm">
+                        <CircleDollarSign className="size-4 text-electric" />
+
+                        <span className="text-muted-foreground">
+                            You will be paid
+                        </span>
+
+                        <span className="ml-auto text-base font-semibold">
+                            {formatAmount(selectedTotal)}
+                        </span>
+                    </div>
+                )}
+            </div>
 
             <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
@@ -185,42 +303,6 @@ export function SubmitProposalForm({
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
-                <div className="space-y-2">
-                    <Label htmlFor="proposal-bid-amount">
-                        Bid amount
-                    </Label>
-
-                    <div className="relative">
-                        <CircleDollarSign className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-
-                        <Input
-                            id="proposal-bid-amount"
-                            type="text"
-                            inputMode="decimal"
-                            placeholder="2500.00"
-                            className="pl-10"
-                            disabled={isSubmitting}
-                            aria-invalid={Boolean(
-                                form.formState.errors
-                                    .bidAmount,
-                            )}
-                            {...form.register(
-                                "bidAmount",
-                            )}
-                        />
-                    </div>
-
-                    {form.formState.errors
-                        .bidAmount?.message && (
-                            <p className="text-sm text-destructive">
-                                {
-                                    form.formState.errors
-                                        .bidAmount.message
-                                }
-                            </p>
-                        )}
-                </div>
-
                 <div className="space-y-2">
                     <Label htmlFor="proposal-estimated-days">
                         Estimated days

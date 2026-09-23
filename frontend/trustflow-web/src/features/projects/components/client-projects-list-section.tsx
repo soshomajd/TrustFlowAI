@@ -1,4 +1,6 @@
 "use client";
+import { MemberName } from "@/features/profile-photos/components/user-avatar";
+
 
 import { useEffect, useState } from "react";
 import {
@@ -11,6 +13,7 @@ import {
     LoaderCircle,
     RefreshCw,
     Send,
+    Lock,
     Pencil,
     Trash2,
     UserRound,
@@ -36,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { ProjectProposalActivityBadge, } from "@/features/projects/components/project-proposal-activity-badge";
 import { StaggerContainer, StaggerItem, } from "@/components/motion/animation-primitives";
 import { ProjectMilestoneReviewBadge, } from "@/features/projects/components/project-milestone-review-badge";
+import { ProjectHiddenBadge } from "@/features/projects/components/project-hidden-badge";
 import { toast } from "sonner";
 import { useDeleteProject } from "@/features/projects/hooks/use-delete-project";
 
@@ -206,8 +210,12 @@ function ClientProjectListItem({
         useDeleteProject();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen,] = useState(false);
 
+    // Freelancers write proposals against the scope, price and deadline they
+    // can see, so the project freezes while any proposal is still live.
+    // Rejecting or withdrawing them releases it again.
     const canManageProject =
-        project.status === "Open";
+        project.status === "Open" &&
+        project.pendingProposalCount === 0;
     const progress =
         project.milestoneCount === 0
             ? 0
@@ -283,6 +291,14 @@ function ClientProjectListItem({
                                 project.submittedMilestoneCount
                             }
                         />
+
+                        <ProjectHiddenBadge
+                            status={project.status}
+                            budget={project.budget}
+                            allocatedAmount={
+                                project.allocatedAmount
+                            }
+                        />
                     </div>
 
                     <p className="mt-2 line-clamp-2 max-w-3xl text-sm leading-6 text-muted-foreground">
@@ -313,10 +329,7 @@ function ClientProjectListItem({
 
                 <ProjectDetail
                     label="Freelancer"
-                    value={
-                        project.freelancerFullName ??
-                        "Not assigned"
-                    }
+                    value={project.freelancerId ? <MemberName userId={project.freelancerId} name={project.freelancerFullName} /> : "Not assigned"}
                     icon={UserRound}
                 />
 
@@ -480,6 +493,16 @@ function ClientProjectListItem({
                         </AlertDialog>
                     </>
                 )}
+
+                {!canManageProject &&
+                    project.status === "Open" &&
+                    project.pendingProposalCount > 0 && (
+                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Lock className="size-3.5" />
+                            Locked while proposals are waiting. Reject them
+                            to edit or delete this project.
+                        </p>
+                    )}
             </div>
         </article >
     );
@@ -487,7 +510,7 @@ function ClientProjectListItem({
 
 type ProjectDetailProps = {
     label: string;
-    value: string;
+    value: React.ReactNode;
     icon: typeof FolderKanban;
 };
 

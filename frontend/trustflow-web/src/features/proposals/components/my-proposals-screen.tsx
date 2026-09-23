@@ -295,7 +295,7 @@ function MyProposalCard({
                 <div className="grid shrink-0 gap-3 sm:grid-cols-2 lg:min-w-64 lg:grid-cols-1">
                     <ProposalMeta
                         icon={CircleDollarSign}
-                        label="Bid amount"
+                        label="Agreed price"
                         value={formatAmount(
                             proposal.bidAmount,
                         )}

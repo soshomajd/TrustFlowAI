@@ -4,19 +4,19 @@ using TrustFlow.Api.Models.Enums;
 
 namespace TrustFlow.Api.Blockchain;
 
-public interface IEscrowFundingSyncOrchestrator
+public interface IEscrowChainSyncOrchestrator
 {
-    Task<bool> TrySyncFundingAsync(
+    Task<bool> TrySyncAsync(
         Guid escrowId,
         CancellationToken cancellationToken);
 }
 
-public sealed class EscrowFundingSyncOrchestrator(
+public sealed class EscrowChainSyncOrchestrator(
     AppDbContext dbContext,
     IEscrowChainDeployer deployer)
-    : IEscrowFundingSyncOrchestrator
+    : IEscrowChainSyncOrchestrator
 {
-    public async Task<bool> TrySyncFundingAsync(
+    public async Task<bool> TrySyncAsync(
         Guid escrowId,
         CancellationToken cancellationToken)
     {
@@ -28,8 +28,9 @@ public sealed class EscrowFundingSyncOrchestrator(
             );
 
         if (escrow is null ||
-            escrow.Status != EscrowStatus.AwaitingFunding ||
-            string.IsNullOrWhiteSpace(escrow.ContractAddress))
+            string.IsNullOrWhiteSpace(escrow.ContractAddress) ||
+            escrow.Status is EscrowStatus.PendingDeployment or
+                EscrowStatus.Deploying)
         {
             return false;
         }
@@ -39,10 +40,10 @@ public sealed class EscrowFundingSyncOrchestrator(
             cancellationToken
         );
 
-        if (snapshot.State != OnChainEscrowState.Funded)
-        {
-            return false;
-        }
+        var tokenDecimals = await deployer.GetTokenDecimalsAsync(
+            escrow.TokenAddress,
+            cancellationToken
+        );
 
         if (!string.Equals(
                 snapshot.Token,
@@ -59,10 +60,7 @@ public sealed class EscrowFundingSyncOrchestrator(
             snapshot.TotalAmount !=
                 TokenAmountConverter.ToBaseUnits(
                     escrow.TotalAmount,
-                    await deployer.GetTokenDecimalsAsync(
-                        escrow.TokenAddress,
-                        cancellationToken
-                    )
+                    tokenDecimals
                 ))
         {
             throw new InvalidOperationException(
@@ -71,6 +69,31 @@ public sealed class EscrowFundingSyncOrchestrator(
                 $"{escrow.Id}."
             );
         }
+
+        return snapshot.State switch
+        {
+            OnChainEscrowState.AwaitingFunding => false,
+            OnChainEscrowState.Funded =>
+                await SyncFundedAsync(escrowId, cancellationToken),
+            OnChainEscrowState.Cancelled =>
+                await SyncCancelledAsync(
+                    escrowId,
+                    escrow.ProjectId,
+                    cancellationToken
+                ),
+            OnChainEscrowState.Completed => false,
+            _ => throw new InvalidOperationException(
+                $"Unsupported on-chain escrow state " +
+                $"{snapshot.State}."
+            )
+        };
+    }
+
+    private async Task<bool> SyncFundedAsync(
+        Guid escrowId,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
 
         var updated = await dbContext.Escrows
             .Where(item =>
@@ -84,15 +107,69 @@ public sealed class EscrowFundingSyncOrchestrator(
                     )
                     .SetProperty(
                         item => item.FundedAt,
-                        DateTimeOffset.UtcNow
+                        now
                     )
                     .SetProperty(
                         item => item.UpdatedAt,
-                        DateTimeOffset.UtcNow
+                        now
                     ),
                 cancellationToken
             );
 
         return updated == 1;
+    }
+
+    private async Task<bool> SyncCancelledAsync(
+        Guid escrowId,
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken);
+
+        var escrowUpdated = await dbContext.Escrows
+            .Where(item =>
+                item.Id == escrowId &&
+                (item.Status == EscrowStatus.AwaitingFunding ||
+                 item.Status == EscrowStatus.Funded))
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        item => item.Status,
+                        EscrowStatus.Cancelled
+                    )
+                    .SetProperty(
+                        item => item.CancelledAt,
+                        now
+                    )
+                    .SetProperty(
+                        item => item.UpdatedAt,
+                        now
+                    ),
+                cancellationToken
+            );
+
+        if (escrowUpdated == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+
+        await dbContext.Projects
+            .Where(item =>
+                item.Id == projectId &&
+                item.Status == ProjectStatus.InProgress)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    item => item.Status,
+                    ProjectStatus.Cancelled
+                ),
+                cancellationToken
+            );
+
+        await transaction.CommitAsync(cancellationToken);
+        return true;
     }
 }

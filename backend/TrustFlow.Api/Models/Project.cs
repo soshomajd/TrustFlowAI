@@ -26,7 +26,7 @@ namespace TrustFlow.Api.Models
         public ICollection<Proposal> Proposals { get; set; } = [];
 
         [JsonIgnore]
-        public Escrow? Escrow { get; set; }
+        public ICollection<Escrow> Escrows { get; set; } = [];
         public Guid? FreelancerId { get; set; }
         [JsonIgnore]
         public ApplicationUser? Freelancer { get; set; }

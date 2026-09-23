@@ -2,6 +2,7 @@ import "client-only";
 
 import type {
   AuthSessionResponse,
+  GoogleSignInRequest,
   LoginRequest,
   RegisterRequest,
   RegisterResponse,
@@ -20,6 +21,15 @@ export async function login(request: LoginRequest) {
 export async function register(request: RegisterRequest) {
   const response = await apiClient.post<RegisterResponse>(
     "/auth/register",
+    request,
+  );
+
+  return response.data;
+}
+
+export async function googleSignIn(request: GoogleSignInRequest) {
+  const response = await apiClient.post<AuthSessionResponse>(
+    "/auth/google",
     request,
   );
 

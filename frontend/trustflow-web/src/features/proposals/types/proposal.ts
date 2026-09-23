@@ -22,8 +22,8 @@ export type GetProjectProposalsParams = {
 
 export type CreateProposalRequest = {
   coverLetter: string;
-  bidAmount: number;
   estimatedDays: number;
+  milestoneIds: string[];
 };
 
 export type CreatedProposal = {

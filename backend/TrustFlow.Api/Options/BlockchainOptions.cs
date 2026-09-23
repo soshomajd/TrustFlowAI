@@ -9,6 +9,8 @@ namespace TrustFlow.Api.Options
 
         public string RpcUrl { get; set; } = string.Empty;
 
+        public string TokenAddress { get; set; } = string.Empty;
+
         public string DeployerPrivateKey { get; set; } = string.Empty;
     }
 }

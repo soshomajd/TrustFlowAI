@@ -1,4 +1,6 @@
 "use client";
+import { MemberName } from "@/features/profile-photos/components/user-avatar";
+
 
 import { isAxiosError } from "axios";
 import {
@@ -37,6 +39,8 @@ import { ProjectProposalsSection } from
     "@/features/proposals/components/project-proposals-section";
 import { EscrowPanel } from
     "@/features/escrow/components/escrow-panel";
+import { ProjectHiddenNotice } from
+    "@/features/projects/components/project-hidden-notice";
 
 export function ProjectWorkspaceScreen({
     projectId,
@@ -99,6 +103,11 @@ export function ProjectWorkspaceScreen({
     const project =
         workspaceQuery.data;
 
+    const allocatedAmount = project.milestones.reduce(
+        (total, milestone) => total + milestone.amount,
+        0,
+    );
+
     return (
         <AnimatedSection className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
             <header className="mb-8">
@@ -145,7 +154,14 @@ export function ProjectWorkspaceScreen({
                 </div>
             </header>
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <ProjectHiddenNotice
+                status={project.status}
+                budget={project.budget}
+                allocatedAmount={allocatedAmount}
+                milestoneCount={project.milestones.length}
+            />
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <WorkspaceDetailCard
                     icon={CircleDollarSign}
                     label="Budget"
@@ -165,10 +181,7 @@ export function ProjectWorkspaceScreen({
                 <WorkspaceDetailCard
                     icon={UserRound}
                     label="Client"
-                    value={
-                        project.clientFullName ||
-                        "Unknown client"
-                    }
+                    value={<MemberName userId={project.clientId} name={project.clientFullName} />}
                 />
 
                 <WorkspaceDetailCard
@@ -186,8 +199,7 @@ export function ProjectWorkspaceScreen({
                 </p>
 
                 <p className="mt-2 font-medium">
-                    {project.freelancerFullName ??
-                        "No freelancer assigned yet"}
+                    {project.freelancerId ? <MemberName userId={project.freelancerId} name={project.freelancerFullName} /> : "No freelancer assigned yet"}
                 </p>
                 {project.freelancerId && (
                     <Button asChild variant="outline" size="sm" className="mt-4">
@@ -207,6 +219,9 @@ export function ProjectWorkspaceScreen({
             <div className="mt-6">
                 <ProjectMilestonesSection
                     projectId={project.id}
+                    hasProposals={
+                        project.activeProposalCount > 0
+                    }
                     projectBudget={project.budget}
                     projectDeadline={
                         project.deadline
@@ -229,7 +244,7 @@ export function ProjectWorkspaceScreen({
 type WorkspaceDetailCardProps = {
     icon: typeof FolderKanban;
     label: string;
-    value: string;
+    value: React.ReactNode;
 };
 
 function WorkspaceDetailCard({

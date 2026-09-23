@@ -1,6 +1,7 @@
 "use client";
 
 import {
+    Ban,
     CheckCircle2,
     CircleDollarSign,
     Coins,
@@ -14,7 +15,6 @@ import {
     TriangleAlert,
     Wallet,
 } from "lucide-react";
-import { useState } from "react";
 import {
     formatEther,
     formatUnits,
@@ -28,9 +28,18 @@ import {
     useSwitchChain,
 } from "wagmi";
 
+import {
+    AlertDialog,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useCancelEscrow } from "@/features/escrow/hooks/use-cancel-escrow";
 import { useCreateEscrow } from "@/features/escrow/hooks/use-create-escrow";
 import { useDeployEscrow } from "@/features/escrow/hooks/use-deploy-escrow";
 import { useFundEscrow } from "@/features/escrow/hooks/use-fund-escrow";
@@ -41,10 +50,13 @@ import { useSyncEscrow } from "@/features/escrow/hooks/use-sync-escrow";
 import { erc20Abi } from "@/features/escrow/lib/erc20-abi";
 import { escrowAbi } from "@/features/escrow/lib/escrow-abi";
 import {
-    LOCAL_HARDHAT_CHAIN_ID,
-    LOCAL_MOCK_USDC_ADDRESS,
-    MIN_LOCAL_GAS_BALANCE,
-} from "@/features/escrow/lib/local-test-chain";
+    ACTIVE_CHAIN_ID,
+    ACTIVE_CHAIN_NAME,
+    ACTIVE_TOKEN_ADDRESS,
+    ACTIVE_TOKEN_SYMBOL,
+    MIN_GAS_BALANCE,
+    TEST_TOKEN_MINT_ENABLED,
+} from "@/features/escrow/lib/network-config";
 import { toBaseUnits } from "@/features/escrow/lib/token-amount";
 import type { ProjectEscrow } from "@/features/escrow/types/escrow";
 import type { ProjectStatus } from "@/features/projects/types/project";
@@ -67,7 +79,7 @@ export function EscrowPanel({
 }: EscrowPanelProps) {
     const escrowQuery = useProjectEscrow(projectId);
 
-    if (projectStatus !== "InProgress") {
+    if (projectStatus === "Open") {
         return null;
     }
 
@@ -114,10 +126,6 @@ export function EscrowPanel({
 }
 
 function CreateEscrowCard({ projectId }: { projectId: string }) {
-    const [tokenAddress, setTokenAddress] = useState(
-        LOCAL_MOCK_USDC_ADDRESS,
-    );
-
     const connection = useConnection();
     const walletQuery = useMyWallet();
     const createMutation = useCreateEscrow(projectId);
@@ -205,33 +213,25 @@ function CreateEscrowCard({ projectId }: { projectId: string }) {
                 aria-disabled={!isWalletReady}
             >
                 <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-                    <div>
-                        <Label htmlFor="escrow-token-address">
-                            Token address
-                        </Label>
-
-                        <Input
-                            id="escrow-token-address"
-                            value={tokenAddress}
-                            disabled={!isWalletReady}
-                            onChange={(event) => {
-                                setTokenAddress(event.target.value);
-                            }}
-                            className="mt-1.5 font-mono text-xs"
-                        />
+                    <div className="rounded-xl border bg-background/35 px-4 py-3">
+                        <p className="text-xs text-muted-foreground">
+                            Payment network and token
+                        </p>
+                        <p className="mt-1 text-sm font-medium">
+                            {ACTIVE_CHAIN_NAME} · {ACTIVE_TOKEN_SYMBOL}
+                        </p>
+                        <p className="mt-1 font-mono text-xs text-muted-foreground">
+                            {truncateAddress(ACTIVE_TOKEN_ADDRESS)}
+                        </p>
                     </div>
 
                     <Button
                         type="button"
-                        disabled={
-                            !isWalletReady ||
-                            createMutation.isPending ||
-                            tokenAddress.trim().length === 0
-                        }
+                        disabled={!isWalletReady || createMutation.isPending}
                         onClick={() => {
                             createMutation.mutate({
-                                chainId: LOCAL_HARDHAT_CHAIN_ID,
-                                tokenAddress: tokenAddress.trim(),
+                                chainId: ACTIVE_CHAIN_ID,
+                                tokenAddress: ACTIVE_TOKEN_ADDRESS,
                             });
                         }}
                     >
@@ -355,9 +355,37 @@ function EscrowDetailsCard({
                 )}
 
             {escrow.status === "Deploying" && (
-                <div className="mt-5 flex items-center gap-2 border-t pt-5 text-sm text-muted-foreground">
-                    <LoaderCircle className="size-4 animate-spin" />
-                    Deploying the escrow contract on-chain...
+                <div className="mt-5 border-t pt-5">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <LoaderCircle className="size-4 animate-spin" />
+                        The deployment transaction is waiting for confirmation.
+                    </div>
+                    {viewerRole === "Client" && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="mt-3"
+                            disabled={deployMutation.isPending}
+                            onClick={() => deployMutation.mutate()}
+                        >
+                            <RefreshCw
+                                className={cn(
+                                    "size-3.5",
+                                    deployMutation.isPending && "animate-spin",
+                                )}
+                            />
+                            Check deployment
+                        </Button>
+                    )}
+                    {deployMutation.isError && (
+                        <ErrorNotice
+                            message={getApiErrorMessage(
+                                deployMutation.error,
+                                "Deployment status could not be checked.",
+                            )}
+                        />
+                    )}
                 </div>
             )}
 
@@ -422,9 +450,11 @@ function EscrowDetailsCard({
                                             if (
                                                 escrow.contractAddress
                                             ) {
-                                                startWorkMutation.mutate(
-                                                    escrow.contractAddress,
-                                                );
+                                                startWorkMutation.mutate({
+                                                    contractAddress:
+                                                        escrow.contractAddress,
+                                                    chainId: escrow.chainId,
+                                                });
                                             }
                                         }}
                                     >
@@ -458,6 +488,25 @@ function EscrowDetailsCard({
                 </div>
             )}
 
+            {viewerRole === "Client" &&
+                escrow.contractAddress &&
+                (escrow.status === "AwaitingFunding" ||
+                    escrow.status === "Funded") &&
+                workStartedQuery.data === false &&
+                isWalletVerified && (
+                    <CancelEscrowControl
+                        projectId={projectId}
+                        escrow={escrow}
+                    />
+                )}
+
+            {escrow.status === "Cancelled" && (
+                <div className="mt-5 border-t pt-5 text-sm text-muted-foreground">
+                    This escrow was cancelled before work started. Any funded
+                    test tokens were returned to the client wallet.
+                </div>
+            )}
+
             {escrow.status === "Completed" && (
                 <div className="mt-5 border-t pt-5 text-sm text-muted-foreground">
                     All milestones have been released. The escrow
@@ -465,6 +514,72 @@ function EscrowDetailsCard({
                 </div>
             )}
         </EscrowPanelShell>
+    );
+}
+
+function CancelEscrowControl({
+    projectId,
+    escrow,
+}: {
+    projectId: string;
+    escrow: ProjectEscrow;
+}) {
+    const cancelMutation = useCancelEscrow(projectId);
+
+    return (
+        <div className="mt-5 border-t pt-5">
+            <AlertDialog>
+                <AlertDialogTrigger asChild>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        disabled={cancelMutation.isPending}
+                    >
+                        <Ban className="size-4" />
+                        Cancel escrow
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            Cancel this escrow?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            You can cancel only before the freelancer starts
+                            work. If the escrow is funded, the contract returns
+                            the full token balance to your wallet.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={cancelMutation.isPending}>
+                            Keep escrow
+                        </AlertDialogCancel>
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            disabled={cancelMutation.isPending}
+                            onClick={() => cancelMutation.mutate(escrow)}
+                        >
+                            {cancelMutation.isPending ? (
+                                <LoaderCircle className="size-4 animate-spin" />
+                            ) : (
+                                <Ban className="size-4" />
+                            )}
+                            Cancel and refund
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {cancelMutation.isError && (
+                <ErrorNotice
+                    message={getWalletErrorMessage(
+                        cancelMutation.error,
+                        "Escrow cancellation failed.",
+                    )}
+                />
+            )}
+        </div>
     );
 }
 
@@ -492,7 +607,7 @@ function ClientFundingControls({
         address: escrow.tokenAddress as Address,
         abi: erc20Abi,
         functionName: "decimals",
-        chainId: LOCAL_HARDHAT_CHAIN_ID,
+        chainId: escrow.chainId,
         query: {
             enabled: checksEnabled,
             staleTime: Number.POSITIVE_INFINITY,
@@ -504,7 +619,7 @@ function ClientFundingControls({
         abi: erc20Abi,
         functionName: "balanceOf",
         args: [connection.address ?? zeroAddress],
-        chainId: LOCAL_HARDHAT_CHAIN_ID,
+        chainId: escrow.chainId,
         query: {
             enabled: checksEnabled,
             refetchInterval: 5_000,
@@ -513,7 +628,7 @@ function ClientFundingControls({
 
     const gasBalanceQuery = useBalance({
         address: connection.address,
-        chainId: LOCAL_HARDHAT_CHAIN_ID,
+        chainId: escrow.chainId,
         query: {
             enabled: checksEnabled,
             refetchInterval: 5_000,
@@ -536,8 +651,8 @@ function ClientFundingControls({
             : requiredTokenAmount - tokenBalance;
 
     const networkReady =
-        escrow.chainId === LOCAL_HARDHAT_CHAIN_ID &&
-        connection.chainId === LOCAL_HARDHAT_CHAIN_ID;
+        escrow.chainId === ACTIVE_CHAIN_ID &&
+        connection.chainId === escrow.chainId;
 
     const tokenReady =
         requiredTokenAmount !== null &&
@@ -546,7 +661,7 @@ function ClientFundingControls({
 
     const gasReady =
         gasBalanceQuery.isSuccess &&
-        gasBalance >= MIN_LOCAL_GAS_BALANCE;
+        gasBalance >= MIN_GAS_BALANCE;
 
     const checksLoading =
         tokenDecimalsQuery.isLoading ||
@@ -559,11 +674,11 @@ function ClientFundingControls({
         gasReady &&
         !checksLoading;
 
-    const localFaucetAvailable =
-        process.env.NODE_ENV === "development" &&
-        escrow.chainId === LOCAL_HARDHAT_CHAIN_ID &&
+    const testTokenMintAvailable =
+        TEST_TOKEN_MINT_ENABLED &&
+        escrow.chainId === ACTIVE_CHAIN_ID &&
         escrow.tokenAddress.toLowerCase() ===
-            LOCAL_MOCK_USDC_ADDRESS.toLowerCase();
+            ACTIVE_TOKEN_ADDRESS.toLowerCase();
 
     const balanceReadFailed =
         tokenDecimalsQuery.isError ||
@@ -578,9 +693,9 @@ function ClientFundingControls({
                     label="Network"
                     value={
                         networkReady
-                            ? "Localhost 31337"
-                            : escrow.chainId === LOCAL_HARDHAT_CHAIN_ID
-                              ? "Switch to Localhost 31337"
+                            ? ACTIVE_CHAIN_NAME
+                            : escrow.chainId === ACTIVE_CHAIN_ID
+                              ? `Switch to ${ACTIVE_CHAIN_NAME}`
                               : `Unsupported chain ${escrow.chainId}`
                     }
                     ready={networkReady}
@@ -588,7 +703,7 @@ function ClientFundingControls({
 
                 <FundingReadinessItem
                     icon={Coins}
-                    label="Mock USDC"
+                    label={ACTIVE_TOKEN_SYMBOL}
                     value={formatTokenFundingBalance(
                         tokenBalance,
                         tokenDecimals,
@@ -617,19 +732,19 @@ function ClientFundingControls({
             </div>
 
             {balanceReadFailed && (
-                <ErrorNotice message="Local wallet balances could not be read. Make sure Hardhat and Mock USDC are running." />
+                <ErrorNotice message="Wallet balances could not be read from the configured network." />
             )}
 
             <div className="flex flex-wrap gap-3">
                 {!networkReady &&
-                    escrow.chainId === LOCAL_HARDHAT_CHAIN_ID && (
+                    escrow.chainId === ACTIVE_CHAIN_ID && (
                         <Button
                             type="button"
                             variant="outline"
                             disabled={switchChainMutation.isPending}
                             onClick={() => {
                                 switchChainMutation.mutate({
-                                    chainId: LOCAL_HARDHAT_CHAIN_ID,
+                                    chainId: escrow.chainId,
                                 });
                             }}
                         >
@@ -638,11 +753,11 @@ function ClientFundingControls({
                             ) : (
                                 <Network className="size-4" />
                             )}
-                            Switch to Localhost
+                            Switch network
                         </Button>
                     )}
 
-                {localFaucetAvailable &&
+                {testTokenMintAvailable &&
                     networkReady &&
                     (!tokenReady || !gasReady) && (
                         <Button
@@ -703,7 +818,7 @@ function ClientFundingControls({
             {!canFund && !checksLoading && !balanceReadFailed && (
                 <p className="text-xs leading-5 text-muted-foreground">
                     Approve and fund unlocks after the wallet is on
-                    Localhost and has the full project budget plus gas.
+                    {ACTIVE_CHAIN_NAME} and has the full project budget plus gas.
                 </p>
             )}
 
@@ -720,7 +835,7 @@ function ClientFundingControls({
                 <ErrorNotice
                     message={getWalletErrorMessage(
                         testFundsMutation.error,
-                        "Local test funds could not be prepared.",
+                        "Test funds could not be prepared.",
                     )}
                 />
             )}

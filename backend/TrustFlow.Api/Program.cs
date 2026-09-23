@@ -14,7 +14,6 @@ using TrustFlow.Api.Models.Identity;
 using TrustFlow.Api.Options;
 using TrustFlow.Api.Services.Auth;
 using TrustFlow.Api.Services.Files;
-using TrustFlow.Api.Services.Identity;
 using System.Globalization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
@@ -175,6 +174,21 @@ if (string.IsNullOrWhiteSpace(blockchainOptions.RpcUrl))
     );
 }
 
+if (string.IsNullOrWhiteSpace(blockchainOptions.TokenAddress) ||
+    blockchainOptions.TokenAddress.Length != 42 ||
+    !blockchainOptions.TokenAddress.StartsWith(
+        "0x",
+        StringComparison.OrdinalIgnoreCase) ||
+    !blockchainOptions.TokenAddress
+        .AsSpan(2)
+        .ToString()
+        .All(Uri.IsHexDigit))
+{
+    throw new InvalidOperationException(
+        "Blockchain token address is missing or invalid."
+    );
+}
+
 if (string.IsNullOrWhiteSpace(blockchainOptions.DeployerPrivateKey))
 {
     throw new InvalidOperationException(
@@ -246,14 +260,16 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 builder.Services.AddScoped<IEscrowChainDeployer, EscrowChainDeployer>();
 builder.Services.AddScoped<IEscrowDeploymentOrchestrator, EscrowDeploymentOrchestrator>();
-builder.Services.AddScoped<IEscrowFundingSyncOrchestrator, EscrowFundingSyncOrchestrator>();
+builder.Services.AddScoped<IEscrowChainSyncOrchestrator, EscrowChainSyncOrchestrator>();
+builder.Services.Configure<GoogleAuthOptions>(
+    builder.Configuration.GetSection(GoogleAuthOptions.SectionName));
 builder.Services.Configure<MalwareScannerOptions>(
     builder.Configuration.GetSection(MalwareScannerOptions.SectionName));
 builder.Services.AddScoped<IMalwareScanner, ClamAvMalwareScanner>();
 builder.Services.AddSingleton<PdfResumeValidator>();
 builder.Services.AddSingleton<MilestoneDeliveryFileValidator>();
 builder.Services.AddDataProtection();
-builder.Services.AddSingleton<IIdentityDataProtector, IdentityDataProtector>();
+builder.Services.AddSingleton<ProfilePhotoProcessor>();
 builder.Services.AddHostedService<RefreshTokenCleanupService>();
 
 builder.Services.AddRateLimiter(options =>
@@ -379,7 +395,7 @@ builder.Services.AddRateLimiter(options =>
                     window: TimeSpan.FromMinutes(10))));
 
     options.AddPolicy(
-        RateLimitPolicies.IdentitySubmission,
+        RateLimitPolicies.ProfilePhotoUpload,
         httpContext => RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: GetClientRateLimitKey(httpContext),
             factory: _ => CreateFixedWindowOptions(

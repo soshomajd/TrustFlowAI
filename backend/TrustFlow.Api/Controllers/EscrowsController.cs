@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Npgsql;
 using TrustFlow.Api.Blockchain;
 using TrustFlow.Api.Constants;
@@ -9,6 +10,7 @@ using TrustFlow.Api.Data;
 using TrustFlow.Api.Dtos.Escrows;
 using TrustFlow.Api.Models;
 using TrustFlow.Api.Models.Enums;
+using TrustFlow.Api.Options;
 
 namespace TrustFlow.Api.Controllers;
 
@@ -17,7 +19,8 @@ namespace TrustFlow.Api.Controllers;
 public sealed class EscrowsController(
     AppDbContext dbContext,
     IEscrowDeploymentOrchestrator deploymentOrchestrator,
-    IEscrowFundingSyncOrchestrator fundingSyncOrchestrator)
+    IEscrowChainSyncOrchestrator chainSyncOrchestrator,
+    IOptions<BlockchainOptions> blockchainOptions)
     : ControllerBase
 {
     [Authorize(Roles = AppRoles.Client)]
@@ -43,12 +46,17 @@ public sealed class EscrowsController(
             });
         }
 
-        if (request.ChainId <= 0)
+        var configuredBlockchain = blockchainOptions.Value;
+
+        if (request.ChainId != configuredBlockchain.ChainId)
         {
             return BadRequest(new
             {
                 message =
-                    "Chain id must be greater than zero."
+                    $"Escrows must use the configured chain " +
+                    $"{configuredBlockchain.ChainId}.",
+                configuredChainId =
+                    configuredBlockchain.ChainId
             });
         }
 
@@ -62,6 +70,20 @@ public sealed class EscrowsController(
             {
                 message =
                     "Token address is invalid."
+            });
+        }
+
+        if (!string.Equals(
+                tokenAddress,
+                configuredBlockchain.TokenAddress,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new
+            {
+                message =
+                    "Escrows must use the configured payment token.",
+                configuredTokenAddress =
+                    configuredBlockchain.TokenAddress
             });
         }
 
@@ -98,14 +120,26 @@ public sealed class EscrowsController(
             });
         }
 
-        if (!project.FreelancerId.HasValue)
+        // One escrow per freelancer: the request names which of the
+        // project's freelancers this one pays.
+        var assignment = await dbContext.Milestones
+            .AsNoTracking()
+            .Where(milestone =>
+                milestone.ProjectId == projectId &&
+                milestone.FreelancerId == request.FreelancerId)
+            .Select(milestone => milestone.Amount)
+            .ToListAsync(cancellationToken);
+
+        if (assignment.Count == 0)
         {
             return Conflict(new
             {
                 message =
-                    "The project does not have an assigned freelancer."
+                    "That freelancer has no milestones on this project."
             });
         }
+
+        var assignedTotal = assignment.Sum();
         var clientWallet =
     await dbContext.Users
         .AsNoTracking()
@@ -143,8 +177,7 @@ public sealed class EscrowsController(
             await dbContext.Users
                 .AsNoTracking()
                 .Where(user =>
-                    user.Id ==
-                    project.FreelancerId.Value)
+                    user.Id == request.FreelancerId)
                 .Select(user => new
                 {
                     user.WalletAddress,
@@ -178,8 +211,9 @@ public sealed class EscrowsController(
                 .AsNoTracking()
                 .AnyAsync(
                     escrow =>
-                        escrow.ProjectId ==
-                        projectId,
+                        escrow.ProjectId == projectId &&
+                        escrow.FreelancerId ==
+                            request.FreelancerId,
                     cancellationToken
                 );
 
@@ -188,7 +222,7 @@ public sealed class EscrowsController(
             return Conflict(new
             {
                 message =
-                    "An escrow already exists for this project."
+                    "An escrow already exists for this freelancer on this project."
             });
         }
 
@@ -198,6 +232,8 @@ public sealed class EscrowsController(
         var escrow = new Escrow
         {
             ProjectId = project.Id,
+
+            FreelancerId = request.FreelancerId,
 
             ChainId = request.ChainId,
 
@@ -210,8 +246,8 @@ public sealed class EscrowsController(
             FreelancerWalletAddress =
                 freelancerWallet.WalletAddress,
 
-            TotalAmount =
-                project.Budget,
+            // Only this freelancer's share, not the whole budget.
+            TotalAmount = assignedTotal,
 
             ReleasedAmount = 0m,
 
@@ -278,7 +314,7 @@ public sealed class EscrowsController(
                     (
                         item.Project.ClientId ==
                         userId ||
-                        item.Project.FreelancerId ==
+                        item.FreelancerId ==
                         userId
                     ))
                 .FirstOrDefaultAsync(
@@ -403,7 +439,7 @@ public sealed class EscrowsController(
                         (
                             item.Project.ClientId ==
                             userId ||
-                            item.Project.FreelancerId ==
+                            item.FreelancerId ==
                             userId
                         ),
                     cancellationToken
@@ -418,7 +454,7 @@ public sealed class EscrowsController(
             });
         }
 
-        await fundingSyncOrchestrator.TrySyncFundingAsync(
+        await chainSyncOrchestrator.TrySyncAsync(
             escrow.Id,
             cancellationToken
         );

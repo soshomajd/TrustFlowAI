@@ -1,4 +1,6 @@
 "use client";
+import { MemberName } from "@/features/profile-photos/components/user-avatar";
+
 
 import { ShieldCheck } from "lucide-react";
 import Link from "next/link";
@@ -143,7 +145,7 @@ export function DashboardSidebar({
                 {!collapsed && (
                     <div className="mb-3 rounded-xl border border-sidebar-border bg-sidebar-accent/50 p-3">
                         <p className="truncate text-sm font-medium">
-                            {user?.fullName}
+                            <MemberName userId={user?.id} name={user?.fullName} />
                         </p>
 
                         <p className="mt-1 truncate text-xs text-muted-foreground">

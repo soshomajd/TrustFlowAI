@@ -1,3 +1,4 @@
+import { UserAvatar } from "@/features/profile-photos/components/user-avatar";
 import { BriefcaseBusiness, CalendarDays, CheckCircle2, ExternalLink, MapPin, ShieldCheck, Sparkles } from "lucide-react";
 import { availabilityLabels, type FreelancerProfile } from "@/features/freelancers/types/freelancer-profile";
 import { isSafePortfolioUrl } from "@/features/freelancers/schemas/freelancer-profile-schema";
@@ -6,13 +7,12 @@ import { ResumeDownloadButton } from "@/features/freelancers/components/resume-d
 const panelClass = "rounded-2xl border bg-card/70 p-5 sm:p-7";
 
 export function FreelancerProfileView({ profile }: { profile: FreelancerProfile }) {
-  const initials = profile.fullName.trim().split(/\s+/).slice(0, 2).map((word) => word[0]).join("");
   return (
     <div className="space-y-6">
       <section className="relative overflow-hidden rounded-2xl border bg-card/80 p-6 sm:p-8">
         <div className="pointer-events-none absolute -right-16 -top-20 size-72 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center">
-          <div className="flex size-20 shrink-0 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10 text-2xl font-semibold text-electric" aria-hidden="true">{initials}</div>
+          <UserAvatar userId={profile.userId} name={profile.fullName} className="size-24 sm:size-28" />
           <div className="min-w-0 flex-1">
             <p className="mb-2 text-xs font-medium uppercase tracking-[0.2em] text-electric">Freelancer profile</p>
             <h1 className="break-words text-3xl font-semibold">{profile.fullName}</h1>

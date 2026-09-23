@@ -1,11 +1,12 @@
 "use client";
 
-import { CheckCircle2, LoaderCircle, Wallet } from "lucide-react";
+import { CheckCircle2, LoaderCircle, Unplug, Wallet } from "lucide-react";
 import { useConnection } from "wagmi";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useConnectAndVerifyWallet } from "@/features/wallet/hooks/use-connect-and-verify-wallet";
+import { useDisconnectWallet } from "@/features/wallet/hooks/use-disconnect-wallet";
 import { useMyWallet } from "@/features/wallet/hooks/use-my-wallet";
 
 export function WalletConnectButton() {
@@ -13,6 +14,7 @@ export function WalletConnectButton() {
   const walletQuery = useMyWallet();
 
   const connectMutation = useConnectAndVerifyWallet();
+  const disconnectMutation = useDisconnectWallet();
 
   const isVerified = Boolean(
     connection.address &&
@@ -21,40 +23,62 @@ export function WalletConnectButton() {
         connection.address.toLowerCase(),
   );
 
-  if (connection.isConnected && isVerified) {
-    return (
-      <Badge
-        variant="outline"
-        className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-      >
-        <CheckCircle2 className="size-3.5" />
-        {truncateAddress(connection.address)}
-      </Badge>
-    );
-  }
-
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      disabled={connectMutation.isPending || walletQuery.isLoading}
-      onClick={() => {
-        connectMutation.mutate();
-      }}
-    >
-      {connectMutation.isPending ? (
-        <LoaderCircle className="size-4 animate-spin" />
+    <div className="flex items-center gap-2">
+      {connection.isConnected && isVerified ? (
+        <Badge
+          variant="outline"
+          className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+        >
+          <CheckCircle2 className="size-3.5" />
+          {truncateAddress(connection.address)}
+        </Badge>
       ) : (
-        <Wallet className="size-4" />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={connectMutation.isPending || walletQuery.isLoading}
+          onClick={() => {
+            connectMutation.mutate();
+          }}
+        >
+          {connectMutation.isPending ? (
+            <LoaderCircle className="size-4 animate-spin" />
+          ) : (
+            <Wallet className="size-4" />
+          )}
+
+          {walletQuery.data?.isVerified
+            ? "Connect verified wallet"
+            : connection.isConnected
+              ? "Verify wallet"
+              : "Connect wallet"}
+        </Button>
       )}
 
-      {walletQuery.data?.isVerified
-        ? "Connect verified wallet"
-        : connection.isConnected
-          ? "Verify wallet"
-          : "Connect wallet"}
-    </Button>
+      {connection.isConnected && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={disconnectMutation.isPending}
+          onClick={() => {
+            disconnectMutation.mutate();
+          }}
+          title="Disconnect this wallet from TrustFlow. Your account keeps its verified address."
+          aria-label="Disconnect wallet"
+        >
+          {disconnectMutation.isPending ? (
+            <LoaderCircle className="size-4 animate-spin" />
+          ) : (
+            <Unplug className="size-4" />
+          )}
+
+          <span className="hidden sm:inline">Disconnect</span>
+        </Button>
+      )}
+    </div>
   );
 }
 

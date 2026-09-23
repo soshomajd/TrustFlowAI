@@ -36,9 +36,22 @@ public sealed class ProjectMarketplaceQuery
     public ProjectSortOption SortBy { get; set; } =
         ProjectSortOption.Newest;
 
+    public const int MinimumSearchLength = 3;
+
     public IEnumerable<ValidationResult> Validate(
         ValidationContext validationContext)
     {
+        // One or two letters match nearly every project, so the filter would
+        // cost a full scan and still narrow nothing.
+        if (!string.IsNullOrWhiteSpace(Search) &&
+            Search.Trim().Length < MinimumSearchLength)
+        {
+            yield return new ValidationResult(
+                $"Search needs at least {MinimumSearchLength} characters.",
+                [nameof(Search)]
+            );
+        }
+
         if (MinBudget.HasValue &&
             MaxBudget.HasValue &&
             MinBudget.Value > MaxBudget.Value)

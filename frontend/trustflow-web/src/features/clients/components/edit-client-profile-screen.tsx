@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ClientVerificationPanel } from "@/features/clients/components/client-verification-panel";
+import { ProfilePhotoEditor } from "@/features/profile-photos/components/profile-photo-editor";
 import { useMyClientProfile, useUpdateClientProfile } from "@/features/clients/hooks/use-client-profile";
 import { clientProfileSchema, type ClientProfileFormValues } from "@/features/clients/schemas/client-profile-schema";
 import { companySizeLabels, type ClientAccountType, type ClientProfile, type CompanySize } from "@/features/clients/types/client-profile";
@@ -26,7 +26,6 @@ function Editor({ profile }: { profile: ClientProfile }) {
   const mutation = useUpdateClientProfile();
   const form = useForm<ClientProfileFormValues>({ resolver: zodResolver(clientProfileSchema), defaultValues: toValues(profile) });
   const [accountType, companyName, overview, industry, location] = useWatch({ control: form.control, name: ["accountType", "companyName", "overview", "industry", "location"] });
-  const statusLocked = ["Pending", "Verified"].includes(profile.verificationStatus);
   const essentials = [
     { label: accountType === "Company" ? "Company name" : "Account type", done: accountType === "Individual" || Boolean(companyName.trim()) },
     { label: "Short introduction", done: Boolean(overview.trim()) },
@@ -42,19 +41,19 @@ function Editor({ profile }: { profile: ClientProfile }) {
 
   return <>
     <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-      <div><p className="text-xs font-medium uppercase tracking-[0.2em] text-electric">Your hiring identity</p><h1 className="mt-3 text-3xl font-semibold">My client profile</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">Give freelancers the context they need to trust the opportunity. The essentials take only a few minutes.</p></div>
+      <div><p className="text-xs font-medium uppercase tracking-[0.2em] text-electric">Your client profile</p><h1 className="mt-3 text-3xl font-semibold">My client profile</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">Give freelancers the context they need to trust the opportunity. The essentials take only a few minutes.</p></div>
       <Button asChild variant="outline" className="self-start"><Link href={`/dashboard/clients/${profile.userId}`}><Eye className="size-4" />View public profile</Link></Button>
     </header>
 
+    <ProfilePhotoEditor userId={profile.userId} name={profile.displayName} />
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_290px]">
       <div className="min-w-0 space-y-6">
         <form onSubmit={form.handleSubmit(save)} className="space-y-6" noValidate>
           <fieldset disabled={mutation.isPending} className="space-y-6">
             <Section title="Who is hiring?" description="Choose the account type and add the name people should recognize.">
               <div className="grid gap-3 sm:grid-cols-2">
-                {(["Individual", "Company"] as ClientAccountType[]).map((value) => { const Icon = value === "Company" ? Building2 : UserRound; return <label key={value} className={`flex cursor-pointer gap-3 rounded-xl border p-4 transition ${accountType === value ? "border-primary/50 bg-primary/10" : "hover:border-primary/25"} ${statusLocked ? "cursor-not-allowed opacity-70" : ""}`}><input type="radio" value={value} {...form.register("accountType")} disabled={statusLocked || mutation.isPending} className="sr-only" /><Icon className="size-5 text-electric" /><span><span className="block text-sm font-medium">{value}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{value === "Individual" ? "Hiring under your own name" : "Hiring for a registered business"}</span></span></label>; })}
+                {(["Individual", "Company"] as ClientAccountType[]).map((value) => { const Icon = value === "Company" ? Building2 : UserRound; return <label key={value} className={`flex cursor-pointer gap-3 rounded-xl border p-4 transition ${accountType === value ? "border-primary/50 bg-primary/10" : "hover:border-primary/25"} `}><input type="radio" value={value} {...form.register("accountType")} disabled={mutation.isPending} className="sr-only" /><Icon className="size-5 text-electric" /><span><span className="block text-sm font-medium">{value}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{value === "Individual" ? "Hiring under your own name" : "Hiring for a registered business"}</span></span></label>; })}
               </div>
-              {statusLocked && <p className="text-xs text-muted-foreground">Reset identity verification before changing the account type.</p>}
               {accountType === "Company" && <Field id="company-name" label="Company name" error={errors.companyName?.message}><Input id="company-name" {...form.register("companyName")} maxLength={120} placeholder="Acme Studio" /></Field>}
             </Section>
 
@@ -71,12 +70,12 @@ function Editor({ profile }: { profile: ClientProfile }) {
           {mutation.isError && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{getApiErrorMessage(mutation.error, "Your profile could not be saved. Your edits are still here.")}</p>}
           <div className="sticky bottom-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/95 p-4 shadow-lg backdrop-blur"><p role="status" className="text-xs text-muted-foreground">{mutation.isPending ? "Saving..." : isDirty ? "You have unsaved changes" : "All changes saved"}</p><Button type="submit" disabled={mutation.isPending || !isDirty}>{mutation.isPending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{mutation.isPending ? "Saving..." : "Save profile"}</Button></div>
         </form>
-        <ClientVerificationPanel profile={profile} />
+
       </div>
 
       <aside className="space-y-5 lg:sticky lg:top-24">
         <section className="rounded-2xl border bg-card/70 p-5"><h2 className="font-semibold">A trustworthy introduction</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">These four details answer most freelancer questions before they apply.</p><div className="mt-5 h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={completed} aria-valuemin={0} aria-valuemax={4}><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${completed / 4 * 100}%` }} /></div><p className="mt-2 text-xs text-muted-foreground">{completed} of 4 essentials added</p><ul className="mt-5 space-y-3">{essentials.map((item) => <li key={item.label} className="flex items-center gap-2 text-sm"><span className={`flex size-5 items-center justify-center rounded-full border ${item.done ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "text-muted-foreground"}`}>{item.done && <Check className="size-3" />}</span>{item.label}</li>)}</ul></section>
-        <section className="rounded-2xl border border-primary/20 bg-primary/5 p-5"><h2 className="text-sm font-semibold">Trust without oversharing</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Public visitors see your overview, hiring history, and verification badges. Legal details and uploaded documents stay private.</p></section>
+        <section className="rounded-2xl border border-primary/20 bg-primary/5 p-5"><h2 className="text-sm font-semibold">Trust without oversharing</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Other members can see your photo, introduction, hiring history and wallet ownership status.</p></section>
       </aside>
     </div>
   </>;

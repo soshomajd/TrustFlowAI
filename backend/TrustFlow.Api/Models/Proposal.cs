@@ -23,6 +23,10 @@ namespace TrustFlow.Api.Models
         public ProposalStatus Status { get; set; } = ProposalStatus.Pending;
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
+        // The milestones this freelancer is offering to deliver.
+        [JsonIgnore]
+        public ICollection<ProposalMilestone> ProposalMilestones { get; set; } = [];
+
 
 
 

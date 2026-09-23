@@ -10,4 +10,8 @@ public class PublicMilestoneResponse
     public int SequenceNumber { get; set; }
     public DateTimeOffset Deadline { get; set; }
 
+    // True once another freelancer's proposal for this stage was accepted,
+    // so it can no longer be bid for.
+    public bool IsTaken { get; set; }
+
 }

@@ -90,9 +90,9 @@ public sealed class EscrowFlowTests
                 clientAccessToken,
                 new
                 {
-                    ChainId = 11155111,
+                    ChainId = 31337,
                     TokenAddress =
-                        "0x1111111111111111111111111111111111111111"
+                        "0x5FbDB2315678afecb367f032d93F642f64180aa3"
                 }
             );
 
@@ -125,13 +125,13 @@ public sealed class EscrowFlowTests
         );
 
         Assert.Equal(
-            11155111,
+            31337,
             root.GetProperty("chainId")
                 .GetInt64()
         );
 
         Assert.Equal(
-            "0x1111111111111111111111111111111111111111",
+            "0x5fbdb2315678afecb367f032d93f642f64180aa3",
             root.GetProperty("tokenAddress")
                 .GetString()
         );
@@ -177,6 +177,70 @@ public sealed class EscrowFlowTests
 
 
 
+    [Fact]
+    public async Task CreateEscrow_RejectsChainAndTokenThatDifferFromConfiguration()
+    {
+        var clientAccessToken = await RegisterAndLoginAsync(
+            role: "Client",
+            fullName: "Configured Chain Client"
+        );
+        var freelancerAccessToken = await RegisterAndLoginAsync(
+            role: "Freelancer",
+            fullName: "Configured Chain Freelancer"
+        );
+
+        await ConnectWalletAsync(clientAccessToken);
+        await ConnectWalletAsync(freelancerAccessToken);
+
+        var projectId = await CreateInProgressProjectAsync(
+            clientAccessToken,
+            freelancerAccessToken
+        );
+
+        using (var wrongChainRequest = CreateAuthorizedRequest(
+                   HttpMethod.Post,
+                   $"/api/projects/{projectId}/escrow",
+                   clientAccessToken,
+                   new
+                   {
+                       ChainId = 11_155_111,
+                       TokenAddress =
+                           "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+                   }))
+        {
+            var response = await _client.SendAsync(wrongChainRequest);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains(
+                "configured chain",
+                await response.Content.ReadAsStringAsync(),
+                StringComparison.OrdinalIgnoreCase
+            );
+        }
+
+        using var wrongTokenRequest = CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/projects/{projectId}/escrow",
+            clientAccessToken,
+            new
+            {
+                ChainId = 31_337,
+                TokenAddress =
+                    "0x0000000000000000000000000000000000000001"
+            }
+        );
+        var wrongTokenResponse =
+            await _client.SendAsync(wrongTokenRequest);
+
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            wrongTokenResponse.StatusCode
+        );
+        Assert.Contains(
+            "configured payment token",
+            await wrongTokenResponse.Content.ReadAsStringAsync(),
+            StringComparison.OrdinalIgnoreCase
+        );
+    }
     [Fact]
     public async Task Deploy_TransitionsPendingDeploymentToAwaitingFunding_AndPersistsContractDetails()
     {
@@ -519,7 +583,12 @@ public sealed class EscrowFlowTests
                 clientAccessToken
             );
 
-        await _client.SendAsync(syncRequest);
+        var syncResponse = await _client.SendAsync(syncRequest);
+        var contractAddress = await ReadStringPropertyAsync(
+            syncResponse,
+            "contractAddress"
+        );
+        FakeEscrowChainDeployer.MarkWorkStarted(contractAddress);
 
         var milestoneId =
             await GetFirstMilestoneIdAsync(
@@ -600,6 +669,10 @@ public sealed class EscrowFlowTests
                 syncResponse,
                 "contractAddress"
             );
+
+        FakeEscrowChainDeployer.MarkWorkStarted(
+            contractAddress
+        );
 
         var milestoneId =
             await GetFirstMilestoneIdAsync(
@@ -746,6 +819,82 @@ public sealed class EscrowFlowTests
     }
 
     [Fact]
+    public async Task Sync_ReconcilesOnChainCancellation()
+    {
+        var clientAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Client",
+                fullName: "Cancellation Sync Client"
+            );
+
+        var freelancerAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Freelancer",
+                fullName: "Cancellation Sync Freelancer"
+            );
+
+        await ConnectWalletAsync(clientAccessToken);
+        await ConnectWalletAsync(freelancerAccessToken);
+
+        var projectId = await CreateInProgressProjectAsync(
+            clientAccessToken,
+            freelancerAccessToken
+        );
+
+        await CreateEscrowAsync(clientAccessToken, projectId);
+        await DeployEscrowAsync(clientAccessToken, projectId);
+
+        using (var fundingSyncRequest = CreateAuthorizedRequest(
+                   HttpMethod.Post,
+                   $"/api/projects/{projectId}/escrow/sync",
+                   clientAccessToken))
+        {
+            var fundingSyncResponse =
+                await _client.SendAsync(fundingSyncRequest);
+
+            Assert.Equal(
+                "Funded",
+                await ReadStringPropertyAsync(
+                    fundingSyncResponse,
+                    "status"
+                )
+            );
+        }
+
+        using var escrowRequest = CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/projects/{projectId}/escrow",
+            clientAccessToken
+        );
+        var escrowResponse = await _client.SendAsync(escrowRequest);
+        var contractAddress = await ReadStringPropertyAsync(
+            escrowResponse,
+            "contractAddress"
+        );
+
+        FakeEscrowChainDeployer.MarkCancelled(contractAddress);
+
+        using var cancellationSyncRequest = CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/projects/{projectId}/escrow/sync",
+            clientAccessToken
+        );
+        var cancellationSyncResponse =
+            await _client.SendAsync(cancellationSyncRequest);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            cancellationSyncResponse.StatusCode
+        );
+        Assert.Equal(
+            "Cancelled",
+            await ReadStringPropertyAsync(
+                cancellationSyncResponse,
+                "status"
+            )
+        );
+    }
+    [Fact]
     public async Task CreateEscrow_ReturnsConflict_WhenClientWalletIsNotVerified()
     {
         var clientAccessToken =
@@ -773,9 +922,9 @@ public sealed class EscrowFlowTests
                 clientAccessToken,
                 new
                 {
-                    ChainId = 11155111,
+                    ChainId = 31337,
                     TokenAddress =
-                        "0x1111111111111111111111111111111111111111"
+                        "0x5FbDB2315678afecb367f032d93F642f64180aa3"
                 }
             );
 
@@ -830,9 +979,9 @@ public sealed class EscrowFlowTests
                 clientAccessToken,
                 new
                 {
-                    ChainId = 11155111,
+                    ChainId = 31337,
                     TokenAddress =
-                        "0x1111111111111111111111111111111111111111"
+                        "0x5FbDB2315678afecb367f032d93F642f64180aa3"
                 }
             );
 

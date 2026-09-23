@@ -62,6 +62,9 @@ public sealed class CustomWebApplicationFactory
                 ["Blockchain:RpcUrl"] =
                     "http://127.0.0.1:8545",
 
+                ["Blockchain:TokenAddress"] =
+                    "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+
                 ["Blockchain:DeployerPrivateKey"] =
                     // Well-known local Hardhat/Anvil test account #0 key.
                     // Not a real secret; used only so config

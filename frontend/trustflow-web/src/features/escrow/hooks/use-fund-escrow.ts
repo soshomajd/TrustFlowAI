@@ -34,6 +34,7 @@ export function useFundEscrow(projectId: string) {
         address: tokenAddress,
         abi: erc20Abi,
         functionName: "decimals",
+        chainId: escrow.chainId,
       });
 
       const amount = toBaseUnits(escrow.totalAmount, decimals);
@@ -43,17 +44,25 @@ export function useFundEscrow(projectId: string) {
         abi: erc20Abi,
         functionName: "approve",
         args: [contractAddress, amount],
+        chainId: escrow.chainId,
       });
 
-      await waitForTransactionReceipt(wagmiConfig, { hash: approveHash });
+      await waitForTransactionReceipt(wagmiConfig, {
+        hash: approveHash,
+        chainId: escrow.chainId,
+      });
 
       const fundHash = await writeContract(wagmiConfig, {
         address: contractAddress,
         abi: escrowAbi,
         functionName: "fund",
+        chainId: escrow.chainId,
       });
 
-      await waitForTransactionReceipt(wagmiConfig, { hash: fundHash });
+      await waitForTransactionReceipt(wagmiConfig, {
+        hash: fundHash,
+        chainId: escrow.chainId,
+      });
 
       return syncEscrow(normalizedProjectId);
     },

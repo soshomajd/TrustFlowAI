@@ -106,18 +106,25 @@ public sealed class FreelancersController(AppDbContext dbContext) : ControllerBa
             .SingleOrDefaultAsync(cancellationToken);
 
         var completedQuery = dbContext.Projects.AsNoTracking()
-            .Where(item => item.FreelancerId == userId && item.Status == ProjectStatus.Completed);
+            .Where(item => item.Milestones.Any(milestone => milestone.FreelancerId == userId) && item.Status == ProjectStatus.Completed);
 
         var completedCount = await completedQuery.CountAsync(cancellationToken);
         var completedProjects = await completedQuery
-            .OrderByDescending(item => item.Escrow == null ? null : item.Escrow.CompletedAt)
+            // Order by when this freelancer's own escrow finished.
+            .OrderByDescending(item => item.Escrows
+                .Where(escrow => escrow.FreelancerId == userId)
+                .Select(escrow => escrow.CompletedAt)
+                .FirstOrDefault())
             .ThenByDescending(item => item.CreatedAt).ThenBy(item => item.Id)
             .Take(10)
             .Select(item => new CompletedFreelancerProjectResponse
             {
                 Title = item.Title,
                 MilestoneCount = item.Milestones.Count,
-                CompletedAt = item.Escrow == null ? null : item.Escrow.CompletedAt
+                CompletedAt = item.Escrows
+                    .Where(escrow => escrow.FreelancerId == userId)
+                    .Select(escrow => escrow.CompletedAt)
+                    .FirstOrDefault()
             }).ToArrayAsync(cancellationToken);
 
         return Ok(new FreelancerProfileResponse

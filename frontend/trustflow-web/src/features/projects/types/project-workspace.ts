@@ -23,6 +23,7 @@ export type ProjectWorkspace = {
   deadline: string;
   status: ProjectStatus;
   createdAt: string;
+  activeProposalCount: number;
 
   milestones: ProjectWorkspaceMilestone[];
 };

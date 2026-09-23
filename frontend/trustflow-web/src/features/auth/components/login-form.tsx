@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { GoogleSignInButton } from "@/features/auth/components/google-sign-in-button";
 import { useLogin } from "@/features/auth/hooks/use-login";
 import { loginSchema, type LoginFormValues, } from "@/features/auth/schemas/login-schema";
 
@@ -158,6 +159,8 @@ export function LoginForm() {
                             </Link>
                         </p>
                     </form>
+
+                    <GoogleSignInButton />
                 </CardContent>
             </Card>
         </motion.div>

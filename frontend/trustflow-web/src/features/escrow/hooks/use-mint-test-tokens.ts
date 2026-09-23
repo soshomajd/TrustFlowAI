@@ -11,10 +11,13 @@ import {
 } from "wagmi/actions";
 
 import {
-  LOCAL_HARDHAT_CHAIN_ID,
-  LOCAL_MOCK_USDC_ADDRESS,
-  MIN_LOCAL_GAS_BALANCE,
-} from "@/features/escrow/lib/local-test-chain";
+  ACTIVE_CHAIN_ID,
+  ACTIVE_CHAIN_NAME,
+  ACTIVE_TOKEN_ADDRESS,
+  MIN_GAS_BALANCE,
+  TEST_TOKEN_MINT_ENABLED,
+  isLocalHardhat,
+} from "@/features/escrow/lib/network-config";
 import { addLocalTestGas } from "@/features/wallet/api/wallet-api";
 import { getWalletErrorMessage } from "@/lib/wallet/get-wallet-error-message";
 import { wagmiConfig } from "@/lib/wallet/wagmi-config";
@@ -32,15 +35,14 @@ const mintAbi = [
   },
 ] as const;
 
-type GetLocalTestFundsRequest = {
+type GetTestFundsRequest = {
   tokenAddress: string;
   tokenShortfall: bigint;
   expectedWalletAddress: string;
 };
 
-// MockUSDC's mint() is public with no access control and is explicitly a
-// local/test-only contract, so this only ever targets that dev token -
-// it is not something a real ERC20 would ever support.
+// This action is only for the configured, valueless MockUSDC contract.
+// It is disabled unless the environment explicitly enables test minting.
 export function useMintTestTokens() {
   return useMutation({
     mutationKey: ["escrow", "mint-test-tokens"],
@@ -49,16 +51,15 @@ export function useMintTestTokens() {
       tokenAddress,
       tokenShortfall,
       expectedWalletAddress,
-    }: GetLocalTestFundsRequest) => {
-      if (process.env.NODE_ENV !== "development") {
-        throw new Error("The test faucet is only available in local development.");
+    }: GetTestFundsRequest) => {
+      if (!TEST_TOKEN_MINT_ENABLED) {
+        throw new Error("Test token minting is disabled for this environment.");
       }
 
       if (
-        tokenAddress.toLowerCase() !==
-        LOCAL_MOCK_USDC_ADDRESS.toLowerCase()
+        tokenAddress.toLowerCase() !== ACTIVE_TOKEN_ADDRESS.toLowerCase()
       ) {
-        throw new Error("The test faucet only supports the local Mock USDC token.");
+        throw new Error("The test faucet only supports the configured test token.");
       }
 
       const connection = getConnection(wagmiConfig);
@@ -74,17 +75,23 @@ export function useMintTestTokens() {
         throw new Error("Select the wallet verified for this account.");
       }
 
-      if (connection.chainId !== LOCAL_HARDHAT_CHAIN_ID) {
-        throw new Error("Switch your wallet to Localhost 31337 first.");
+      if (connection.chainId !== ACTIVE_CHAIN_ID) {
+        throw new Error(`Switch your wallet to ${ACTIVE_CHAIN_NAME} first.`);
       }
 
       const gasBalance = await getBalance(wagmiConfig, {
         address: connection.address,
-        chainId: LOCAL_HARDHAT_CHAIN_ID,
+        chainId: ACTIVE_CHAIN_ID,
       });
 
-      if (gasBalance.value < MIN_LOCAL_GAS_BALANCE) {
-        await addLocalTestGas();
+      if (gasBalance.value < MIN_GAS_BALANCE) {
+        if (isLocalHardhat) {
+          await addLocalTestGas();
+        } else {
+          throw new Error(
+            `Get Sepolia ETH from a faucet before minting test tokens.`,
+          );
+        }
       }
 
       if (tokenShortfall <= 0n) {
@@ -96,15 +103,19 @@ export function useMintTestTokens() {
         abi: mintAbi,
         functionName: "mint",
         args: [connection.address, tokenShortfall],
+        chainId: ACTIVE_CHAIN_ID,
       });
 
-      await waitForTransactionReceipt(wagmiConfig, { hash });
+      await waitForTransactionReceipt(wagmiConfig, {
+        hash,
+        chainId: ACTIVE_CHAIN_ID,
+      });
 
       return { mintedAmount: tokenShortfall };
     },
 
     onSuccess: () => {
-      toast.success("Local test USDC and gas are ready.");
+      toast.success("Test tokens are ready.");
     },
 
     onError: (error) => {

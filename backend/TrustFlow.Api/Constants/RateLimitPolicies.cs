@@ -12,6 +12,6 @@ public static class RateLimitPolicies
         "public-marketplace";
 
     public const string ResumeUpload = "resume-upload";
-    public const string IdentitySubmission = "identity-submission";
+    public const string ProfilePhotoUpload = "profile-photo-upload";
     public const string MilestoneDelivery = "milestone-delivery";
 }

@@ -87,16 +87,35 @@ namespace TrustFlow.Api.Controllers
 
             if (!string.IsNullOrWhiteSpace(request.Search))
             {
-                var searchTerm = request.Search.Trim();
+                // A freelancer searching for a skill often finds it only in
+                // the delivery stages, so milestones are searched too. The
+                // `%` and `_` wildcards are escaped so a term such as
+                // "100%" matches literally instead of everything.
+                var searchPattern =
+                    $"%{EscapeLikePattern(request.Search.Trim())}%";
 
                 query = query.Where(project =>
                     EF.Functions.ILike(
                         project.Title,
-                        $"%{searchTerm}%"
+                        searchPattern,
+                        LikeEscapeCharacter
                     ) ||
                     EF.Functions.ILike(
                         project.Description,
-                        $"%{searchTerm}%"
+                        searchPattern,
+                        LikeEscapeCharacter
+                    ) ||
+                    project.Milestones.Any(milestone =>
+                        EF.Functions.ILike(
+                            milestone.Title,
+                            searchPattern,
+                            LikeEscapeCharacter
+                        ) ||
+                        EF.Functions.ILike(
+                            milestone.Description,
+                            searchPattern,
+                            LikeEscapeCharacter
+                        )
                     )
                 );
             }
@@ -285,6 +304,9 @@ namespace TrustFlow.Api.Controllers
                                     SequenceNumber =
                                         milestone.SequenceNumber,
 
+                                    IsTaken =
+                                        milestone.FreelancerId != null,
+
                                     Deadline =
                                         milestone.Deadline
                                 })
@@ -353,6 +375,33 @@ namespace TrustFlow.Api.Controllers
                             message =
                                 "Only an open project can be updated.",
                             currentProjectStatus = project.Status
+                        });
+                    }
+
+                    // Freelancers write proposals against the scope, price
+                    // and deadline they can see. Once the first one arrives,
+                    // changing or removing the project would pull the ground
+                    // out from under work they already did.
+                    // Rejected and withdrawn proposals no longer bind
+                    // anyone, so they release the project again.
+                    var hasProposals = await dbContext.Proposals
+                        .AnyAsync(
+                            proposal =>
+                                proposal.ProjectId == id &&
+                                (proposal.Status ==
+                                     ProposalStatus.Pending ||
+                                 proposal.Status ==
+                                     ProposalStatus.Accepted),
+                            cancellationToken
+                        );
+
+                    if (hasProposals)
+                    {
+                        return Conflict(new
+                        {
+                            message =
+                                "This project can no longer be edited because a freelancer has already sent a proposal for it.",
+                            hasProposals = true
                         });
                     }
 
@@ -502,6 +551,33 @@ namespace TrustFlow.Api.Controllers
                         });
                     }
 
+                    // Freelancers write proposals against the scope, price
+                    // and deadline they can see. Once the first one arrives,
+                    // changing or removing the project would pull the ground
+                    // out from under work they already did.
+                    // Rejected and withdrawn proposals no longer bind
+                    // anyone, so they release the project again.
+                    var hasProposals = await dbContext.Proposals
+                        .AnyAsync(
+                            proposal =>
+                                proposal.ProjectId == id &&
+                                (proposal.Status ==
+                                     ProposalStatus.Pending ||
+                                 proposal.Status ==
+                                     ProposalStatus.Accepted),
+                            cancellationToken
+                        );
+
+                    if (hasProposals)
+                    {
+                        return Conflict(new
+                        {
+                            message =
+                                "This project can no longer be deleted because a freelancer has already sent a proposal for it.",
+                            hasProposals = true
+                        });
+                    }
+
                     dbContext.Projects.Remove(project);
 
                     await dbContext.SaveChangesAsync(
@@ -568,7 +644,8 @@ namespace TrustFlow.Api.Controllers
             var query = dbContext.Projects
                 .AsNoTracking()
                 .Where(project =>
-                    project.FreelancerId == freelancerId);
+                    project.Milestones.Any(milestone =>
+                        milestone.FreelancerId == freelancerId));
 
             var totalItems = await query.CountAsync(
                 cancellationToken
@@ -672,7 +749,8 @@ namespace TrustFlow.Api.Controllers
                     project.Id == id &&
                     (
                         project.ClientId == userId ||
-                        project.FreelancerId == userId
+                        project.Milestones.Any(milestone =>
+                            milestone.FreelancerId == userId)
                     ))
                 .Select(project =>
                     new ProjectWorkspaceResponse
@@ -705,6 +783,13 @@ namespace TrustFlow.Api.Controllers
                         Status = project.Status,
 
                         CreatedAt = project.CreatedAt,
+
+                        ActiveProposalCount =
+                            project.Proposals.Count(proposal =>
+                                proposal.Status ==
+                                    ProposalStatus.Pending ||
+                                proposal.Status ==
+                                    ProposalStatus.Accepted),
 
                         Milestones = project.Milestones
                             .OrderBy(milestone =>
@@ -1010,5 +1095,15 @@ namespace TrustFlow.Api.Controllers
 
             return Ok(response);
         }
+
+        private const string LikeEscapeCharacter = "\\";
+
+        // Without this, a search for "50%" or "front_end" would be read as
+        // LIKE wildcards and match far more than the freelancer asked for.
+        private static string EscapeLikePattern(string value) =>
+            value
+                .Replace("\\", "\\\\")
+                .Replace("%", "\\%")
+                .Replace("_", "\\_");
     }
 }

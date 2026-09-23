@@ -176,13 +176,56 @@ public class ProposalsController(AppDbContext dbContext)
                     });
                 }
 
+                var requestedMilestoneIds = request.MilestoneIds
+                    .Distinct()
+                    .ToList();
+
+                var chosenMilestones = await dbContext.Milestones
+                    .AsNoTracking()
+                    .Where(milestone =>
+                        milestone.ProjectId == projectId &&
+                        requestedMilestoneIds.Contains(milestone.Id))
+                    .Select(milestone => new
+                    {
+                        milestone.Id,
+                        milestone.Amount,
+                        milestone.FreelancerId
+                    })
+                    .ToListAsync(cancellationToken);
+
+                if (chosenMilestones.Count !=
+                    requestedMilestoneIds.Count)
+                {
+                    return BadRequest(new
+                    {
+                        message =
+                            "One or more of the chosen milestones do not belong to this project."
+                    });
+                }
+
+                // A milestone already promised to someone else is not
+                // available to bid for.
+                if (chosenMilestones.Any(milestone =>
+                        milestone.FreelancerId.HasValue))
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "One or more of the chosen milestones are already assigned to another freelancer."
+                    });
+                }
+
                 var proposal = new Proposal
                 {
                     ProjectId = projectId,
                     FreelancerId = freelancerId,
                     CoverLetter =
                         request.CoverLetter.Trim(),
-                    BidAmount = request.BidAmount,
+                    // Fixed price set by the client: this records what the
+                    // chosen milestones pay, not an offer of the
+                    // freelancer's own.
+                    BidAmount = chosenMilestones
+                        .Sum(milestone => milestone.Amount),
                     EstimatedDays =
                         request.EstimatedDays,
                     Status = ProposalStatus.Pending,
@@ -191,6 +234,17 @@ public class ProposalsController(AppDbContext dbContext)
                 };
 
                 dbContext.Proposals.Add(proposal);
+
+                foreach (var milestone in chosenMilestones)
+                {
+                    dbContext.ProposalMilestones.Add(
+                        new ProposalMilestone
+                        {
+                            ProposalId = proposal.Id,
+                            MilestoneId = milestone.Id
+                        }
+                    );
+                }
 
                 await dbContext.SaveChangesAsync(
                     cancellationToken
@@ -619,12 +673,16 @@ public class ProposalsController(AppDbContext dbContext)
                     });
                 }
 
-                if (project.Status != ProjectStatus.Open)
+                // A project keeps accepting proposals for the milestones
+                // nobody has taken yet, so going InProgress after the first
+                // acceptance must not close it to the remaining stages.
+                if (project.Status != ProjectStatus.Open &&
+                    project.Status != ProjectStatus.InProgress)
                 {
                     return Conflict(new
                     {
                         message =
-                            "This project already has an assigned freelancer.",
+                            "Proposals can no longer be accepted for this project.",
                         currentStatus = project.Status
                     });
                 }
@@ -702,35 +760,112 @@ public class ProposalsController(AppDbContext dbContext)
                     });
                 }
 
-                if (proposal.BidAmount != project.Budget)
+                var claimedMilestoneIds =
+                    await dbContext.ProposalMilestones
+                        .AsNoTracking()
+                        .Where(link => link.ProposalId == proposalId)
+                        .Select(link => link.MilestoneId)
+                        .ToListAsync(cancellationToken);
+
+                if (claimedMilestoneIds.Count == 0)
                 {
                     return Conflict(new
                     {
                         message =
-                            "This proposal cannot be accepted because its bid amount does not match the current project budget. Update the project budget and milestones to the agreed amount before accepting.",
-                        projectBudget = project.Budget,
-                        proposalBidAmount = proposal.BidAmount
+                            "This proposal does not name any milestone to deliver."
+                    });
+                }
+
+                // Another proposal may have claimed one of these in the
+                // meantime, so re-check inside the transaction.
+                var alreadyAssigned = await dbContext.Milestones
+                    .AsNoTracking()
+                    .AnyAsync(
+                        milestone =>
+                            claimedMilestoneIds.Contains(milestone.Id) &&
+                            milestone.FreelancerId != null,
+                        cancellationToken
+                    );
+
+                if (alreadyAssigned)
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "One or more milestones in this proposal have already been given to another freelancer."
+                    });
+                }
+
+                // The freelancer agreed to what their chosen milestones
+                // paid when they applied. If the client changed those
+                // amounts afterwards, the freelancer has to see and accept
+                // the new figure, so this is a rejection rather than a
+                // silent re-price.
+                var currentClaimedTotal = await dbContext.Milestones
+                    .Where(milestone =>
+                        claimedMilestoneIds.Contains(milestone.Id))
+                    .SumAsync(
+                        milestone => (decimal?)milestone.Amount,
+                        cancellationToken
+                    ) ?? 0m;
+
+                if (proposal.BidAmount != currentClaimedTotal)
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "The price of these milestones changed after this freelancer applied, so they have not agreed to the current amount. Restore the amounts they applied at, or ask them to apply again.",
+                        currentTotal = currentClaimedTotal,
+                        agreedPrice = proposal.BidAmount
                     });
                 }
 
                 proposal.Status = ProposalStatus.Accepted;
-                project.FreelancerId = proposal.FreelancerId;
                 project.Status = ProjectStatus.InProgress;
 
-                await dbContext.Proposals
-                    .Where(otherProposal =>
-                        otherProposal.ProjectId == projectId &&
-                        otherProposal.Id != proposalId &&
-                        otherProposal.Status ==
-                            ProposalStatus.Pending)
+                await dbContext.Milestones
+                    .Where(milestone =>
+                        claimedMilestoneIds.Contains(milestone.Id))
                     .ExecuteUpdateAsync(
                         setters => setters.SetProperty(
-                            otherProposal =>
-                                otherProposal.Status,
-                            ProposalStatus.Rejected
+                            milestone => milestone.FreelancerId,
+                            proposal.FreelancerId
                         ),
                         cancellationToken
                     );
+
+                // Other freelancers may still be needed for the milestones
+                // this proposal did not take, so their proposals stay open.
+                // Only proposals that now overlap an assigned milestone are
+                // rejected.
+                var conflictingProposalIds =
+                    await dbContext.ProposalMilestones
+                        .AsNoTracking()
+                        .Where(link =>
+                            claimedMilestoneIds.Contains(
+                                link.MilestoneId) &&
+                            link.ProposalId != proposalId)
+                        .Select(link => link.ProposalId)
+                        .Distinct()
+                        .ToListAsync(cancellationToken);
+
+                if (conflictingProposalIds.Count > 0)
+                {
+                    await dbContext.Proposals
+                        .Where(otherProposal =>
+                            conflictingProposalIds.Contains(
+                                otherProposal.Id) &&
+                            otherProposal.Status ==
+                                ProposalStatus.Pending)
+                        .ExecuteUpdateAsync(
+                            setters => setters.SetProperty(
+                                otherProposal =>
+                                    otherProposal.Status,
+                                ProposalStatus.Rejected
+                            ),
+                            cancellationToken
+                        );
+                }
 
                 await dbContext.SaveChangesAsync(
                     cancellationToken

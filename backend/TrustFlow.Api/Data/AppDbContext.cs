@@ -30,12 +30,16 @@ public class AppDbContext(
     public DbSet<Escrow> Escrows =>
         Set<Escrow>();
 
+    public DbSet<ProposalMilestone> ProposalMilestones =>
+        Set<ProposalMilestone>();
+
     public DbSet<FreelancerProfile> FreelancerProfiles => Set<FreelancerProfile>();
     public DbSet<FreelancerResume> FreelancerResumes => Set<FreelancerResume>();
     public DbSet<MilestoneSubmission> MilestoneSubmissions => Set<MilestoneSubmission>();
     public DbSet<MilestoneSubmissionAttachment> MilestoneSubmissionAttachments => Set<MilestoneSubmissionAttachment>();
     public DbSet<ClientProfile> ClientProfiles => Set<ClientProfile>();
-    public DbSet<ClientIdentityVerification> ClientIdentityVerifications => Set<ClientIdentityVerification>();
+
+    public DbSet<ProfilePhoto> ProfilePhotos => Set<ProfilePhoto>();
 
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
@@ -44,19 +48,25 @@ public class AppDbContext(
 
 
         base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<ProfilePhoto>(photo =>
+        {
+            photo.HasKey(item => item.UserId);
+            photo.HasOne<ApplicationUser>().WithOne().HasForeignKey<ProfilePhoto>(item => item.UserId).OnDelete(DeleteBehavior.Cascade);
+            photo.Property(item => item.Content).HasColumnType("bytea");
+        });
 
         modelBuilder.HasPostgresExtension("pg_trgm");
 
         ConfigureProjects(modelBuilder);
         ConfigureMilestones(modelBuilder);
         ConfigureProposals(modelBuilder);
+        ConfigureProposalMilestones(modelBuilder);
         ConfigureEscrows(modelBuilder);
         ConfigureRefreshTokens(modelBuilder);
         ConfigureWalletIdentity(modelBuilder);
         ConfigureFreelancerProfiles(modelBuilder);
         ConfigureFreelancerResumes(modelBuilder);
         ConfigureClientProfiles(modelBuilder);
-        ConfigureClientIdentityVerifications(modelBuilder);
         ConfigureMilestoneSubmissions(modelBuilder);
     }
 
@@ -113,32 +123,6 @@ public class AppDbContext(
                 table.HasCheckConstraint("CK_ClientProfiles_AccountType", "\"AccountType\" IN ('Individual', 'Company')");
                 table.HasCheckConstraint("CK_ClientProfiles_CompanySize", "\"CompanySize\" IN ('NotSpecified', 'JustMe', '2-10', '11-50', '51-200', '201Plus')");
             });
-        });
-    }
-
-    private static void ConfigureClientIdentityVerifications(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<ClientIdentityVerification>(verification =>
-        {
-            verification.HasKey(item => item.ClientId);
-            verification.HasOne<ApplicationUser>().WithOne()
-                .HasForeignKey<ClientIdentityVerification>(item => item.ClientId)
-                .OnDelete(DeleteBehavior.Cascade);
-            verification.HasOne<ApplicationUser>().WithMany()
-                .HasForeignKey(item => item.ReviewedByUserId)
-                .OnDelete(DeleteBehavior.SetNull);
-            verification.Property(item => item.AccountType).HasMaxLength(20);
-            verification.Property(item => item.CountryCode).HasMaxLength(2);
-            verification.Property(item => item.DocumentSha256).HasMaxLength(64);
-            verification.Property(item => item.Status).HasMaxLength(20);
-            verification.Property(item => item.RejectionReason).HasMaxLength(300);
-            verification.ToTable(table =>
-            {
-                table.HasCheckConstraint("CK_ClientIdentityVerifications_AccountType", "\"AccountType\" IN ('Individual', 'Company')");
-                table.HasCheckConstraint("CK_ClientIdentityVerifications_Status", "\"Status\" IN ('Pending', 'Verified', 'Rejected')");
-                table.HasCheckConstraint("CK_ClientIdentityVerifications_PendingDocument", "\"Status\" <> 'Pending' OR (\"DocumentContentProtected\" IS NOT NULL AND \"DocumentFileSize\" BETWEEN 1 AND 5242880)");
-            });
-            verification.HasIndex(item => new { item.Status, item.SubmittedAt });
         });
     }
 
@@ -307,13 +291,21 @@ public class AppDbContext(
                 .HasMaxLength(66);
 
             escrow.HasOne(item => item.Project)
-                .WithOne(project => project.Escrow)
-                .HasForeignKey<Escrow>(
-                    item => item.ProjectId
-                )
+                .WithMany(project => project.Escrows)
+                .HasForeignKey(item => item.ProjectId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            escrow.HasIndex(item => item.ProjectId)
+            escrow.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(item => item.FreelancerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // One escrow per freelancer per project, not one per project.
+            escrow.HasIndex(item => new
+            {
+                item.ProjectId,
+                item.FreelancerId
+            })
                 .IsUnique();
 
             escrow.HasIndex(item =>
@@ -466,6 +458,11 @@ public class AppDbContext(
             milestone.Property(item => item.Status)
                 .HasConversion<string>();
 
+            milestone.HasOne(item => item.Freelancer)
+                .WithMany()
+                .HasForeignKey(item => item.FreelancerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             milestone.HasOne(item => item.Project)
                 .WithMany(project => project.Milestones)
                 .HasForeignKey(item => item.ProjectId)
@@ -490,6 +487,29 @@ public class AppDbContext(
                     "\"SequenceNumber\" > 0"
                 );
             });
+        });
+    }
+
+    private static void ConfigureProposalMilestones(
+        ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ProposalMilestone>(link =>
+        {
+            link.HasKey(item => new
+            {
+                item.ProposalId,
+                item.MilestoneId
+            });
+
+            link.HasOne(item => item.Proposal)
+                .WithMany(proposal => proposal.ProposalMilestones)
+                .HasForeignKey(item => item.ProposalId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            link.HasOne(item => item.Milestone)
+                .WithMany(milestone => milestone.ProposalMilestones)
+                .HasForeignKey(item => item.MilestoneId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 

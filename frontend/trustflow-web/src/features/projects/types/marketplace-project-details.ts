@@ -7,6 +7,7 @@ export type PublicMarketplaceMilestone = {
   amount: number;
   sequenceNumber: number;
   deadline: string;
+  isTaken: boolean;
 };
 
 export type MarketplaceProjectDetails = {

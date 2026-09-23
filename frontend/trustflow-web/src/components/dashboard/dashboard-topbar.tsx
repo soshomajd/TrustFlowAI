@@ -1,4 +1,6 @@
 "use client";
+import { NotificationBell } from "@/features/notifications/components/notification-bell";
+import { UserAvatar } from "@/features/profile-photos/components/user-avatar";
 
 import {
     Menu,
@@ -101,28 +103,10 @@ export function DashboardTopbar() {
             <div className="flex items-center gap-3">
                 <WalletConnectButton />
 
-                <div className="flex size-9 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-sm font-semibold text-electric">
-                    {getInitials(
-                        user?.fullName,
-                    )}
-                </div>
+                <NotificationBell />
+
+                <UserAvatar userId={user?.id} name={user?.fullName} />
             </div>
         </header>
     );
-}
-
-function getInitials(
-    fullName?: string,
-) {
-    if (!fullName) {
-        return "TF";
-    }
-
-    return fullName
-        .trim()
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((part) => part[0])
-        .join("")
-        .toUpperCase();
 }

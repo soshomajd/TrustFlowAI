@@ -30,6 +30,7 @@ type ProjectMilestonesSectionProps = {
     projectBudget: number;
     projectDeadline: string;
     projectStatus: ProjectStatus;
+    hasProposals: boolean;
 };
 
 
@@ -38,6 +39,7 @@ export function ProjectMilestonesSection({
     projectBudget,
     projectDeadline,
     projectStatus,
+    hasProposals,
 }: ProjectMilestonesSectionProps) {
     const milestonesQuery =
         useProjectMilestones(projectId);
@@ -48,6 +50,7 @@ export function ProjectMilestonesSection({
     const escrowContractAddress =
         escrowQuery.data?.contractAddress ??
         null;
+    const escrowChainId = escrowQuery.data?.chainId ?? null;
 
     if (milestonesQuery.isLoading) {
         return (
@@ -133,6 +136,7 @@ export function ProjectMilestonesSection({
                             </div>
                         )}
 
+                        {!hasProposals && (
                         <CreateMilestoneDialog
                             projectId={projectId}
                             projectDeadline={
@@ -148,6 +152,7 @@ export function ProjectMilestonesSection({
                                 existingSequenceNumbers
                             }
                         />
+                        )}
                     </div>
                 </header>
 
@@ -164,6 +169,9 @@ export function ProjectMilestonesSection({
                                         projectStatus={
                                             projectStatus
                                         }
+                                        hasProposals={
+                                            hasProposals
+                                        }
                                         projectDeadline={
                                             projectDeadline
                                         }
@@ -176,6 +184,7 @@ export function ProjectMilestonesSection({
                                         escrowContractAddress={
                                             escrowContractAddress
                                         }
+                                        escrowChainId={escrowChainId}
                                         milestone={milestone}
                                     />
                                 </StaggerItem>
@@ -191,18 +200,22 @@ export function ProjectMilestonesSection({
 function MilestoneCard({
     projectId,
     projectStatus,
+    hasProposals,
     projectDeadline,
     remainingBudget,
     existingSequenceNumbers,
     escrowContractAddress,
+    escrowChainId,
     milestone,
 }: {
     projectId: string;
     projectStatus: ProjectStatus;
+    hasProposals: boolean;
     projectDeadline: string;
     remainingBudget: number;
     existingSequenceNumbers: number[];
     escrowContractAddress: string | null;
+    escrowChainId: number | null;
     milestone: ProjectMilestone;
 }) {
     const onChainIndex =
@@ -212,8 +225,11 @@ function MilestoneCard({
                 milestone.sequenceNumber,
         ).length;
 
+    // Milestones carry the scope, schedule and payment split a freelancer
+    // applied to, so they freeze with the rest of the project.
     const canManageMilestone =
         projectStatus === "Open" &&
+        !hasProposals &&
         milestone.status === "Pending";
     return (
         <article className="group rounded-xl border bg-background/40 p-4 transition hover:border-primary/40 hover:bg-background/70 sm:p-5">
@@ -288,6 +304,7 @@ function MilestoneCard({
                     contractAddress={
                         escrowContractAddress
                     }
+                    chainId={escrowChainId}
                     onChainIndex={onChainIndex}
                 />
             </div>

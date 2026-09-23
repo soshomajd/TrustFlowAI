@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
+using SkiaSharp;
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -25,7 +26,6 @@ public sealed class ClientProfileTests(CustomWebApplicationFactory factory)
         var initial = await ReadProfileAsync(client.Client, "me");
         Assert.Equal("Individual", initial.AccountType);
         Assert.Equal(client.Id, initial.UserId);
-        Assert.False(initial.IdentityVerified);
 
         var update = new
         {
@@ -42,11 +42,10 @@ public sealed class ClientProfileTests(CustomWebApplicationFactory factory)
         Assert.Equal("Northstar Labs", viewed.DisplayName);
         Assert.Equal("Northstar Labs", viewed.CompanyName);
         Assert.Equal("Software", viewed.Industry);
-        Assert.False(viewed.IdentityVerified);
         Assert.Equal(0, viewed.ProjectsPosted);
-        Assert.Equal("NotSubmitted", viewed.VerificationStatus);
 
         var ownerBody = await client.Client.GetStringAsync("/api/clients/me/profile");
+        Assert.DoesNotContain("identityVerified", ownerBody, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("legalName", ownerBody, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("registrationNumber", ownerBody, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("documentSha", ownerBody, StringComparison.OrdinalIgnoreCase);
@@ -68,155 +67,101 @@ public sealed class ClientProfileTests(CustomWebApplicationFactory factory)
             (await client.Client.GetAsync($"/api/clients/{freelancer.Id}/profile")).StatusCode);
     }
 
-    [Fact]
-    public async Task Verification_CompanySubmitAdminReviewAndApprove_PurgesSensitiveData()
+
+    [Theory]
+    [InlineData("Client")]
+    [InlineData("Freelancer")]
+    public async Task Photo_UploadReplaceReadAndDelete_AreBoundToOwner(string role)
     {
-        using var client = await CreateAccountAsync("Client");
-        using var freelancer = await CreateAccountAsync("Freelancer");
-        using var admin = await CreateAdminAsync();
-        var profileSave = await client.Client.PutAsJsonAsync("/api/clients/me/profile", new
+        using var owner = await CreateAccountAsync(role);
+        using var other = await CreateAccountAsync("Client");
+        using var anonymous = NewClient();
+        var original = MakePhoto();
+        var upload = await UploadPhoto(owner.Client, original, x: "100");
+        Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
+        var saved = (await upload.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("image").GetString()!;
+        var bytes = Convert.FromBase64String(saved.Split(',')[1]);
+        using (var decoded = SKBitmap.Decode(bytes))
         {
-            AccountType = "Company", CompanyName = "Acme Studio", Overview = "Product team",
-            Industry = "Design", Location = "Berlin", Website = "https://example.com", CompanySize = "2-10"
-        });
-        profileSave.EnsureSuccessStatusCode();
-
-        var pdf = BuildPdf("Business registration");
-        var submit = await SubmitVerificationAsync(client.Client, pdf, "Acme Studio GmbH", "DE", "HRB-12345");
-        Assert.Equal(HttpStatusCode.OK, submit.StatusCode);
-        Assert.Equal("Pending", (await ReadProfileAsync(client.Client, "me")).VerificationStatus);
-        var publicProfile = await ReadProfileAsync(freelancer.Client, client.Id.ToString());
-        Assert.False(publicProfile.IdentityVerified);
-        Assert.Equal("NotSubmitted", publicProfile.VerificationStatus);
-
-        var queue = await admin.Client.GetFromJsonAsync<ClientVerificationAdminResponse[]>(
-            "/api/admin/client-verifications");
-        var item = Assert.Single(queue!, value => value.ClientId == client.Id);
-        Assert.Equal("Acme Studio GmbH", item.LegalName);
-        Assert.Equal("HRB-12345", item.RegistrationNumber);
-        Assert.Equal("DE", item.CountryCode);
-
-        var document = await admin.Client.GetAsync($"/api/admin/client-verifications/{client.Id}/document");
-        Assert.Equal(pdf, await document.Content.ReadAsByteArrayAsync());
-        Assert.Equal("attachment", document.Content.Headers.ContentDisposition?.DispositionType);
-
-        var decision = await admin.Client.PostAsJsonAsync(
-            $"/api/admin/client-verifications/{client.Id}/decision", new { Approve = true, Reason = "" });
-        Assert.Equal(HttpStatusCode.NoContent, decision.StatusCode);
-        var verified = await ReadProfileAsync(freelancer.Client, client.Id.ToString());
-        Assert.True(verified.IdentityVerified);
-        Assert.Equal("Verified", verified.VerificationStatus);
-        Assert.NotNull(verified.IdentityVerifiedAt);
-        Assert.Equal(HttpStatusCode.NotFound,
-            (await admin.Client.GetAsync($"/api/admin/client-verifications/{client.Id}/document")).StatusCode);
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var stored = await db.ClientIdentityVerifications.AsNoTracking().SingleAsync(value => value.ClientId == client.Id);
-        Assert.Null(stored.DocumentContentProtected);
-        Assert.Null(stored.LegalNameProtected);
-        Assert.Null(stored.RegistrationNumberProtected);
-        Assert.NotEmpty(stored.DocumentSha256);
+            Assert.Equal(512, decoded.Width);
+            Assert.Equal(512, decoded.Height);
+            Assert.True(decoded.GetPixel(256, 256).Blue > 240); // Right-hand crop selected.
+        }
+        Assert.NotEqual(original, bytes);
+        Assert.Equal(saved, (await other.Client.GetFromJsonAsync<JsonElement>($"/api/users/{owner.Id}/photo")).GetProperty("image").GetString());
+        Assert.Equal(JsonValueKind.Null, (await other.Client.GetFromJsonAsync<JsonElement>($"/api/users/{other.Id}/photo")).GetProperty("image").ValueKind);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync($"/api/users/{owner.Id}/photo")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await UploadPhoto(anonymous, original)).StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, (await other.Client.DeleteAsync($"/api/users/{owner.Id}/photo")).StatusCode);
+        var replacement = await UploadPhoto(owner.Client, original, x: "0");
+        replacement.EnsureSuccessStatusCode();
+        Assert.NotEqual(saved, (await replacement.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("image").GetString());
+        (await other.Client.DeleteAsync("/api/users/me/photo")).EnsureSuccessStatusCode();
+        Assert.NotEqual(JsonValueKind.Null, (await owner.Client.GetFromJsonAsync<JsonElement>($"/api/users/{owner.Id}/photo")).GetProperty("image").ValueKind);
+        (await owner.Client.DeleteAsync("/api/users/me/photo")).EnsureSuccessStatusCode();
+        Assert.Equal(JsonValueKind.Null, (await owner.Client.GetFromJsonAsync<JsonElement>($"/api/users/{owner.Id}/photo")).GetProperty("image").ValueKind);
     }
 
     [Fact]
-    public async Task Verification_RejectRequiresReason_AllowsResubmitAndReset()
+    public async Task Photo_RejectsUnsafeInputs_AndPreservesPreviousPhoto()
     {
-        using var client = await CreateAccountAsync("Client");
-        using var admin = await CreateAdminAsync();
-        var pdf = BuildPdf("Government identity document");
-        var initialSubmit = await SubmitVerificationAsync(client.Client, pdf, "Jane Client", "CA", "");
-        Assert.True(initialSubmit.IsSuccessStatusCode, await initialSubmit.Content.ReadAsStringAsync());
-
-        var missingReason = await admin.Client.PostAsJsonAsync(
-            $"/api/admin/client-verifications/{client.Id}/decision", new { Approve = false, Reason = "" });
-        Assert.Equal(HttpStatusCode.BadRequest, missingReason.StatusCode);
-        var rejected = await admin.Client.PostAsJsonAsync(
-            $"/api/admin/client-verifications/{client.Id}/decision",
-            new { Approve = false, Reason = "Document image is not readable." });
-        Assert.Equal(HttpStatusCode.NoContent, rejected.StatusCode);
-        var owner = await ReadProfileAsync(client.Client, "me");
-        Assert.Equal("Rejected", owner.VerificationStatus);
-        Assert.Contains("not readable", owner.VerificationRejectionReason);
-
-        Assert.Equal(HttpStatusCode.OK,
-            (await SubmitVerificationAsync(client.Client, pdf, "Jane Client", "CA", "")).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent,
-            (await client.Client.DeleteAsync("/api/clients/me/verification")).StatusCode);
-        Assert.Equal("NotSubmitted", (await ReadProfileAsync(client.Client, "me")).VerificationStatus);
+        using var owner = await CreateAccountAsync("Client");
+        var photo = MakePhoto();
+        var savedResponse = await UploadPhoto(owner.Client, photo);
+        savedResponse.EnsureSuccessStatusCode();
+        var saved = await savedResponse.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.BadRequest, (await UploadPhoto(owner.Client, Encoding.UTF8.GetBytes("<svg onload='alert(1)'/>"), "face.svg", "image/svg+xml")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await UploadPhoto(owner.Client, photo, "face.jpg", "image/jpeg")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await UploadPhoto(owner.Client, photo[..40])).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await UploadPhoto(owner.Client, MakePhoto(64, 64))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await UploadPhoto(owner.Client, MakePhoto(8001, 128))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await UploadPhoto(owner.Client, photo, zoom: "0")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await UploadPhoto(owner.Client, photo, x: "101")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await UploadPhoto(owner.Client, [.. photo, .. Encoding.ASCII.GetBytes("EICAR")])).StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await UploadPhoto(owner.Client, [.. photo, .. Encoding.ASCII.GetBytes("SCAN_UNAVAILABLE")])).StatusCode);
+        Assert.Equal(saved, await owner.Client.GetStringAsync($"/api/users/{owner.Id}/photo"));
+        var oversized = await UploadPhoto(owner.Client, new byte[5 * 1024 * 1024 + 1]);
+        Assert.Contains(oversized.StatusCode, new[] { HttpStatusCode.BadRequest, HttpStatusCode.RequestEntityTooLarge });
     }
 
     [Fact]
-    public async Task Verification_RejectsMalformedThreatAndWrongRole()
+    public async Task IdentityVerification_RemovedFromRoutesAndProfile()
     {
-        using var client = await CreateAccountAsync("Client");
-        using var freelancer = await CreateAccountAsync("Freelancer");
-        var malformed = await SubmitVerificationAsync(client.Client, "%PDF-broken"u8.ToArray(), "Jane", "US", "");
-        Assert.Equal(HttpStatusCode.BadRequest, malformed.StatusCode);
-        var infected = await SubmitVerificationAsync(client.Client, BuildPdf("EICAR"), "Jane", "US", "");
-        Assert.Equal(HttpStatusCode.BadRequest, infected.StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden,
-            (await SubmitVerificationAsync(freelancer.Client, BuildPdf("Document"), "Jane", "US", "")).StatusCode);
-        Assert.Equal("NotSubmitted", (await ReadProfileAsync(client.Client, "me")).VerificationStatus);
+        using var owner = await CreateAccountAsync("Client");
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.Client.PostAsJsonAsync("/api/clients/me/verification", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.Client.GetAsync("/api/admin/client-verifications")).StatusCode);
+        var body = await owner.Client.GetStringAsync("/api/clients/me/profile");
+        Assert.DoesNotContain("identityVerified", body);
+        Assert.DoesNotContain("verificationStatus", body);
     }
 
-    private static async Task<HttpResponseMessage> SubmitVerificationAsync(
-        HttpClient client, byte[] content, string legalName, string countryCode, string registrationNumber)
+    private static byte[] MakePhoto(int width = 600, int height = 300)
+    {
+        using var surface = SKSurface.Create(new SKImageInfo(width, height));
+        surface.Canvas.Clear(SKColors.Red);
+        using var paint = new SKPaint { Color = SKColors.Blue };
+        surface.Canvas.DrawRect(new SKRect(width / 2, 0, width, height), paint);
+        using var image = surface.Snapshot();
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
+    private static async Task<HttpResponseMessage> UploadPhoto(HttpClient client, byte[] bytes,
+        string fileName = "face.png", string contentType = "image/png", string zoom = "1", string x = "50")
     {
         using var form = new MultipartFormDataContent();
-        form.Add(new StringContent(legalName), "legalName");
-        form.Add(new StringContent(countryCode), "countryCode");
-        form.Add(new StringContent(registrationNumber), "registrationNumber");
-        var file = new ByteArrayContent(content);
-        file.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
-        form.Add(file, "file", "identity.pdf");
-        return await client.PostAsync("/api/clients/me/verification", form);
-    }
-
-    private static byte[] BuildPdf(string text)
-    {
-        var safeText = text.Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
-        var objects = new[]
-        {
-            "<< /Type /Catalog /Pages 2 0 R >>",
-            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-            $"<< /Length {safeText.Length + 35} >>\nstream\nBT /F1 12 Tf 72 720 Td ({safeText}) Tj ET\nendstream"
-        };
-        var builder = new StringBuilder("%PDF-1.4\n");
-        var offsets = new List<int> { 0 };
-        for (var index = 0; index < objects.Length; index++)
-        {
-            offsets.Add(Encoding.ASCII.GetByteCount(builder.ToString()));
-            builder.Append(index + 1).Append(" 0 obj\n").Append(objects[index]).Append("\nendobj\n");
-        }
-        var xref = Encoding.ASCII.GetByteCount(builder.ToString());
-        builder.Append("xref\n0 6\n0000000000 65535 f \n");
-        foreach (var offset in offsets.Skip(1)) builder.Append(offset.ToString("D10")).Append(" 00000 n \n");
-        builder.Append("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n").Append(xref).Append("\n%%EOF\n");
-        return Encoding.ASCII.GetBytes(builder.ToString());
+        var file = new ByteArrayContent(bytes);
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        form.Add(file, "file", fileName);
+        form.Add(new StringContent(zoom), "zoom");
+        form.Add(new StringContent(x), "x");
+        return await client.PostAsync("/api/users/me/photo", form);
     }
 
     private HttpClient NewClient() => factory.CreateClient(new WebApplicationFactoryClientOptions
     {
         BaseAddress = new Uri("https://localhost"), AllowAutoRedirect = false, HandleCookies = false
     });
-
-    private async Task<Account> CreateAdminAsync()
-    {
-        var account = await CreateAccountAsync("Client", login: false);
-        await using (var scope = factory.Services.CreateAsyncScope())
-        {
-            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-            var user = await userManager.FindByIdAsync(account.Id.ToString());
-            Assert.NotNull(user);
-            var result = await userManager.AddToRoleAsync(user!, "Admin");
-            Assert.True(result.Succeeded);
-        }
-        await LoginAsync(account.Client, account.Email);
-        return account;
-    }
 
     private async Task<Account> CreateAccountAsync(string role, bool login = true)
     {

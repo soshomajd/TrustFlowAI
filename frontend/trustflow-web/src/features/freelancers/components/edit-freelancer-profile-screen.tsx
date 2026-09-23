@@ -1,9 +1,10 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, Eye, LoaderCircle, Plus, RefreshCw, Save, Trash2, UserRound } from "lucide-react";
+import { toast } from "sonner";
+import { Check, Eye, LoaderCircle, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,8 @@ import { useMyFreelancerProfile, useUpdateFreelancerProfile } from "@/features/f
 import { freelancerProfileSchema, splitEntries, type FreelancerProfileFormValues } from "@/features/freelancers/schemas/freelancer-profile-schema";
 import { availabilityLabels, type Availability, type FreelancerProfile } from "@/features/freelancers/types/freelancer-profile";
 import { getApiErrorMessage } from "@/lib/api/get-api-error-message";
+import { ProfilePhotoEditor } from "@/features/profile-photos/components/profile-photo-editor";
+import { UserAvatar } from "@/features/profile-photos/components/user-avatar";
 import { ResumeManager } from "@/features/freelancers/components/resume-manager";
 
 export function EditFreelancerProfileScreen() {
@@ -56,6 +59,20 @@ function ProfileEditor({ profile }: { profile: FreelancerProfile }) {
   const completed = essentials.filter((item) => item.done).length;
   const { errors, isDirty } = form.formState;
 
+  const optionalFieldNames = ["location", "languages", "yearsOfExperience", "availability"] as const;
+  const hasOptionalSectionError = optionalFieldNames.some((name) => errors[name]);
+  const [wasOptionalSectionOpened, setOptionalSectionOpened] = useState(false);
+  // Never leave an error hidden behind a collapsed section.
+  const isOptionalSectionOpen = wasOptionalSectionOpened || hasOptionalSectionError;
+
+  function setOptionalSectionOpen(open: boolean) {
+    setOptionalSectionOpened(open || hasOptionalSectionError);
+  }
+
+  function showFirstProblem() {
+    toast.error("Some details still need fixing. The first one is highlighted.");
+  }
+
   useEffect(() => {
     if (!isDirty) return;
     function warnBeforeLeaving(event: BeforeUnloadEvent) { event.preventDefault(); }
@@ -78,11 +95,12 @@ function ProfileEditor({ profile }: { profile: FreelancerProfile }) {
         <div><p className="text-xs font-medium uppercase tracking-[0.2em] text-electric">Your professional introduction</p><h1 className="mt-3 text-3xl font-semibold">My profile</h1><p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">Help clients understand what you do and why you fit their project. Start small and add more whenever you like.</p></div>
         <Button asChild variant="outline" className="self-start sm:shrink-0"><Link href={`/dashboard/freelancers/${profile.userId}`}><Eye className="size-4" />View saved profile</Link></Button>
       </header>
+      <ProfilePhotoEditor userId={profile.userId} name={profile.fullName} />
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
-        <form onSubmit={form.handleSubmit(save)} className="min-w-0 space-y-6" noValidate>
+        <form onSubmit={form.handleSubmit(save, showFirstProblem)} className="min-w-0 space-y-6 pb-28" noValidate>
           <fieldset disabled={mutation.isPending} className="min-w-0 space-y-6">
             <EditorSection number="01" title="The essentials" description="A few lines are enough to make a useful introduction.">
-              <div className="flex items-center gap-3 rounded-xl bg-background/40 p-3"><UserRound className="size-5 text-electric" /><div><p className="text-sm font-medium">{profile.fullName}</p><p className="text-xs text-muted-foreground">Your name from your TrustFlow account</p></div></div>
+              <div className="flex items-center gap-3 rounded-xl bg-background/40 p-3"><UserAvatar userId={profile.userId} name={profile.fullName} /><div><p className="text-sm font-medium">{profile.fullName}</p><p className="text-xs text-muted-foreground">Your name from your TrustFlow account</p></div></div>
               <Field id="headline" label="Professional title" error={errors.headline?.message} hint="One line that says what you do.">
                 <Input id="headline" {...form.register("headline")} maxLength={100} placeholder="e.g. Frontend developer for fast, accessible websites" aria-describedby="headline-help" aria-invalid={Boolean(errors.headline)} />
               </Field>
@@ -96,7 +114,7 @@ function ProfileEditor({ profile }: { profile: FreelancerProfile }) {
               <SectionSaveAction isDirty={isDirty} isPending={mutation.isPending} />
             </EditorSection>
 
-            <details className="rounded-2xl border bg-card/70 p-5 sm:p-6">
+            <details open={isOptionalSectionOpen} onToggle={(event) => setOptionalSectionOpen(event.currentTarget.open)} className="rounded-2xl border bg-card/70 p-5 sm:p-6">
               <summary className="cursor-pointer font-semibold">A little more about you <span className="ml-2 text-xs font-normal text-muted-foreground">Optional</span></summary>
               <div className="mt-6 space-y-5">
                 <p className="text-sm text-muted-foreground">Help clients plan communication and timing. Share only what you want them to see.</p>
@@ -127,9 +145,9 @@ function ProfileEditor({ profile }: { profile: FreelancerProfile }) {
           </fieldset>
 
           {mutation.isError && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{getApiErrorMessage(mutation.error, "Your profile could not be saved. Your edits are still here; please try again.")}</p>}
-          <div className="sticky bottom-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/95 p-4 shadow-lg backdrop-blur">
-            <p role="status" className="text-xs text-muted-foreground">{mutation.isPending ? "Saving your profile…" : isDirty ? "You have unsaved changes" : profile.updatedAt ? "All changes saved" : "Save whenever you are ready"}</p>
-            <SaveChangesButton isDirty={isDirty} isPending={mutation.isPending} />
+          <div className="pointer-events-none sticky bottom-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/95 p-4 shadow-lg backdrop-blur">
+            <p role="status" className="pointer-events-auto text-xs text-muted-foreground">{mutation.isPending ? "Saving your profile…" : isDirty ? "You have unsaved changes" : profile.updatedAt ? "All changes saved" : "Save whenever you are ready"}</p>
+            <div className="pointer-events-auto"><SaveChangesButton isDirty={isDirty} isPending={mutation.isPending} /></div>
           </div>
         </form>
 

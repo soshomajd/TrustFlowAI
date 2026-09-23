@@ -126,6 +126,29 @@ public class MilestonesController(
                     });
                 }
 
+                // Rejected and withdrawn proposals no longer bind anyone,
+                // so they release the project again.
+                var hasProposals = await dbContext.Proposals
+                    .AnyAsync(
+                        proposal =>
+                            proposal.ProjectId == projectId &&
+                            (proposal.Status ==
+                                 ProposalStatus.Pending ||
+                             proposal.Status ==
+                                 ProposalStatus.Accepted),
+                        cancellationToken
+                    );
+
+                if (hasProposals)
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "Milestones can no longer be added because a freelancer has already sent a proposal for this project.",
+                        hasProposals = true
+                    });
+                }
+
                 var sequenceExists = await dbContext.Milestones
                     .AnyAsync(
                         milestone =>
@@ -266,7 +289,8 @@ public class MilestonesController(
                     project.Id == projectId &&
                     (
                         project.ClientId == userId ||
-                        project.FreelancerId == userId
+                        project.Milestones.Any(milestone =>
+                            milestone.FreelancerId == userId)
                     ),
                 cancellationToken
             );
@@ -323,7 +347,7 @@ public class MilestonesController(
                 milestone.ProjectId == projectId &&
                 (
                     milestone.Project.ClientId == userId ||
-                    milestone.Project.FreelancerId == userId
+                    milestone.FreelancerId == userId
                 ))
             .Select(milestone => new MilestoneResponse
             {
@@ -408,6 +432,29 @@ public class MilestonesController(
                         message =
                             "Milestones can only be updated while the project is open.",
                         currentProjectStatus = project.Status
+                    });
+                }
+
+                // Rejected and withdrawn proposals no longer bind anyone,
+                // so they release the project again.
+                var hasProposals = await dbContext.Proposals
+                    .AnyAsync(
+                        proposal =>
+                            proposal.ProjectId == projectId &&
+                            (proposal.Status ==
+                                 ProposalStatus.Pending ||
+                             proposal.Status ==
+                                 ProposalStatus.Accepted),
+                        cancellationToken
+                    );
+
+                if (hasProposals)
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "Milestones can no longer be changed because a freelancer has already sent a proposal for this project.",
+                        hasProposals = true
                     });
                 }
 
@@ -571,7 +618,12 @@ public class MilestonesController(
                 milestone.ProjectId == projectId &&
                 milestone.Project.ClientId == clientId &&
                 milestone.Project.Status == ProjectStatus.Open &&
-                milestone.Status == MileStoneStatus.Pending)
+                milestone.Status == MileStoneStatus.Pending &&
+                // Removing a stage after someone applied would change the
+                // scope and the payment split they agreed to.
+                !milestone.Project.Proposals.Any(proposal =>
+                    proposal.Status == ProposalStatus.Pending ||
+                    proposal.Status == ProposalStatus.Accepted))
             .ExecuteDeleteAsync(cancellationToken);
 
         if (affectedRows == 1)
@@ -611,6 +663,25 @@ public class MilestonesController(
             });
         }
 
+        var hasProposals = await dbContext.Proposals
+            .AnyAsync(
+                proposal =>
+                    proposal.ProjectId == projectId &&
+                    (proposal.Status == ProposalStatus.Pending ||
+                     proposal.Status == ProposalStatus.Accepted),
+                cancellationToken
+            );
+
+        if (hasProposals)
+        {
+            return Conflict(new
+            {
+                message =
+                    "Milestones can no longer be deleted because a freelancer has already sent a proposal for this project.",
+                hasProposals = true
+            });
+        }
+
         return Conflict(new
         {
             message =
@@ -637,22 +708,73 @@ public class MilestonesController(
             return Unauthorized();
         }
 
+        var workStartGate = await dbContext.Milestones
+            .AsNoTracking()
+            .Where(milestone =>
+                milestone.Id == milestoneId &&
+                milestone.ProjectId == projectId &&
+                milestone.FreelancerId == freelancerId)
+            .Select(milestone => new
+            {
+                EscrowStatus = milestone.Project.Escrows
+                    .Where(escrow =>
+                        escrow.FreelancerId == milestone.FreelancerId)
+                    .Select(escrow => (EscrowStatus?)escrow.Status)
+                    .FirstOrDefault(),
+
+                ContractAddress = milestone.Project.Escrows
+                    .Where(escrow =>
+                        escrow.FreelancerId == milestone.FreelancerId)
+                    .Select(escrow => escrow.ContractAddress)
+                    .FirstOrDefault()
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (workStartGate?.EscrowStatus == EscrowStatus.Funded &&
+            !string.IsNullOrWhiteSpace(workStartGate.ContractAddress))
+        {
+            var onChainEscrow = await chainDeployer
+                .GetEscrowSnapshotAsync(
+                    workStartGate.ContractAddress,
+                    cancellationToken
+                );
+
+            if (onChainEscrow.State != OnChainEscrowState.Funded ||
+                !onChainEscrow.WorkStarted)
+            {
+                return Conflict(new
+                {
+                    message =
+                        "Start work in the freelancer wallet before starting a milestone.",
+                    workStartedOnChain =
+                        onChainEscrow.WorkStarted,
+                    onChainEscrowState =
+                        onChainEscrow.State
+                });
+            }
+        }
+
         var affectedRows = await dbContext.Milestones
             .Where(milestone =>
                 milestone.Id == milestoneId &&
                 milestone.ProjectId == projectId &&
-                milestone.Project.FreelancerId == freelancerId &&
+                milestone.FreelancerId == freelancerId &&
                 milestone.Project.Status == ProjectStatus.InProgress &&
-                milestone.Project.Escrow != null &&
-                milestone.Project.Escrow.Status ==
-                    EscrowStatus.Funded &&
+                milestone.Project.Escrows.Any(escrow =>
+                    escrow.FreelancerId == milestone.FreelancerId &&
+                    escrow.Status == EscrowStatus.Funded) &&
                 (
                     milestone.Status == MileStoneStatus.Pending ||
                     milestone.Status == MileStoneStatus.Rejected
                 ) &&
+                // Each escrow releases its own milestones in order, so the
+                // queue is per freelancer. One freelancer running late must
+                // not block another's stage.
                 !dbContext.Milestones.Any(previousMilestone =>
                     previousMilestone.ProjectId ==
                         milestone.ProjectId &&
+                    previousMilestone.FreelancerId ==
+                        milestone.FreelancerId &&
                     previousMilestone.SequenceNumber <
                         milestone.SequenceNumber &&
                     previousMilestone.Status !=
@@ -680,14 +802,18 @@ public class MilestonesController(
             .Where(milestone =>
                 milestone.Id == milestoneId &&
                 milestone.ProjectId == projectId &&
-                milestone.Project.FreelancerId == freelancerId)
+                milestone.FreelancerId == freelancerId)
             .Select(milestone => new
             {
                 MilestoneStatus = milestone.Status,
                 ProjectStatus = milestone.Project.Status,
-                EscrowStatus = milestone.Project.Escrow == null
-                    ? (EscrowStatus?)null
-                    : milestone.Project.Escrow.Status,
+
+                EscrowStatus = milestone.Project.Escrows
+                    .Where(escrow =>
+                        escrow.FreelancerId == milestone.FreelancerId)
+                    .Select(escrow => (EscrowStatus?)escrow.Status)
+                    .FirstOrDefault(),
+
                 milestone.SequenceNumber
             })
             .FirstOrDefaultAsync(cancellationToken);
@@ -796,7 +922,7 @@ public class MilestonesController(
             .Where(milestone =>
                 milestone.Id == milestoneId &&
                 milestone.ProjectId == projectId &&
-                milestone.Project.FreelancerId == freelancerId &&
+                milestone.FreelancerId == freelancerId &&
                 milestone.Project.Status == ProjectStatus.InProgress &&
                 milestone.Status == MileStoneStatus.InProgress)
             .ExecuteUpdateAsync(
@@ -821,7 +947,7 @@ public class MilestonesController(
             .Where(milestone =>
                 milestone.Id == milestoneId &&
                 milestone.ProjectId == projectId &&
-                milestone.Project.FreelancerId == freelancerId)
+                milestone.FreelancerId == freelancerId)
             .Select(milestone => new
             {
                 MilestoneStatus = milestone.Status,
@@ -884,14 +1010,20 @@ public class MilestonesController(
                 milestone.Status,
                 milestone.Amount,
                 milestone.SequenceNumber,
+                milestone.FreelancerId,
                 ProjectStatus = milestone.Project.Status,
-                Escrow = milestone.Project.Escrow == null
-                    ? null
-                    : new
+
+                // Payment comes from the escrow of the freelancer who owns
+                // this milestone, not from a single project-wide one.
+                Escrow = milestone.Project.Escrows
+                    .Where(escrow =>
+                        escrow.FreelancerId == milestone.FreelancerId)
+                    .Select(escrow => new
                     {
-                        milestone.Project.Escrow.ContractAddress,
-                        milestone.Project.Escrow.TokenAddress
-                    }
+                        escrow.ContractAddress,
+                        escrow.TokenAddress
+                    })
+                    .FirstOrDefault()
             })
             .FirstOrDefaultAsync(cancellationToken);
 

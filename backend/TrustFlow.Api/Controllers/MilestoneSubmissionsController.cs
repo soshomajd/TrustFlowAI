@@ -55,7 +55,7 @@ public sealed class MilestoneSubmissionsController(
 
         var canSubmit = await dbContext.Milestones.AsNoTracking().AnyAsync(
             item => item.Id == milestoneId && item.ProjectId == projectId &&
-                    item.Project.FreelancerId == freelancerId &&
+                    item.FreelancerId == freelancerId &&
                     item.Project.Status == ProjectStatus.InProgress &&
                     item.Status == MileStoneStatus.InProgress,
             cancellationToken);
@@ -100,7 +100,7 @@ public sealed class MilestoneSubmissionsController(
             .Include(item => item.Project)
             .SingleOrDefaultAsync(item => item.Id == milestoneId && item.ProjectId == projectId,
                 cancellationToken);
-        if (milestone is null || milestone.Project.FreelancerId != freelancerId)
+        if (milestone is null || milestone.FreelancerId != freelancerId)
             return NotFound(new { message = "Milestone not found." });
         if (milestone.Project.Status != ProjectStatus.InProgress ||
             milestone.Status != MileStoneStatus.InProgress)
@@ -211,7 +211,7 @@ public sealed class MilestoneSubmissionsController(
         Guid projectId, Guid milestoneId, Guid userId, CancellationToken cancellationToken) =>
         await dbContext.Milestones.AsNoTracking().AnyAsync(
             item => item.Id == milestoneId && item.ProjectId == projectId &&
-                    (item.Project.ClientId == userId || item.Project.FreelancerId == userId),
+                    (item.Project.ClientId == userId || item.FreelancerId == userId),
             cancellationToken);
 
     private static string? NormalizeUrl(string? value)

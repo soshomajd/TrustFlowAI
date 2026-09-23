@@ -17,6 +17,7 @@ import {
     DialogTrigger,
 } from
     "@/components/ui/dialog";
+import type { PublicMarketplaceMilestone } from "@/features/projects/types/marketplace-project-details";
 import { SubmitProposalForm } from
     "@/features/proposals/components/submit-proposal-form";
 
@@ -26,6 +27,8 @@ type SubmitProposalDialogProps = {
     projectTitle?: string;
     projectBudget?: number;
 
+    milestones: PublicMarketplaceMilestone[];
+
     disabled?: boolean;
     disabledReason?: string;
 };
@@ -34,6 +37,7 @@ export function SubmitProposalDialog({
     projectId,
     projectTitle,
     projectBudget,
+    milestones,
     disabled = false,
     disabledReason,
 }: SubmitProposalDialogProps) {
@@ -75,6 +79,7 @@ export function SubmitProposalDialog({
 
                 <SubmitProposalForm
                     projectId={projectId}
+                    milestones={milestones}
                     projectTitle={
                         projectTitle
                     }
