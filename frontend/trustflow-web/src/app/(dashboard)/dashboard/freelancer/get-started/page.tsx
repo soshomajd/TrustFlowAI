@@ -47,7 +47,7 @@ const steps: GuideStep[] = [
     {
         title: "Send a clear proposal",
         description:
-            "The client sets the price, so you only enter your delivery time and a short message. Explain how you will help. If it is still pending, you can withdraw it from My proposals.",
+            "Pick the milestones you want to deliver. You can take one, a few, or all of them; the ones another freelancer already has are marked as taken. Your price is the total of the milestones you pick, because the client sets the price. Add your delivery time and a short message. If it is still pending, you can withdraw it from My proposals.",
         icon: Send,
         action: {
             label: "Open my proposals",
@@ -57,7 +57,7 @@ const steps: GuideStep[] = [
     {
         title: "Wait for secure funding",
         description:
-            "When a client accepts you, the project appears in Assigned projects. Do not start yet. Wait until the escrow status says Funded. Then use your verified wallet to start work on-chain.",
+            "When a client accepts you, the project appears in Assigned projects. You get your own escrow for your own milestones, even when other freelancers work on the same project. Do not start yet. Wait until your escrow status says Funded. Then use your verified wallet to start work on-chain.",
         icon: CircleDollarSign,
         action: {
             label: "Open assigned projects",
@@ -81,8 +81,9 @@ const reminders = [
     "Disconnect in the top bar only signs the wallet out of this site. Your account keeps the address you verified.",
     "Do not start work until the escrow status says Funded.",
     "The client can cancel the escrow until you start work on-chain.",
-    "Finish milestones in order, one at a time.",
-    "You cannot offer a lower price. The project budget is the price you are paid.",
+    "Finish your own milestones in order, one at a time. Another freelancer being slow does not block you.",
+    "You cannot offer a lower price. The milestones you pick set the price you are paid.",
+    "A project can stay on the marketplace after someone is hired. The milestones nobody has taken are still open to you.",
     "Keep your proposal and submitted work clear and short.",
 ];
 

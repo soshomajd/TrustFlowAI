@@ -65,7 +65,7 @@ public sealed class EscrowFlowTests
                 projectDeadline
             );
 
-        await CreateMilestoneAsync(
+        var milestoneId = await CreateMilestoneAsync(
             clientAccessToken,
             projectId,
             projectDeadline.AddDays(-5)
@@ -74,7 +74,8 @@ public sealed class EscrowFlowTests
         var proposalId =
             await CreateProposalAsync(
                 freelancerAccessToken,
-                projectId
+                projectId,
+                milestoneId
             );
 
         await AcceptProposalAsync(
@@ -1150,7 +1151,7 @@ public sealed class EscrowFlowTests
                 projectDeadline
             );
 
-        await CreateMilestoneAsync(
+        var milestoneId = await CreateMilestoneAsync(
             clientAccessToken,
             projectId,
             projectDeadline.AddDays(-5)
@@ -1159,7 +1160,8 @@ public sealed class EscrowFlowTests
         var proposalId =
             await CreateProposalAsync(
                 freelancerAccessToken,
-                projectId
+                projectId,
+                milestoneId
             );
 
         await AcceptProposalAsync(
@@ -1292,7 +1294,7 @@ public sealed class EscrowFlowTests
         );
     }
 
-    private async Task CreateMilestoneAsync(
+    private async Task<Guid> CreateMilestoneAsync(
         string accessToken,
         Guid projectId,
         DateTimeOffset deadline)
@@ -1325,11 +1327,17 @@ public sealed class EscrowFlowTests
             HttpStatusCode.Created,
             response.StatusCode
         );
+
+        return await ReadGuidPropertyAsync(
+            response,
+            "id"
+        );
     }
 
     private async Task<Guid> CreateProposalAsync(
         string accessToken,
-        Guid projectId)
+        Guid projectId,
+        Guid milestoneId)
     {
         using var request =
             CreateAuthorizedRequest(
@@ -1341,7 +1349,9 @@ public sealed class EscrowFlowTests
                     CoverLetter =
                         "I can complete this project.",
 
-                    BidAmount = 10_000m,
+                    // The price is the sum of the milestones claimed,
+                    // so the proposal names them instead of a bid.
+                    MilestoneIds = new[] { milestoneId },
 
                     EstimatedDays = 7
                 }

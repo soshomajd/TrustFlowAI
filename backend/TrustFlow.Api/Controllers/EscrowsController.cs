@@ -120,26 +120,52 @@ public sealed class EscrowsController(
             });
         }
 
-        // One escrow per freelancer: the request names which of the
-        // project's freelancers this one pays.
-        var assignment = await dbContext.Milestones
+        // One escrow per freelancer. The request names which of the project's
+        // freelancers this one pays, and may leave that out only while a
+        // single freelancer holds every assigned milestone.
+        var assignments = await dbContext.Milestones
             .AsNoTracking()
             .Where(milestone =>
                 milestone.ProjectId == projectId &&
-                milestone.FreelancerId == request.FreelancerId)
-            .Select(milestone => milestone.Amount)
+                milestone.FreelancerId != null &&
+                (request.FreelancerId == null ||
+                 milestone.FreelancerId ==
+                    request.FreelancerId))
+            .GroupBy(milestone =>
+                milestone.FreelancerId!.Value)
+            .Select(group => new
+            {
+                FreelancerId = group.Key,
+                Total = group.Sum(
+                    milestone => milestone.Amount
+                )
+            })
             .ToListAsync(cancellationToken);
 
-        if (assignment.Count == 0)
+        if (assignments.Count == 0)
         {
             return Conflict(new
             {
-                message =
-                    "That freelancer has no milestones on this project."
+                message = request.FreelancerId == null
+                    ? "No freelancer has been assigned milestones on this project yet."
+                    : "That freelancer has no milestones on this project."
             });
         }
 
-        var assignedTotal = assignment.Sum();
+        if (assignments.Count > 1)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "This project is split between several freelancers. " +
+                    "Name the freelancer this escrow pays with " +
+                    "freelancerId."
+            });
+        }
+
+        var assignment = assignments[0];
+        var freelancerId = assignment.FreelancerId;
+        var assignedTotal = assignment.Total;
         var clientWallet =
     await dbContext.Users
         .AsNoTracking()
@@ -177,7 +203,7 @@ public sealed class EscrowsController(
             await dbContext.Users
                 .AsNoTracking()
                 .Where(user =>
-                    user.Id == request.FreelancerId)
+                    user.Id == freelancerId)
                 .Select(user => new
                 {
                     user.WalletAddress,
@@ -213,7 +239,7 @@ public sealed class EscrowsController(
                     escrow =>
                         escrow.ProjectId == projectId &&
                         escrow.FreelancerId ==
-                            request.FreelancerId,
+                            freelancerId,
                     cancellationToken
                 );
 
@@ -233,7 +259,7 @@ public sealed class EscrowsController(
         {
             ProjectId = project.Id,
 
-            FreelancerId = request.FreelancerId,
+            FreelancerId = freelancerId,
 
             ChainId = request.ChainId,
 
@@ -284,11 +310,14 @@ public sealed class EscrowsController(
         );
     }
 
+    // Every freelancer holding milestones on the project, each with their own
+    // escrow once the client has created it. The client sees all of them; a
+    // freelancer sees only their own row.
     [Authorize]
-    [HttpGet]
-    public async Task<IActionResult> GetEscrow(
-    Guid projectId,
-    CancellationToken cancellationToken)
+    [HttpGet("~/api/projects/{projectId:guid}/escrows")]
+    public async Task<IActionResult> GetProjectEscrows(
+        Guid projectId,
+        CancellationToken cancellationToken)
     {
         var userIdValue =
             User.FindFirstValue(
@@ -306,72 +335,151 @@ public sealed class EscrowsController(
             });
         }
 
-        var escrow =
-            await dbContext.Escrows
+        var isClient =
+            await dbContext.Projects
                 .AsNoTracking()
-                .Where(item =>
-                    item.ProjectId == projectId &&
-                    (
-                        item.Project.ClientId ==
-                        userId ||
-                        item.FreelancerId ==
-                        userId
-                    ))
-                .FirstOrDefaultAsync(
+                .AnyAsync(
+                    project =>
+                        project.Id == projectId &&
+                        project.ClientId == userId,
                     cancellationToken
                 );
 
-        if (escrow is null)
+        var assignments =
+            await dbContext.Milestones
+                .AsNoTracking()
+                .Where(milestone =>
+                    milestone.ProjectId == projectId &&
+                    milestone.FreelancerId != null &&
+                    (isClient ||
+                     milestone.FreelancerId == userId))
+                .GroupBy(milestone =>
+                    milestone.FreelancerId!.Value)
+                .Select(group => new
+                {
+                    FreelancerId = group.Key,
+                    MilestoneCount = group.Count(),
+                    AssignedTotal = group.Sum(
+                        milestone => milestone.Amount
+                    )
+                })
+                .ToListAsync(cancellationToken);
+
+        if (!isClient && assignments.Count == 0)
         {
             return NotFound(new
             {
                 message =
-                    "Escrow not found."
+                    "Project not found."
             });
         }
 
-        return Ok(ToResponse(escrow));
+        var freelancerIds = assignments
+            .Select(assignment => assignment.FreelancerId)
+            .ToList();
+
+        var freelancerNames =
+            await dbContext.Users
+                .AsNoTracking()
+                .Where(user =>
+                    freelancerIds.Contains(user.Id))
+                .Select(user => new
+                {
+                    user.Id,
+                    user.FullName
+                })
+                .ToDictionaryAsync(
+                    user => user.Id,
+                    user => user.FullName,
+                    cancellationToken
+                );
+
+        var escrows =
+            await dbContext.Escrows
+                .AsNoTracking()
+                .Where(escrow =>
+                    escrow.ProjectId == projectId &&
+                    freelancerIds.Contains(
+                        escrow.FreelancerId
+                    ))
+                .ToListAsync(cancellationToken);
+
+        var participants = assignments
+            .Select(assignment =>
+                new ProjectEscrowParticipantResponse
+                {
+                    FreelancerId =
+                        assignment.FreelancerId,
+
+                    FreelancerFullName =
+                        freelancerNames.GetValueOrDefault(
+                            assignment.FreelancerId,
+                            string.Empty
+                        ),
+
+                    MilestoneCount =
+                        assignment.MilestoneCount,
+
+                    AssignedTotal =
+                        assignment.AssignedTotal,
+
+                    Escrow = escrows
+                        .Where(escrow =>
+                            escrow.FreelancerId ==
+                            assignment.FreelancerId)
+                        .Select(ToResponse)
+                        .FirstOrDefault()
+                })
+            .OrderBy(
+                participant =>
+                    participant.FreelancerFullName,
+                StringComparer.OrdinalIgnoreCase
+            )
+            .ToList();
+
+        return Ok(participants);
+    }
+
+    [Authorize]
+    [HttpGet]
+    public async Task<IActionResult> GetEscrow(
+    Guid projectId,
+    [FromQuery] Guid? freelancerId,
+    CancellationToken cancellationToken)
+    {
+        var resolved = await ResolveEscrowAsync(
+            projectId,
+            freelancerId,
+            cancellationToken
+        );
+
+        if (resolved.Error is not null)
+        {
+            return resolved.Error;
+        }
+
+        return Ok(ToResponse(resolved.Escrow!));
     }
 
     [Authorize(Roles = AppRoles.Client)]
     [HttpPost("deploy")]
     public async Task<IActionResult> DeployEscrow(
         Guid projectId,
+        [FromQuery] Guid? freelancerId,
         CancellationToken cancellationToken)
     {
-        var clientIdValue =
-            User.FindFirstValue(
-                ClaimTypes.NameIdentifier
-            );
+        var resolved = await ResolveEscrowAsync(
+            projectId,
+            freelancerId,
+            cancellationToken
+        );
 
-        if (!Guid.TryParse(
-            clientIdValue,
-            out var clientId))
+        if (resolved.Error is not null)
         {
-            return Unauthorized(new
-            {
-                message =
-                    "Invalid user identity."
-            });
+            return resolved.Error;
         }
 
-        var escrow =
-            await dbContext.Escrows
-                .FirstOrDefaultAsync(
-                    item =>
-                        item.ProjectId == projectId &&
-                        item.Project.ClientId == clientId,
-                    cancellationToken
-                );
-
-        if (escrow is null)
-        {
-            return NotFound(new
-            {
-                message =
-                    "Escrow not found."
-            });
-        }
+        var escrow = resolved.Escrow!;
 
         var deployed =
             await deploymentOrchestrator.TryDeployAsync(
@@ -412,47 +520,21 @@ public sealed class EscrowsController(
     [HttpPost("sync")]
     public async Task<IActionResult> SyncEscrow(
         Guid projectId,
+        [FromQuery] Guid? freelancerId,
         CancellationToken cancellationToken)
     {
-        var userIdValue =
-            User.FindFirstValue(
-                ClaimTypes.NameIdentifier
-            );
+        var resolved = await ResolveEscrowAsync(
+            projectId,
+            freelancerId,
+            cancellationToken
+        );
 
-        if (!Guid.TryParse(
-            userIdValue,
-            out var userId))
+        if (resolved.Error is not null)
         {
-            return Unauthorized(new
-            {
-                message =
-                    "Invalid user identity."
-            });
+            return resolved.Error;
         }
 
-        var escrow =
-            await dbContext.Escrows
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    item =>
-                        item.ProjectId == projectId &&
-                        (
-                            item.Project.ClientId ==
-                            userId ||
-                            item.FreelancerId ==
-                            userId
-                        ),
-                    cancellationToken
-                );
-
-        if (escrow is null)
-        {
-            return NotFound(new
-            {
-                message =
-                    "Escrow not found."
-            });
-        }
+        var escrow = resolved.Escrow!;
 
         await chainSyncOrchestrator.TrySyncAsync(
             escrow.Id,
@@ -470,6 +552,84 @@ public sealed class EscrowsController(
         return Ok(ToResponse(currentEscrow));
     }
 
+    // A project can hold several escrows, so callers name the freelancer they
+    // mean. The name may be omitted only while the project has a single
+    // escrow, and a freelancer always resolves to their own.
+    private async Task<(Escrow? Escrow, IActionResult? Error)>
+        ResolveEscrowAsync(
+            Guid projectId,
+            Guid? freelancerId,
+            CancellationToken cancellationToken)
+    {
+        var userIdValue =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier
+            );
+
+        if (!Guid.TryParse(
+            userIdValue,
+            out var userId))
+        {
+            return (null, Unauthorized(new
+            {
+                message =
+                    "Invalid user identity."
+            }));
+        }
+
+        var isClient =
+            await dbContext.Projects
+                .AsNoTracking()
+                .AnyAsync(
+                    project =>
+                        project.Id == projectId &&
+                        project.ClientId == userId,
+                    cancellationToken
+                );
+
+        // A freelancer can only ever reach their own escrow, so their own id
+        // overrides whatever the query string asked for.
+        var targetFreelancerId = isClient
+            ? freelancerId
+            : userId;
+
+        var candidates =
+            await dbContext.Escrows
+                .AsNoTracking()
+                .Where(item =>
+                    item.ProjectId == projectId &&
+                    (isClient ||
+                     item.FreelancerId == userId) &&
+                    (targetFreelancerId == null ||
+                     item.FreelancerId ==
+                        targetFreelancerId))
+                .OrderBy(item => item.CreatedAt)
+                .Take(2)
+                .ToListAsync(cancellationToken);
+
+        if (candidates.Count == 0)
+        {
+            return (null, NotFound(new
+            {
+                message =
+                    "Escrow not found."
+            }));
+        }
+
+        if (candidates.Count > 1)
+        {
+            return (null, BadRequest(new
+            {
+                message =
+                    "This project has an escrow for each assigned " +
+                    "freelancer. Name the freelancer you mean with " +
+                    "the freelancerId query parameter."
+            }));
+        }
+
+        return (candidates[0], null);
+    }
+
     private static EscrowResponse ToResponse(
         Escrow escrow)
     {
@@ -477,6 +637,7 @@ public sealed class EscrowsController(
         {
             Id = escrow.Id,
             ProjectId = escrow.ProjectId,
+            FreelancerId = escrow.FreelancerId,
             ChainId = escrow.ChainId,
             TokenAddress =
                 escrow.TokenAddress,

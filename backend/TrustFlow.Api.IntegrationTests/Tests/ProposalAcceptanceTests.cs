@@ -3,7 +3,11 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using TrustFlow.Api.Data;
 using TrustFlow.Api.IntegrationTests.Infrastructure;
+using TrustFlow.Api.Models;
 
 namespace TrustFlow.Api.IntegrationTests.Tests;
 
@@ -11,10 +15,13 @@ public sealed class ProposalAcceptanceTests
     : IClassFixture<CustomWebApplicationFactory>
 {
     private readonly HttpClient _client;
+    private readonly CustomWebApplicationFactory _factory;
 
     public ProposalAcceptanceTests(
         CustomWebApplicationFactory factory)
     {
+        _factory = factory;
+
         _client = factory.CreateClient(
             new WebApplicationFactoryClientOptions
             {
@@ -83,16 +90,18 @@ public sealed class ProposalAcceptanceTests
         var projectId = await CreateProjectAsync(
             clientToken
         );
-        await CreateMilestoneAsync(
+        var milestoneId = await CreateMilestoneAsync(
     projectId,
     clientToken
 );
 
+        // Both freelancers apply for the same single stage, so accepting one
+        // has to reject the other as overlapping.
         var proposalAId = await CreateProposalAsync(
             projectId,
             freelancerAToken,
             "Proposal from Freelancer A",
-            2000.00m,
+            [milestoneId],
             20
         );
 
@@ -100,7 +109,7 @@ public sealed class ProposalAcceptanceTests
             projectId,
             freelancerBToken,
             "Proposal from Freelancer B",
-            1750.00m,
+            [milestoneId],
             25
         );
 
@@ -180,8 +189,12 @@ public sealed class ProposalAcceptanceTests
         );
     }
 
+    // The API blocks milestone edits while a proposal is live, so this is the
+    // last line of defence: even if an amount does change underneath a
+    // pending proposal, the freelancer can only be bound to the price they
+    // actually applied at.
     [Fact]
-    public async Task AcceptProposal_RejectsBidThatDoesNotMatchCurrentProjectBudget()
+    public async Task AcceptProposal_RejectsPriceThatChangedAfterTheFreelancerApplied()
     {
         var uniqueValue = Guid.NewGuid().ToString("N");
         const string password = "Testpass1";
@@ -194,14 +207,41 @@ public sealed class ProposalAcceptanceTests
         var clientToken = await LoginAsync(clientEmail, password);
         var freelancerToken = await LoginAsync(freelancerEmail, password);
         var projectId = await CreateProjectAsync(clientToken);
-        await CreateMilestoneAsync(projectId, clientToken);
+        var milestoneId = await CreateMilestoneAsync(projectId, clientToken);
         var proposalId = await CreateProposalAsync(
             projectId,
             freelancerToken,
-            "This bid no longer matches the project budget.",
-            1800.00m,
+            "I will deliver this stage for the amount shown.",
+            [milestoneId],
             20
         );
+
+        // Move 200 of the agreed price onto a new stage. The project still
+        // allocates its whole budget, so only the claimed stage's price has
+        // moved out from under the pending proposal.
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var database =
+                scope.ServiceProvider
+                    .GetRequiredService<AppDbContext>();
+
+            var milestone = await database.Milestones
+                .SingleAsync(item => item.Id == milestoneId);
+
+            milestone.Amount = 1800.00m;
+
+            database.Milestones.Add(new MileStone
+            {
+                ProjectId = projectId,
+                Title = "Added after the proposal",
+                Description = "A stage the freelancer never applied for.",
+                Amount = 200.00m,
+                SequenceNumber = 2,
+                Deadline = DateTimeOffset.UtcNow.AddDays(45)
+            });
+
+            await database.SaveChangesAsync();
+        }
 
         using var acceptRequest = CreateAuthorizedRequest(
             HttpMethod.Patch,
@@ -213,8 +253,8 @@ public sealed class ProposalAcceptanceTests
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(2000.00m, problem.GetProperty("projectBudget").GetDecimal());
-        Assert.Equal(1800.00m, problem.GetProperty("proposalBidAmount").GetDecimal());
+        Assert.Equal(1800.00m, problem.GetProperty("currentTotal").GetDecimal());
+        Assert.Equal(2000.00m, problem.GetProperty("agreedPrice").GetDecimal());
 
         var statuses = await GetProposalStatusesAsync(projectId, clientToken);
         Assert.Equal("Pending", statuses[proposalId]);
@@ -334,7 +374,7 @@ public sealed class ProposalAcceptanceTests
         Guid projectId,
         string freelancerToken,
         string coverLetter,
-        decimal bidAmount,
+        Guid[] milestoneIds,
         int estimatedDays)
     {
         using var request =
@@ -345,7 +385,11 @@ public sealed class ProposalAcceptanceTests
                 new
                 {
                     CoverLetter = coverLetter,
-                    BidAmount = bidAmount,
+
+                    // The price is the sum of the milestones claimed, so
+                    // the proposal names them instead of naming a bid.
+                    MilestoneIds = milestoneIds,
+
                     EstimatedDays = estimatedDays
                 }
             );
@@ -507,7 +551,7 @@ public sealed class ProposalAcceptanceTests
 
         return request;
     }
-    private async Task CreateMilestoneAsync(
+    private async Task<Guid> CreateMilestoneAsync(
     Guid projectId,
     string clientToken)
     {
@@ -540,5 +584,18 @@ public sealed class ProposalAcceptanceTests
             HttpStatusCode.Created,
             response.StatusCode
         );
+
+        await using var responseStream =
+            await response.Content
+                .ReadAsStreamAsync();
+
+        using var document =
+            await JsonDocument.ParseAsync(
+                responseStream
+            );
+
+        return document.RootElement
+            .GetProperty("id")
+            .GetGuid();
     }
 }

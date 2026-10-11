@@ -66,7 +66,9 @@ public class MilestonesController(
             Amount = milestone.Amount,
             SequenceNumber = milestone.SequenceNumber,
             Deadline = milestone.Deadline,
-            Status = milestone.Status
+            Status = milestone.Status,
+            FreelancerId = milestone.FreelancerId,
+            FreelancerFullName = milestone.Freelancer?.FullName
         };
     }
 
@@ -305,6 +307,9 @@ public class MilestonesController(
 
         var milestones = await dbContext.Milestones
             .AsNoTracking()
+            // Each stage can belong to a different freelancer, and the
+            // client needs the owner's name to read the list.
+            .Include(milestone => milestone.Freelancer)
             .Where(milestone =>
                 milestone.ProjectId ==
                     projectId
@@ -366,7 +371,14 @@ public class MilestonesController(
 
                 Deadline = milestone.Deadline,
 
-                Status = milestone.Status
+                Status = milestone.Status,
+
+                FreelancerId = milestone.FreelancerId,
+
+                FreelancerFullName =
+                    milestone.Freelancer == null
+                        ? null
+                        : milestone.Freelancer.FullName
             })
             .FirstOrDefaultAsync(cancellationToken);
 

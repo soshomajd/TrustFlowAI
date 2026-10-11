@@ -15,11 +15,11 @@ type StartWorkVariables = {
   chainId: number;
 };
 
-export function useStartWork(projectId: string) {
+export function useStartWork(projectId: string, freelancerId: string) {
   const normalizedProjectId = projectId.trim();
 
   return useMutation({
-    mutationKey: escrowQueryKeys.startWork(normalizedProjectId),
+    mutationKey: escrowQueryKeys.startWork(normalizedProjectId, freelancerId),
 
     mutationFn: async ({ contractAddress, chainId }: StartWorkVariables) => {
       const hash = await writeContract(wagmiConfig, {

@@ -14,13 +14,13 @@ import type { ProjectEscrow } from "@/features/escrow/types/escrow";
 import { getWalletErrorMessage } from "@/lib/wallet/get-wallet-error-message";
 import { wagmiConfig } from "@/lib/wallet/wagmi-config";
 
-export function useFundEscrow(projectId: string) {
+export function useFundEscrow(projectId: string, freelancerId: string) {
   const queryClient = useQueryClient();
 
   const normalizedProjectId = projectId.trim();
 
   return useMutation({
-    mutationKey: escrowQueryKeys.fund(normalizedProjectId),
+    mutationKey: escrowQueryKeys.fund(normalizedProjectId, freelancerId),
 
     mutationFn: async (escrow: ProjectEscrow) => {
       if (!escrow.contractAddress) {
@@ -64,12 +64,12 @@ export function useFundEscrow(projectId: string) {
         chainId: escrow.chainId,
       });
 
-      return syncEscrow(normalizedProjectId);
+      return syncEscrow(normalizedProjectId, freelancerId);
     },
 
     onSuccess: async (updatedEscrow) => {
       await queryClient.invalidateQueries({
-        queryKey: escrowQueryKeys.detail(normalizedProjectId),
+        queryKey: escrowQueryKeys.participants(normalizedProjectId),
       });
 
       toast.success(

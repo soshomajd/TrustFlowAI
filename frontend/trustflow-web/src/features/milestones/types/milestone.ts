@@ -47,6 +47,11 @@ export type ProjectMilestone = {
 
   deadline: string;
   status: MilestoneStatus;
+
+  // Stages are assigned one freelancer at a time, and each is paid by that
+  // freelancer's own escrow contract.
+  freelancerId: string | null;
+  freelancerFullName: string | null;
 };
 
 export type CreateMilestoneRequest = {

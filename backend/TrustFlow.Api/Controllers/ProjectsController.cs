@@ -75,10 +75,18 @@ namespace TrustFlow.Api.Controllers
        [FromQuery] ProjectMarketplaceQuery request,
        CancellationToken cancellationToken)
         {
+            // A project stays on the marketplace while any stage is still
+            // unassigned, because a split project keeps hiring after its
+            // first freelancer is accepted and it turns InProgress. It
+            // appears only once the milestones add up to the whole budget,
+            // so nobody applies to a half-priced brief.
             var query = dbContext.Projects
       .AsNoTracking()
       .Where(project =>
-          project.Status == ProjectStatus.Open &&
+          (project.Status == ProjectStatus.Open ||
+           (project.Status == ProjectStatus.InProgress &&
+            project.Milestones.Any(milestone =>
+                milestone.FreelancerId == null))) &&
           project.Milestones.Any() &&
           project.Milestones.Sum(
               milestone => milestone.Amount
@@ -251,9 +259,15 @@ namespace TrustFlow.Api.Controllers
         {
             var project = await dbContext.Projects
                 .AsNoTracking()
+                // Same rule as the marketplace list: reachable while any
+                // stage is still unassigned, and only once the milestones
+                // add up to the whole budget.
                 .Where(project =>
                 project.Id == id &&
-                project.Status == ProjectStatus.Open &&
+                (project.Status == ProjectStatus.Open ||
+                 (project.Status == ProjectStatus.InProgress &&
+                  project.Milestones.Any(milestone =>
+                      milestone.FreelancerId == null))) &&
                 project.Milestones.Any() &&
                  project.Milestones.Sum(
         milestone => milestone.Amount
@@ -809,7 +823,14 @@ namespace TrustFlow.Api.Controllers
                                     Deadline =
                                         milestone.Deadline,
                                     Status =
-                                        milestone.Status
+                                        milestone.Status,
+                                    FreelancerId =
+                                        milestone.FreelancerId,
+                                    FreelancerFullName =
+                                        milestone.Freelancer == null
+                                            ? null
+                                            : milestone.Freelancer
+                                                .FullName
                                 })
                             .ToList()
                     })

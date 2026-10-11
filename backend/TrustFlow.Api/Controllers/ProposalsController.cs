@@ -120,7 +120,11 @@ public class ProposalsController(AppDbContext dbContext)
                     });
                 }
 
-                if (project.Status != ProjectStatus.Open)
+                // A project goes InProgress as soon as its first freelancer
+                // is accepted, but the stages nobody has taken are still
+                // hiring, so it keeps accepting proposals for them.
+                if (project.Status != ProjectStatus.Open &&
+                    project.Status != ProjectStatus.InProgress)
                 {
                     return Conflict(new
                     {

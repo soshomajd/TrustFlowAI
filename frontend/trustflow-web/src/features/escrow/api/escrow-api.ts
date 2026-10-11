@@ -1,31 +1,24 @@
 import "client-only";
 
-import { isAxiosError } from "axios";
-
 import type {
   CreateEscrowRequest,
   ProjectEscrow,
+  ProjectEscrowParticipant,
 } from "@/features/escrow/types/escrow";
 import { apiClient } from "@/lib/api/api-client";
 
-export async function getProjectEscrow(
+// Every freelancer assigned to the project, each with their own escrow once
+// the client has created it. A freelancer only ever gets their own row.
+export async function getProjectEscrowParticipants(
   projectId: string,
   signal?: AbortSignal,
-): Promise<ProjectEscrow | null> {
-  try {
-    const response = await apiClient.get<ProjectEscrow>(
-      `/projects/${projectId}/escrow`,
-      { signal },
-    );
+): Promise<ProjectEscrowParticipant[]> {
+  const response = await apiClient.get<ProjectEscrowParticipant[]>(
+    `/projects/${projectId}/escrows`,
+    { signal },
+  );
 
-    return response.data;
-  } catch (error) {
-    if (isAxiosError(error) && error.response?.status === 404) {
-      return null;
-    }
-
-    throw error;
-  }
+  return response.data;
 }
 
 export async function createEscrow(
@@ -40,17 +33,21 @@ export async function createEscrow(
   return response.data;
 }
 
-export async function deployEscrow(projectId: string) {
+export async function deployEscrow(projectId: string, freelancerId: string) {
   const response = await apiClient.post<ProjectEscrow>(
     `/projects/${projectId}/escrow/deploy`,
+    undefined,
+    { params: { freelancerId } },
   );
 
   return response.data;
 }
 
-export async function syncEscrow(projectId: string) {
+export async function syncEscrow(projectId: string, freelancerId: string) {
   const response = await apiClient.post<ProjectEscrow>(
     `/projects/${projectId}/escrow/sync`,
+    undefined,
+    { params: { freelancerId } },
   );
 
   return response.data;

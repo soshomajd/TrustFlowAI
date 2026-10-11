@@ -10,7 +10,9 @@ import {
 } from "lucide-react";
 import { AnimatedSection, StaggerContainer, StaggerItem, } from "@/components/motion/animation-primitives";
 import { Button } from "@/components/ui/button";
-import { useProjectEscrow } from "@/features/escrow/hooks/use-project-escrow";
+import { useProjectEscrows } from "@/features/escrow/hooks/use-project-escrows";
+import type { ProjectEscrow } from "@/features/escrow/types/escrow";
+import { MemberName } from "@/features/profile-photos/components/user-avatar";
 import { useProjectMilestones } from "@/features/milestones/hooks/use-project-milestones";
 import type { MilestoneStatus, ProjectMilestone, } from "@/features/milestones/types/milestone";
 import { getApiErrorMessage } from "@/lib/api/get-api-error-message";
@@ -44,13 +46,17 @@ export function ProjectMilestonesSection({
     const milestonesQuery =
         useProjectMilestones(projectId);
 
-    const escrowQuery =
-        useProjectEscrow(projectId);
+    // Each freelancer on the project has their own escrow contract, holding
+    // only their own milestones, so a release has to use the contract that
+    // belongs to the milestone's owner.
+    const escrowsQuery = useProjectEscrows(projectId);
 
-    const escrowContractAddress =
-        escrowQuery.data?.contractAddress ??
-        null;
-    const escrowChainId = escrowQuery.data?.chainId ?? null;
+    const escrowsByFreelancer = new Map(
+        (escrowsQuery.data ?? []).map(
+            (participant) =>
+                [participant.freelancerId, participant.escrow] as const,
+        ),
+    );
 
     if (milestonesQuery.isLoading) {
         return (
@@ -94,6 +100,26 @@ export function ProjectMilestonesSection({
             (milestone) =>
                 milestone.sequenceNumber,
         );
+
+    // A contract only knows its own freelancer's milestones, so the index it
+    // is asked to release counts within that freelancer's stages, not across
+    // the whole project.
+    const onChainIndexes = new Map<string, number>();
+    const countPerFreelancer = new Map<string, number>();
+
+    for (const milestone of [...milestones].sort(
+        (left, right) =>
+            left.sequenceNumber - right.sequenceNumber,
+    )) {
+        const owner = milestone.freelancerId ?? "";
+        const taken = countPerFreelancer.get(owner) ?? 0;
+
+        onChainIndexes.set(milestone.id, taken);
+        countPerFreelancer.set(owner, taken + 1);
+    }
+
+    // Only a split project needs each stage labelled with its owner.
+    const showMilestoneOwner = countPerFreelancer.size > 1;
 
     return (
         <AnimatedSection>
@@ -181,10 +207,20 @@ export function ProjectMilestonesSection({
                                         existingSequenceNumbers={
                                             existingSequenceNumbers
                                         }
-                                        escrowContractAddress={
-                                            escrowContractAddress
+                                        escrow={
+                                            escrowsByFreelancer.get(
+                                                milestone.freelancerId ??
+                                                    "",
+                                            ) ?? null
                                         }
-                                        escrowChainId={escrowChainId}
+                                        onChainIndex={
+                                            onChainIndexes.get(
+                                                milestone.id,
+                                            ) ?? 0
+                                        }
+                                        showOwner={
+                                            showMilestoneOwner
+                                        }
                                         milestone={milestone}
                                     />
                                 </StaggerItem>
@@ -204,8 +240,9 @@ function MilestoneCard({
     projectDeadline,
     remainingBudget,
     existingSequenceNumbers,
-    escrowContractAddress,
-    escrowChainId,
+    escrow,
+    onChainIndex,
+    showOwner,
     milestone,
 }: {
     projectId: string;
@@ -214,17 +251,11 @@ function MilestoneCard({
     projectDeadline: string;
     remainingBudget: number;
     existingSequenceNumbers: number[];
-    escrowContractAddress: string | null;
-    escrowChainId: number | null;
+    escrow: ProjectEscrow | null;
+    onChainIndex: number;
+    showOwner: boolean;
     milestone: ProjectMilestone;
 }) {
-    const onChainIndex =
-        existingSequenceNumbers.filter(
-            (sequenceNumber) =>
-                sequenceNumber <
-                milestone.sequenceNumber,
-        ).length;
-
     // Milestones carry the scope, schedule and payment split a freelancer
     // applied to, so they freeze with the rest of the project.
     const canManageMilestone =
@@ -245,6 +276,18 @@ function MilestoneCard({
                             <MilestoneStatusBadge
                                 status={milestone.status}
                             />
+
+                            {showOwner &&
+                                milestone.freelancerId && (
+                                    <MemberName
+                                        userId={
+                                            milestone.freelancerId
+                                        }
+                                        name={
+                                            milestone.freelancerFullName
+                                        }
+                                    />
+                                )}
                         </div>
 
                         {canManageMilestone && (
@@ -302,9 +345,9 @@ function MilestoneCard({
                     milestoneId={milestone.id}
                     status={milestone.status}
                     contractAddress={
-                        escrowContractAddress
+                        escrow?.contractAddress ?? null
                     }
-                    chainId={escrowChainId}
+                    chainId={escrow?.chainId ?? null}
                     onChainIndex={onChainIndex}
                 />
             </div>

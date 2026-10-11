@@ -159,14 +159,18 @@ public sealed class FreelancerProfileTests(CustomWebApplicationFactory factory)
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var completed = new Project
             {
-                ClientId = client.Id, FreelancerId = owner.Id, Title = "Completed website",
+                ClientId = client.Id, Title = "Completed website",
                 Description = "Private project details", Budget = 500m,
                 Deadline = DateTimeOffset.UtcNow.AddDays(10), Status = ProjectStatus.Completed,
-                Milestones = [new MileStone { Title = "Delivery", Description = "Private delivery", Amount = 500m, SequenceNumber = 1, Deadline = DateTimeOffset.UtcNow.AddDays(5), Status = MileStoneStatus.Approved }]
+                // Work is assigned per milestone now, so the history is built
+                // from the stages a freelancer holds, not from the project row.
+                Milestones = [new MileStone { Title = "Delivery", Description = "Private delivery", Amount = 500m, SequenceNumber = 1, Deadline = DateTimeOffset.UtcNow.AddDays(5), Status = MileStoneStatus.Approved, FreelancerId = owner.Id }]
             };
             db.Projects.AddRange(completed,
-                new Project { ClientId = client.Id, FreelancerId = owner.Id, Title = "Still in progress", Budget = 100m, Status = ProjectStatus.InProgress, Deadline = DateTimeOffset.UtcNow.AddDays(10) },
-                new Project { ClientId = client.Id, FreelancerId = other.Id, Title = "Someone else's project", Budget = 100m, Status = ProjectStatus.Completed, Deadline = DateTimeOffset.UtcNow.AddDays(10) });
+                new Project { ClientId = client.Id, Title = "Still in progress", Budget = 100m, Status = ProjectStatus.InProgress, Deadline = DateTimeOffset.UtcNow.AddDays(10),
+                    Milestones = [new MileStone { Title = "In flight", Description = "Ongoing stage", Amount = 100m, SequenceNumber = 1, Deadline = DateTimeOffset.UtcNow.AddDays(5), Status = MileStoneStatus.InProgress, FreelancerId = owner.Id }] },
+                new Project { ClientId = client.Id, Title = "Someone else's project", Budget = 100m, Status = ProjectStatus.Completed, Deadline = DateTimeOffset.UtcNow.AddDays(10),
+                    Milestones = [new MileStone { Title = "Their delivery", Description = "Their stage", Amount = 100m, SequenceNumber = 1, Deadline = DateTimeOffset.UtcNow.AddDays(5), Status = MileStoneStatus.Approved, FreelancerId = other.Id }] });
             await db.SaveChangesAsync();
         }
         var response = await client.Client.GetAsync($"/api/freelancers/{owner.Id}/profile");

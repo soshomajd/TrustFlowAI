@@ -44,7 +44,7 @@ import { useCreateEscrow } from "@/features/escrow/hooks/use-create-escrow";
 import { useDeployEscrow } from "@/features/escrow/hooks/use-deploy-escrow";
 import { useFundEscrow } from "@/features/escrow/hooks/use-fund-escrow";
 import { useMintTestTokens } from "@/features/escrow/hooks/use-mint-test-tokens";
-import { useProjectEscrow } from "@/features/escrow/hooks/use-project-escrow";
+import { useProjectEscrows } from "@/features/escrow/hooks/use-project-escrows";
 import { useStartWork } from "@/features/escrow/hooks/use-start-work";
 import { useSyncEscrow } from "@/features/escrow/hooks/use-sync-escrow";
 import { erc20Abi } from "@/features/escrow/lib/erc20-abi";
@@ -72,63 +72,114 @@ type EscrowPanelProps = {
     viewerRole: "Client" | "Freelancer";
 };
 
+// A project can be split between several freelancers, and the contract pays
+// one immutable address, so each freelancer gets their own escrow and their
+// own card here. A freelancer only ever receives their own.
 export function EscrowPanel({
     projectId,
     projectStatus,
     viewerRole,
 }: EscrowPanelProps) {
-    const escrowQuery = useProjectEscrow(projectId);
+    const escrowsQuery = useProjectEscrows(projectId);
 
     if (projectStatus === "Open") {
         return null;
     }
 
-    if (escrowQuery.isLoading) {
+    if (escrowsQuery.isLoading) {
         return <EscrowPanelSkeleton />;
     }
 
-    if (escrowQuery.isError) {
+    if (escrowsQuery.isError) {
         return (
             <EscrowPanelError
                 message={getApiErrorMessage(
-                    escrowQuery.error,
+                    escrowsQuery.error,
                     "Escrow could not be loaded.",
                 )}
                 onRetry={() => {
-                    void escrowQuery.refetch();
+                    void escrowsQuery.refetch();
                 }}
             />
         );
     }
 
-    const escrow = escrowQuery.data;
+    const participants = escrowsQuery.data ?? [];
 
-    if (!escrow) {
-        return viewerRole === "Client" ? (
-            <CreateEscrowCard projectId={projectId} />
-        ) : (
-            <EscrowPanelShell title="Escrow" statusLabel="Not created yet">
+    if (participants.length === 0) {
+        return (
+            <EscrowPanelShell title="Escrow" statusLabel="No one assigned yet">
                 <p className="text-sm text-muted-foreground">
-                    The client has not created an escrow for this
-                    project yet.
+                    No freelancer has been accepted for this project
+                    yet, so there is nothing to pay into an escrow.
                 </p>
             </EscrowPanelShell>
         );
     }
 
+    // With a single freelancer the card reads as it always did; only a split
+    // project needs each card labelled with its owner.
+    const showOwner = participants.length > 1;
+
     return (
-        <EscrowDetailsCard
-            projectId={projectId}
-            escrow={escrow}
-            viewerRole={viewerRole}
-        />
+        <div className="space-y-5">
+            {participants.map((participant) =>
+                participant.escrow ? (
+                    <EscrowDetailsCard
+                        key={participant.freelancerId}
+                        projectId={projectId}
+                        escrow={participant.escrow}
+                        ownerName={
+                            showOwner
+                                ? participant.freelancerFullName
+                                : null
+                        }
+                        viewerRole={viewerRole}
+                    />
+                ) : viewerRole === "Client" ? (
+                    <CreateEscrowCard
+                        key={participant.freelancerId}
+                        projectId={projectId}
+                        freelancerId={participant.freelancerId}
+                        freelancerFullName={
+                            participant.freelancerFullName
+                        }
+                        assignedTotal={participant.assignedTotal}
+                        milestoneCount={participant.milestoneCount}
+                    />
+                ) : (
+                    <EscrowPanelShell
+                        key={participant.freelancerId}
+                        title="Escrow"
+                        statusLabel="Not created yet"
+                    >
+                        <p className="text-sm text-muted-foreground">
+                            The client has not created an escrow for
+                            your milestones on this project yet.
+                        </p>
+                    </EscrowPanelShell>
+                ),
+            )}
+        </div>
     );
 }
 
-function CreateEscrowCard({ projectId }: { projectId: string }) {
+function CreateEscrowCard({
+    projectId,
+    freelancerId,
+    freelancerFullName,
+    assignedTotal,
+    milestoneCount,
+}: {
+    projectId: string;
+    freelancerId: string;
+    freelancerFullName: string;
+    assignedTotal: number;
+    milestoneCount: number;
+}) {
     const connection = useConnection();
     const walletQuery = useMyWallet();
-    const createMutation = useCreateEscrow(projectId);
+    const createMutation = useCreateEscrow(projectId, freelancerId);
 
     const isWalletReady = Boolean(
         connection.address &&
@@ -139,17 +190,21 @@ function CreateEscrowCard({ projectId }: { projectId: string }) {
 
     return (
         <EscrowPanelShell
-            title="Escrow setup"
+            title={`Escrow setup · ${freelancerFullName}`}
             statusLabel={
                 isWalletReady ? "Wallet verified" : "Wallet required"
             }
             statusTone={isWalletReady ? "positive" : "warning"}
         >
             <p className="text-sm text-muted-foreground">
-                Before the escrow can be created, connect the client
-                wallet that will fund this project and prove ownership
-                with a signature. Signing the verification message does
-                not cost gas.
+                This escrow pays {freelancerFullName} for{" "}
+                {milestoneCount === 1
+                    ? "1 milestone"
+                    : `${milestoneCount} milestones`}
+                , a total of {formatAmount(assignedTotal)}. Connect the
+                client wallet that will fund it and prove ownership with
+                a signature. Signing the verification message does not
+                cost gas.
             </p>
 
             <div className="mt-5 rounded-xl border bg-background/35 p-4 sm:p-5">
@@ -230,6 +285,7 @@ function CreateEscrowCard({ projectId }: { projectId: string }) {
                         disabled={!isWalletReady || createMutation.isPending}
                         onClick={() => {
                             createMutation.mutate({
+                                freelancerId,
                                 chainId: ACTIVE_CHAIN_ID,
                                 tokenAddress: ACTIVE_TOKEN_ADDRESS,
                             });
@@ -260,10 +316,12 @@ function CreateEscrowCard({ projectId }: { projectId: string }) {
 function EscrowDetailsCard({
     projectId,
     escrow,
+    ownerName,
     viewerRole,
 }: {
     projectId: string;
     escrow: ProjectEscrow;
+    ownerName: string | null;
     viewerRole: "Client" | "Freelancer";
 }) {
     const connection = useConnection();
@@ -276,9 +334,15 @@ function EscrowDetailsCard({
                 connection.address.toLowerCase(),
     );
 
-    const deployMutation = useDeployEscrow(projectId);
-    const syncMutation = useSyncEscrow(projectId);
-    const startWorkMutation = useStartWork(projectId);
+    const deployMutation = useDeployEscrow(
+        projectId,
+        escrow.freelancerId,
+    );
+    const syncMutation = useSyncEscrow(projectId, escrow.freelancerId);
+    const startWorkMutation = useStartWork(
+        projectId,
+        escrow.freelancerId,
+    );
 
     const workStartedQuery = useReadContract({
         address: escrow.contractAddress as Address | undefined,
@@ -292,7 +356,7 @@ function EscrowDetailsCard({
 
     return (
         <EscrowPanelShell
-            title="Escrow"
+            title={ownerName ? `Escrow · ${ownerName}` : "Escrow"}
             statusLabel={formatStatusLabel(escrow.status)}
             statusTone={statusTone(escrow.status)}
         >
@@ -394,10 +458,10 @@ function EscrowDetailsCard({
                     {viewerRole === "Client" ? (
                         <>
                             <p className="mb-3 text-sm text-muted-foreground">
-                                Fund the escrow with the full
-                                project budget. Your wallet will
-                                be asked to approve the token
-                                transfer and then fund the
+                                Fund this escrow with the total
+                                for its milestones. Your wallet
+                                will be asked to approve the
+                                token transfer and then fund the
                                 contract.
                             </p>
 
@@ -524,7 +588,10 @@ function CancelEscrowControl({
     projectId: string;
     escrow: ProjectEscrow;
 }) {
-    const cancelMutation = useCancelEscrow(projectId);
+    const cancelMutation = useCancelEscrow(
+        projectId,
+        escrow.freelancerId,
+    );
 
     return (
         <div className="mt-5 border-t pt-5">
@@ -592,7 +659,7 @@ function ClientFundingControls({
 }) {
     const connection = useConnection();
     const walletQuery = useMyWallet();
-    const fundMutation = useFundEscrow(projectId);
+    const fundMutation = useFundEscrow(projectId, escrow.freelancerId);
     const testFundsMutation = useMintTestTokens();
     const switchChainMutation = useSwitchChain();
 
@@ -818,7 +885,7 @@ function ClientFundingControls({
             {!canFund && !checksLoading && !balanceReadFailed && (
                 <p className="text-xs leading-5 text-muted-foreground">
                     Approve and fund unlocks after the wallet is on
-                    {ACTIVE_CHAIN_NAME} and has the full project budget plus gas.
+                    {ACTIVE_CHAIN_NAME} and holds this escrow’s total plus gas.
                 </p>
             )}
 

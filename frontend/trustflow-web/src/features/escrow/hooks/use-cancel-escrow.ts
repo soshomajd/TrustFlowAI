@@ -13,12 +13,12 @@ import { projectQueryKeys } from "@/features/projects/queries/project-query-keys
 import { getWalletErrorMessage } from "@/lib/wallet/get-wallet-error-message";
 import { wagmiConfig } from "@/lib/wallet/wagmi-config";
 
-export function useCancelEscrow(projectId: string) {
+export function useCancelEscrow(projectId: string, freelancerId: string) {
   const queryClient = useQueryClient();
   const normalizedProjectId = projectId.trim();
 
   return useMutation({
-    mutationKey: escrowQueryKeys.cancel(normalizedProjectId),
+    mutationKey: escrowQueryKeys.cancel(normalizedProjectId, freelancerId),
 
     mutationFn: async (escrow: ProjectEscrow) => {
       if (!escrow.contractAddress) {
@@ -37,13 +37,13 @@ export function useCancelEscrow(projectId: string) {
         chainId: escrow.chainId,
       });
 
-      return syncEscrow(normalizedProjectId);
+      return syncEscrow(normalizedProjectId, freelancerId);
     },
 
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: escrowQueryKeys.detail(normalizedProjectId),
+          queryKey: escrowQueryKeys.participants(normalizedProjectId),
         }),
         queryClient.invalidateQueries({
           queryKey: projectQueryKeys.workspace(normalizedProjectId),

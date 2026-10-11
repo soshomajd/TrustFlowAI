@@ -100,7 +100,9 @@ public sealed class MilestoneWorkflowTests
         var proposalId =
             await CreateProposalAsync(
                 projectId,
-                freelancerToken
+                freelancerToken,
+                milestoneOneId,
+                milestoneTwoId
             );
 
         await AcceptProposalAsync(
@@ -593,7 +595,8 @@ public sealed class MilestoneWorkflowTests
 
     private async Task<Guid> CreateProposalAsync(
         Guid projectId,
-        string freelancerToken)
+        string freelancerToken,
+        params Guid[] milestoneIds)
     {
         using var request =
             CreateAuthorizedJsonRequest(
@@ -605,7 +608,9 @@ public sealed class MilestoneWorkflowTests
                     CoverLetter =
                         "I can complete both milestones.",
 
-                    BidAmount = 2500.00m,
+                    // The price is the sum of the milestones claimed,
+                    // so the proposal names them instead of a bid.
+                    MilestoneIds = milestoneIds,
 
                     EstimatedDays = 55
                 }
