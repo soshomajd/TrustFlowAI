@@ -87,7 +87,7 @@ const reminders = [
     "Your project stays on the marketplace while any milestone is still free, so other freelancers can apply for the rest.",
     "Changing the budget after a freelancer applies blocks their proposal until they agree again.",
     "Fund each freelancer’s escrow before that freelancer starts work.",
-    "You can cancel and get a refund only before work starts.",
+    "You can cancel and get a refund only before work starts. Cancelling drops that one freelancer and puts their stages back on the marketplace. Your other freelancers keep working.",
     "Release payment only after you check the submitted work.",
 ];
 

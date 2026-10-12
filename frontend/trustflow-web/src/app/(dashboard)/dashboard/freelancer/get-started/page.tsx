@@ -80,7 +80,7 @@ const reminders = [
     "Use the same wallet that you verified on your account.",
     "Disconnect in the top bar only signs the wallet out of this site. Your account keeps the address you verified.",
     "Do not start work until the escrow status says Funded.",
-    "The client can cancel the escrow until you start work on-chain.",
+    "The client can cancel the escrow until you start work on-chain. If they do, you leave the project, your proposal is marked rejected, and your stages go back on the marketplace for others.",
     "Finish your own milestones in order, one at a time. Another freelancer being slow does not block you.",
     "You cannot offer a lower price. The milestones you pick set the price you are paid.",
     "A project can stay on the marketplace after someone is hired. The milestones nobody has taken are still open to you.",

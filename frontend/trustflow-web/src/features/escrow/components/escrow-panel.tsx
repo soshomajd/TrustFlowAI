@@ -622,7 +622,10 @@ function CancelEscrowControl({
                         <AlertDialogDescription>
                             You can cancel only before the freelancer starts
                             work. If the escrow is funded, the contract returns
-                            the full token balance to your wallet.
+                            the full token balance to your wallet. This
+                            freelancer leaves the project, and the stages they
+                            were going to deliver go back on the market so you
+                            can hire someone else for them.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

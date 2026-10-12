@@ -79,6 +79,7 @@ public sealed class EscrowChainSyncOrchestrator(
                 await SyncCancelledAsync(
                     escrowId,
                     escrow.ProjectId,
+                    escrow.FreelancerId,
                     cancellationToken
                 ),
             OnChainEscrowState.Completed => false,
@@ -119,9 +120,13 @@ public sealed class EscrowChainSyncOrchestrator(
         return updated == 1;
     }
 
+    // Cancelling an escrow retires one freelancer from the project, not the
+    // project itself. Their stages go back on the market, and the project
+    // only reopens once nobody is left working on it.
     private async Task<bool> SyncCancelledAsync(
         Guid escrowId,
         Guid projectId,
+        Guid freelancerId,
         CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
@@ -157,14 +162,56 @@ public sealed class EscrowChainSyncOrchestrator(
             return false;
         }
 
-        await dbContext.Projects
+        // Release this freelancer's stages so the client can hire again.
+        // Cancellation is only possible before work starts, so these are
+        // all still Pending, but the reset keeps that an invariant of this
+        // method rather than an assumption about the contract.
+        await dbContext.Milestones
             .Where(item =>
-                item.Id == projectId &&
-                item.Status == ProjectStatus.InProgress)
+                item.ProjectId == projectId &&
+                item.FreelancerId == freelancerId)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        item => item.FreelancerId,
+                        (Guid?)null
+                    )
+                    .SetProperty(
+                        item => item.Status,
+                        MileStoneStatus.Pending
+                    ),
+                cancellationToken
+            );
+
+        // Their accepted proposal no longer holds anything. Leaving it
+        // Accepted would tell the freelancer they are still hired.
+        await dbContext.Proposals
+            .Where(item =>
+                item.ProjectId == projectId &&
+                item.FreelancerId == freelancerId &&
+                item.Status == ProposalStatus.Accepted)
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(
                     item => item.Status,
-                    ProjectStatus.Cancelled
+                    ProposalStatus.Rejected
+                ),
+                cancellationToken
+            );
+
+        // Only the last freelancer leaving reopens the project; anyone else
+        // still holding a stage keeps it in progress. The "nobody is left"
+        // test is part of the same statement so it cannot be decided from a
+        // stale read.
+        await dbContext.Projects
+            .Where(item =>
+                item.Id == projectId &&
+                item.Status == ProjectStatus.InProgress &&
+                !item.Milestones.Any(
+                    milestone => milestone.FreelancerId != null))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    item => item.Status,
+                    ProjectStatus.Open
                 ),
                 cancellationToken
             );

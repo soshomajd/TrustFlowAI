@@ -3,8 +3,12 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Nethereum.Signer;
+using TrustFlow.Api.Data;
 using TrustFlow.Api.IntegrationTests.Infrastructure;
+using TrustFlow.Api.Models.Enums;
 
 namespace TrustFlow.Api.IntegrationTests.Tests;
 
@@ -15,9 +19,13 @@ public sealed class EscrowFlowTests
 
     private readonly HttpClient _client;
 
+    private readonly CustomWebApplicationFactory _factory;
+
     public EscrowFlowTests(
         CustomWebApplicationFactory factory)
     {
+        _factory = factory;
+
         _client = factory.CreateClient(
             new WebApplicationFactoryClientOptions
             {
@@ -1004,6 +1012,443 @@ public sealed class EscrowFlowTests
             StringComparison.OrdinalIgnoreCase
         );
     }
+
+    // Cancelling one escrow on a project shared with another freelancer
+    // must retire only that freelancer: their stages go back on the market,
+    // and everyone else keeps working.
+    [Fact]
+    public async Task Sync_CancellingOneEscrow_FreesOnlyThatFreelancersStages()
+    {
+        var clientAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Client",
+                fullName: "Split Cancellation Client"
+            );
+
+        var firstAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Freelancer",
+                fullName: "Split Cancellation Freelancer One"
+            );
+
+        var secondAccessToken =
+            await RegisterAndLoginAsync(
+                role: "Freelancer",
+                fullName: "Split Cancellation Freelancer Two"
+            );
+
+        await ConnectWalletAsync(clientAccessToken);
+        await ConnectWalletAsync(firstAccessToken);
+        await ConnectWalletAsync(secondAccessToken);
+
+        var deadline = DateTimeOffset.UtcNow.AddDays(14);
+
+        var projectId = await CreateProjectAsync(
+            clientAccessToken,
+            deadline
+        );
+
+        // The two stages add up to the 10,000 budget, which acceptance
+        // requires.
+        var firstStageId = await CreateSplitMilestoneAsync(
+            clientAccessToken,
+            projectId,
+            "First stage",
+            6_000m,
+            1,
+            deadline.AddDays(-7)
+        );
+
+        var secondStageId = await CreateSplitMilestoneAsync(
+            clientAccessToken,
+            projectId,
+            "Second stage",
+            4_000m,
+            2,
+            deadline.AddDays(-3)
+        );
+
+        var firstProposalId = await CreateProposalAsync(
+            firstAccessToken,
+            projectId,
+            firstStageId
+        );
+
+        await AcceptProposalAsync(
+            clientAccessToken,
+            projectId,
+            firstProposalId
+        );
+
+        var secondProposalId = await CreateProposalAsync(
+            secondAccessToken,
+            projectId,
+            secondStageId
+        );
+
+        await AcceptProposalAsync(
+            clientAccessToken,
+            projectId,
+            secondProposalId
+        );
+
+        var participants =
+            await GetEscrowParticipantsAsync(
+                clientAccessToken,
+                projectId
+            );
+
+        Assert.Equal(2, participants.Count);
+
+        var firstFreelancerId = participants
+            .Single(participant =>
+                participant.AssignedTotal == 6_000m)
+            .FreelancerId;
+
+        var secondFreelancerId = participants
+            .Single(participant =>
+                participant.AssignedTotal == 4_000m)
+            .FreelancerId;
+
+        foreach (var freelancerId in new[]
+                 {
+                     firstFreelancerId,
+                     secondFreelancerId
+                 })
+        {
+            await CreateEscrowForAsync(
+                clientAccessToken,
+                projectId,
+                freelancerId
+            );
+
+            await DeployEscrowForAsync(
+                clientAccessToken,
+                projectId,
+                freelancerId
+            );
+        }
+
+        var firstContractAddress =
+            await GetEscrowContractAddressAsync(
+                clientAccessToken,
+                projectId,
+                firstFreelancerId
+            );
+
+        FakeEscrowChainDeployer.MarkCancelled(
+            firstContractAddress
+        );
+
+        using (var syncRequest = CreateAuthorizedRequest(
+                   HttpMethod.Post,
+                   $"/api/projects/{projectId}/escrow/sync" +
+                   $"?freelancerId={firstFreelancerId}",
+                   clientAccessToken))
+        {
+            var syncResponse =
+                await _client.SendAsync(syncRequest);
+
+            Assert.Equal(
+                HttpStatusCode.OK,
+                syncResponse.StatusCode
+            );
+
+            Assert.Equal(
+                "Cancelled",
+                await ReadStringPropertyAsync(
+                    syncResponse,
+                    "status"
+                )
+            );
+        }
+
+        await using (var scope =
+                     _factory.Services.CreateAsyncScope())
+        {
+            var database =
+                scope.ServiceProvider
+                    .GetRequiredService<AppDbContext>();
+
+            var freedStage = await database.Milestones
+                .AsNoTracking()
+                .SingleAsync(item => item.Id == firstStageId);
+
+            Assert.Null(freedStage.FreelancerId);
+
+            Assert.Equal(
+                MileStoneStatus.Pending,
+                freedStage.Status
+            );
+
+            var keptStage = await database.Milestones
+                .AsNoTracking()
+                .SingleAsync(item => item.Id == secondStageId);
+
+            Assert.Equal(
+                secondFreelancerId,
+                keptStage.FreelancerId
+            );
+
+            // The freelancer who was dropped is no longer hired.
+            var firstProposal = await database.Proposals
+                .AsNoTracking()
+                .SingleAsync(item => item.Id == firstProposalId);
+
+            Assert.Equal(
+                ProposalStatus.Rejected,
+                firstProposal.Status
+            );
+
+            var secondProposal = await database.Proposals
+                .AsNoTracking()
+                .SingleAsync(item => item.Id == secondProposalId);
+
+            Assert.Equal(
+                ProposalStatus.Accepted,
+                secondProposal.Status
+            );
+
+            // Someone is still working, so the project is still running.
+            var project = await database.Projects
+                .AsNoTracking()
+                .SingleAsync(item => item.Id == projectId);
+
+            Assert.Equal(
+                ProjectStatus.InProgress,
+                project.Status
+            );
+
+            var secondEscrow = await database.Escrows
+                .AsNoTracking()
+                .SingleAsync(item =>
+                    item.ProjectId == projectId &&
+                    item.FreelancerId == secondFreelancerId);
+
+            Assert.Equal(
+                EscrowStatus.AwaitingFunding,
+                secondEscrow.Status
+            );
+        }
+
+        // Only the freelancer still holding a stage is listed now.
+        var remaining =
+            await GetEscrowParticipantsAsync(
+                clientAccessToken,
+                projectId
+            );
+
+        Assert.Single(remaining);
+
+        Assert.Equal(
+            secondFreelancerId,
+            remaining[0].FreelancerId
+        );
+
+        // Cancelling the last live escrow reopens the project.
+        var secondContractAddress =
+            await GetEscrowContractAddressAsync(
+                clientAccessToken,
+                projectId,
+                secondFreelancerId
+            );
+
+        FakeEscrowChainDeployer.MarkCancelled(
+            secondContractAddress
+        );
+
+        using (var syncRequest = CreateAuthorizedRequest(
+                   HttpMethod.Post,
+                   $"/api/projects/{projectId}/escrow/sync" +
+                   $"?freelancerId={secondFreelancerId}",
+                   clientAccessToken))
+        {
+            var syncResponse =
+                await _client.SendAsync(syncRequest);
+
+            Assert.Equal(
+                HttpStatusCode.OK,
+                syncResponse.StatusCode
+            );
+        }
+
+        await using (var scope =
+                     _factory.Services.CreateAsyncScope())
+        {
+            var database =
+                scope.ServiceProvider
+                    .GetRequiredService<AppDbContext>();
+
+            var project = await database.Projects
+                .AsNoTracking()
+                .SingleAsync(item => item.Id == projectId);
+
+            Assert.Equal(
+                ProjectStatus.Open,
+                project.Status
+            );
+
+            var stillAssigned = await database.Milestones
+                .AsNoTracking()
+                .AnyAsync(item =>
+                    item.ProjectId == projectId &&
+                    item.FreelancerId != null);
+
+            Assert.False(stillAssigned);
+        }
+    }
+
+    private sealed record EscrowParticipant(
+        Guid FreelancerId,
+        decimal AssignedTotal);
+
+    private async Task<List<EscrowParticipant>>
+        GetEscrowParticipantsAsync(
+            string accessToken,
+            Guid projectId)
+    {
+        using var request = CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/projects/{projectId}/escrows",
+            accessToken
+        );
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode
+        );
+
+        using var payload = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync()
+        );
+
+        return payload.RootElement
+            .EnumerateArray()
+            .Select(element => new EscrowParticipant(
+                element.GetProperty("freelancerId")
+                    .GetGuid(),
+                element.GetProperty("assignedTotal")
+                    .GetDecimal()
+            ))
+            .ToList();
+    }
+
+    private async Task<Guid> CreateSplitMilestoneAsync(
+        string accessToken,
+        Guid projectId,
+        string title,
+        decimal amount,
+        int sequenceNumber,
+        DateTimeOffset deadline)
+    {
+        using var request = CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/projects/{projectId}/milestones",
+            accessToken,
+            new
+            {
+                Title = title,
+
+                Description =
+                    $"{title} of a project split between two freelancers.",
+
+                Amount = amount,
+
+                SequenceNumber = sequenceNumber,
+
+                Deadline = deadline
+            }
+        );
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            response.StatusCode
+        );
+
+        return await ReadGuidPropertyAsync(
+            response,
+            "id"
+        );
+    }
+
+    private async Task CreateEscrowForAsync(
+        string clientAccessToken,
+        Guid projectId,
+        Guid freelancerId)
+    {
+        using var request = CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/projects/{projectId}/escrow",
+            clientAccessToken,
+            new
+            {
+                FreelancerId = freelancerId,
+
+                ChainId = 31337,
+
+                TokenAddress =
+                    "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+            }
+        );
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            response.StatusCode
+        );
+    }
+
+    private async Task DeployEscrowForAsync(
+        string clientAccessToken,
+        Guid projectId,
+        Guid freelancerId)
+    {
+        using var request = CreateAuthorizedRequest(
+            HttpMethod.Post,
+            $"/api/projects/{projectId}/escrow/deploy" +
+            $"?freelancerId={freelancerId}",
+            clientAccessToken
+        );
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode
+        );
+    }
+
+    private async Task<string>
+        GetEscrowContractAddressAsync(
+            string accessToken,
+            Guid projectId,
+            Guid freelancerId)
+    {
+        using var request = CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/projects/{projectId}/escrow" +
+            $"?freelancerId={freelancerId}",
+            accessToken
+        );
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode
+        );
+
+        return await ReadStringPropertyAsync(
+            response,
+            "contractAddress"
+        );
+    }
+
 
     private async Task<string>
         RegisterAndLoginAsync(
