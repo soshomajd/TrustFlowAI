@@ -21,6 +21,12 @@ export const escrowQueryKeys = {
   startWork: (projectId: string, freelancerId: string) =>
     [...escrowQueryKeys.all, "start-work", projectId, freelancerId] as const,
 
+  cases: (projectId: string) =>
+    [...escrowQueryKeys.all, "cases", projectId] as const,
+
+  caseAction: (projectId: string, freelancerId: string) =>
+    [...escrowQueryKeys.all, "case-action", projectId, freelancerId] as const,
+
   cancel: (projectId: string, freelancerId: string) =>
     [...escrowQueryKeys.all, "cancel", projectId, freelancerId] as const,
 };

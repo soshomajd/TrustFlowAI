@@ -71,7 +71,7 @@ const steps: GuideStep[] = [
     {
         title: "Review work and release payment",
         description:
-            "Open each submitted milestone. Read the note, download its files and check its links. You can use Check with AI to see if the work matches what you asked for. Then ask for changes with a clear reason, or release payment and approve the work. If you and the freelancer cannot agree, you can open a dispute.",
+            "Open each submitted milestone. Read the note, download its files and check its links. You can use Check with AI to see if the work matches what you asked for. Then ask for changes with a clear reason, or release payment and approve the work. If you and the freelancer cannot agree, you can open a dispute. If the work never arrives or is not good enough, use Ask for refund.",
         icon: ClipboardCheck,
         action: {
             label: "Go to my projects",
@@ -90,7 +90,10 @@ const reminders = [
     "You can cancel and get a refund only before work starts. Cancelling drops that one freelancer and puts their stages back on the marketplace. Your other freelancers keep working.",
     "Release payment only after you check the submitted work.",
     "AI help is advice. It can be wrong. You decide, and you release payment yourself.",
-    "A dispute asks an AI to give an opinion on who is right. It does not move any money. While a dispute is open you cannot ask for changes on that milestone.",
+    "A dispute asks an AI to give an opinion on who is right. The opinion does not move any money by itself. While a dispute is open you cannot ask for changes on that milestone.",
+    "Ask for refund starts a 14 day clock on the escrow. During it you can still release payment or take the request back. After 14 days a human reviewer can pay the freelancer, pay you back, or split the milestone. They can send the money only to you or the freelancer.",
+    "If the freelancer leaves the project, the money not yet paid comes back to you and their unpaid milestones open for hire again.",
+    "If the reviewer never answers for 90 days, either of you can split the milestone 50/50 and end the escrow.",
 ];
 
 export default function ClientGettingStartedPage() {

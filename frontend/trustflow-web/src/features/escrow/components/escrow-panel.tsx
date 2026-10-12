@@ -30,6 +30,7 @@ import {
 
 import {
     AlertDialog,
+    AlertDialogAction,
     AlertDialogCancel,
     AlertDialogContent,
     AlertDialogDescription,
@@ -40,6 +41,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { useCancelEscrow } from "@/features/escrow/hooks/use-cancel-escrow";
+import { useCaseAction } from "@/features/escrow/hooks/use-case-action";
 import { useCreateEscrow } from "@/features/escrow/hooks/use-create-escrow";
 import { useDeployEscrow } from "@/features/escrow/hooks/use-deploy-escrow";
 import { useFundEscrow } from "@/features/escrow/hooks/use-fund-escrow";
@@ -549,6 +551,15 @@ function EscrowDetailsCard({
                         </p>
                     )}
 
+                    {viewerRole === "Freelancer" &&
+                        workStartedQuery.data === true &&
+                        isWalletVerified && (
+                            <ResignControl
+                                projectId={projectId}
+                                escrow={escrow}
+                            />
+                        )}
+
                     {viewerRole === "Client" &&
                         workStartedQuery.data === false && (
                             <p className="text-sm text-muted-foreground">
@@ -585,7 +596,75 @@ function EscrowDetailsCard({
                     is complete.
                 </div>
             )}
+
+            {escrow.status === "Terminated" && (
+                <div className="mt-5 border-t pt-5 text-sm text-muted-foreground">
+                    This escrow ended early, either because the freelancer
+                    left or because a reviewer settled a case and ended it.
+                    Milestones already paid stay paid. The rest went back to
+                    the client, and the unpaid milestones are open for hire
+                    again.
+                </div>
+            )}
         </EscrowPanelShell>
+    );
+}
+
+function ResignControl({
+    projectId,
+    escrow,
+}: {
+    projectId: string;
+    escrow: ProjectEscrow;
+}) {
+    const action = useCaseAction(projectId, escrow.freelancerId);
+
+    return (
+        <div className="mt-4">
+            <AlertDialog>
+                <AlertDialogTrigger asChild>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={action.isPending}
+                    >
+                        {action.isPending && (
+                            <LoaderCircle className="size-4 animate-spin" />
+                        )}
+                        Leave this project
+                    </Button>
+                </AlertDialogTrigger>
+
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            Leave this project?
+                        </AlertDialogTitle>
+
+                        <AlertDialogDescription>
+                            You give up all milestones that are not paid yet.
+                            Everything unpaid in this escrow goes back to the
+                            client, and those milestones are open for other
+                            freelancers. Milestones already paid stay yours.
+                            This cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Stay</AlertDialogCancel>
+
+                        <AlertDialogAction
+                            onClick={() =>
+                                action.mutate({ escrow, action: "resign" })
+                            }
+                        >
+                            Leave project
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </div>
     );
 }
 

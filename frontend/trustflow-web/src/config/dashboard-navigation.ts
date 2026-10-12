@@ -4,6 +4,7 @@ import {
   CircleHelp,
   FilePlus2,
   FolderKanban,
+  Gavel,
   LayoutDashboard,
   Search,
   Send,
@@ -49,6 +50,12 @@ export const dashboardNavigationItems: DashboardNavigationItem[] = [
     href: "/dashboard/client/get-started",
     icon: CircleHelp,
     roles: ["Client"],
+  },
+  {
+    label: "Review desk",
+    href: "/dashboard/review",
+    icon: Gavel,
+    roles: ["Admin"],
   },
   {
     label: "Overview",

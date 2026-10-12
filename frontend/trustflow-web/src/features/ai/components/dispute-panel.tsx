@@ -218,8 +218,9 @@ function OpenDisputeDialog({
           </li>
 
           <li>
-            It gives a ruling. The ruling is advice only. It does not move any
-            money. The client still releases payment from their own wallet.
+            It gives an opinion. The opinion does not move money by itself.
+            If you still cannot agree, either of you can start a 14 day
+            request on the escrow, and then a human reviewer decides.
           </li>
         </ol>
 
@@ -511,7 +512,8 @@ function RulingRequest({
               The AI will read the milestone request, the delivered work and
               both statements. A ruling is made once and nobody can change it
               or add to the evidence afterwards. It uses one of your daily AI
-              requests. The ruling is advice and does not move any money.
+              requests. The ruling is an opinion and does not move any
+              money by itself.
             </AlertDialogDescription>
           </AlertDialogHeader>
 

@@ -38,6 +38,14 @@ export function DashboardRedirect() {
             return;
         }
 
+        if (user.roles.includes("Admin")) {
+            router.replace(
+                "/dashboard/review",
+            );
+
+            return;
+        }
+
         router.replace("/");
     }, [user, router]);
 

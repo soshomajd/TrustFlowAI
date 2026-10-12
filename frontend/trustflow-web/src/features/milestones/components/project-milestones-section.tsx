@@ -26,6 +26,8 @@ import {
 } from "@/features/milestones/components/client-milestone-review-actions";
 import { DisputePanel } from
     "@/features/ai/components/dispute-panel";
+import { EscrowCasePanel } from
+    "@/features/escrow/components/escrow-case-panel";
 import { MilestoneAiReviewPanel } from
     "@/features/ai/components/milestone-ai-review-panel";
 import { MilestoneSubmissionsPanel } from
@@ -120,6 +122,26 @@ export function ProjectMilestonesSection({
 
         onChainIndexes.set(milestone.id, taken);
         countPerFreelancer.set(owner, taken + 1);
+    }
+
+    // The contract only looks at its next unpaid stage, so a request can only
+    // concern a stage whose earlier stages (same freelancer) are finished.
+    const nextInLine = new Set<string>();
+    const blockedOwners = new Set<string>();
+
+    for (const milestone of [...milestones].sort(
+        (left, right) =>
+            left.sequenceNumber - right.sequenceNumber,
+    )) {
+        const owner = milestone.freelancerId ?? "";
+        const done =
+            milestone.status === "Approved" ||
+            milestone.status === "Settled";
+
+        if (!done && !blockedOwners.has(owner)) {
+            nextInLine.add(milestone.id);
+            blockedOwners.add(owner);
+        }
     }
 
     // Only a split project needs each stage labelled with its owner.
@@ -222,6 +244,9 @@ export function ProjectMilestonesSection({
                                                 milestone.id,
                                             ) ?? 0
                                         }
+                                        isNextInLine={nextInLine.has(
+                                            milestone.id,
+                                        )}
                                         showOwner={
                                             showMilestoneOwner
                                         }
@@ -246,6 +271,7 @@ function MilestoneCard({
     existingSequenceNumbers,
     escrow,
     onChainIndex,
+    isNextInLine,
     showOwner,
     milestone,
 }: {
@@ -257,6 +283,7 @@ function MilestoneCard({
     existingSequenceNumbers: number[];
     escrow: ProjectEscrow | null;
     onChainIndex: number;
+    isNextInLine: boolean;
     showOwner: boolean;
     milestone: ProjectMilestone;
 }) {
@@ -378,6 +405,15 @@ function MilestoneCard({
                     />
                 </>
             )}
+
+            <EscrowCasePanel
+                projectId={projectId}
+                viewerRole="Client"
+                escrow={escrow}
+                milestone={milestone}
+                onChainIndex={onChainIndex}
+                isNextInLine={isNextInLine}
+            />
         </article>
     );
 }
@@ -444,6 +480,9 @@ const milestoneStatusStyles: Record<
 
     Rejected:
         "border-red-500/30 bg-red-500/10 text-red-400",
+
+    Settled:
+        "border-blue-500/30 bg-blue-500/10 text-blue-300",
 };
 
 function ProjectMilestonesEmpty() {

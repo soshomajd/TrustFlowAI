@@ -4,7 +4,8 @@ export type EscrowStatus =
   | "AwaitingFunding"
   | "Funded"
   | "Completed"
-  | "Cancelled";
+  | "Cancelled"
+  | "Terminated";
 
 export type ProjectEscrow = {
   id: string;
@@ -20,6 +21,10 @@ export type ProjectEscrow = {
 
   clientWalletAddress: string | null;
   freelancerWalletAddress: string | null;
+
+  // The one address that can settle a case on this contract. It was fixed
+  // into the contract when it was deployed.
+  arbiterWalletAddress: string | null;
 
   totalAmount: number;
   releasedAmount: number;
@@ -46,6 +51,45 @@ export type ProjectEscrowParticipant = {
   milestoneCount: number;
   assignedTotal: number;
   escrow: ProjectEscrow | null;
+};
+
+export type EscrowCaseKind = "PaymentRequest" | "RefundRequest";
+
+export type EscrowCaseStatus = "Open" | "Withdrawn" | "Settled";
+
+// A request on the contract that starts a 14 day clock. The chain decides;
+// this is the backend's copy of it.
+export type EscrowCase = {
+  id: string;
+  escrowId: string;
+  projectId: string;
+  freelancerId: string;
+  milestoneId: string;
+  milestoneTitle: string;
+  milestoneAmount: number;
+
+  kind: EscrowCaseKind;
+  openedByRole: "Freelancer" | "Client";
+  status: EscrowCaseStatus;
+
+  openedAt: string;
+
+  // From here the reviewer may settle it.
+  settleableAt: string;
+
+  // From here either side may force a 50/50 split if the reviewer never
+  // acted.
+  stallableAt: string;
+
+  closedAt: string | null;
+  paidToFreelancer: number | null;
+  returnedToClient: number | null;
+  escrowEnded: boolean;
+  reviewNote: string | null;
+
+  chainId: number;
+  contractAddress: string | null;
+  arbiterWalletAddress: string | null;
 };
 
 export type CreateEscrowRequest = {

@@ -838,6 +838,8 @@ namespace TrustFlow.Api.Controllers
                                         milestone.Deadline,
                                     Status =
                                         milestone.Status,
+                                    PaidAmount =
+                                        milestone.PaidAmount,
                                     FreelancerId =
                                         milestone.FreelancerId,
                                     FreelancerFullName =

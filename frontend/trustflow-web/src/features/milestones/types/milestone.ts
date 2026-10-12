@@ -5,7 +5,8 @@ export type MilestoneStatus =
   | "InProgress"
   | "Submitted"
   | "Approved"
-  | "Rejected";
+  | "Rejected"
+  | "Settled";
 
 export type MilestoneSubmissionAttachment = {
   id: string;
@@ -47,6 +48,10 @@ export type ProjectMilestone = {
 
   deadline: string;
   status: MilestoneStatus;
+
+  // Only set once a reviewer settled the milestone: what the freelancer
+  // actually received for it, which can be less than the amount.
+  paidAmount: number | null;
 
   // Stages are assigned one freelancer at a time, and each is paid by that
   // freelancer's own escrow contract.

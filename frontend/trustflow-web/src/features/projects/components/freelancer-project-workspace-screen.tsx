@@ -29,10 +29,13 @@ import { useStartMilestone } from
     "@/features/milestones/hooks/use-start-milestone";
 import { SubmitMilestoneDialog } from
     "@/features/milestones/components/submit-milestone-dialog";
+import { EscrowCasePanel } from
+    "@/features/escrow/components/escrow-case-panel";
 import { DisputePanel } from
     "@/features/ai/components/dispute-panel";
 import { MilestoneSubmissionsPanel } from
     "@/features/milestones/components/milestone-submissions-panel";
+import type { ProjectEscrow } from "@/features/escrow/types/escrow";
 import { useProjectEscrows } from
     "@/features/escrow/hooks/use-project-escrows";
 import { useProjectWorkspace } from
@@ -104,7 +107,8 @@ export function FreelancerProjectWorkspaceScreen({
     const approvedCount =
         milestones.filter(
             (milestone) =>
-                milestone.status === "Approved",
+                milestone.status === "Approved" ||
+                milestone.status === "Settled",
         ).length;
 
     const progress =
@@ -234,11 +238,22 @@ export function FreelancerProjectWorkspaceScreen({
                     ) : (
                         <StaggerContainer className="mt-6 space-y-4">
                             {milestones.map(
-                                (milestone) => (
+                                (milestone, position) => (
                                     <StaggerItem
                                         key={milestone.id}
                                     >
                                         <FreelancerMilestoneCard
+                                            escrow={myEscrow}
+                                            onChainIndex={position}
+                                            isNextInLine={milestones
+                                                .slice(0, position)
+                                                .every(
+                                                    (earlier) =>
+                                                        earlier.status ===
+                                                            "Approved" ||
+                                                        earlier.status ===
+                                                            "Settled",
+                                                )}
                                             projectId={
                                                 workspace.id
                                             }
@@ -285,7 +300,13 @@ function FreelancerMilestoneCard({
     milestone,
     milestones,
     isEscrowFunded,
+    escrow,
+    onChainIndex,
+    isNextInLine,
 }: {
+    escrow: ProjectEscrow | null;
+    onChainIndex: number;
+    isNextInLine: boolean;
     projectId: string;
     projectStatus:
     WorkspaceData["status"];
@@ -308,7 +329,9 @@ function FreelancerMilestoneCard({
                 previousMilestone.sequenceNumber <
                 milestone.sequenceNumber &&
                 previousMilestone.status !==
-                "Approved",
+                "Approved" &&
+                previousMilestone.status !==
+                "Settled",
         );
 
     const canStart =
@@ -449,6 +472,22 @@ function FreelancerMilestoneCard({
                     </div>
                 )}
 
+            {milestone.status ===
+                "Settled" && (
+                    <div className="mt-5 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-sm text-muted-foreground">
+                        A reviewer settled this
+                        milestone. You received{" "}
+                        {formatSettledAmount(
+                            milestone.paidAmount ?? 0,
+                        )}{" "}
+                        of{" "}
+                        {formatSettledAmount(
+                            milestone.amount,
+                        )}
+                        .
+                    </div>
+                )}
+
             {milestone.status !== "Pending" && (
                 <MilestoneSubmissionsPanel
                     projectId={projectId}
@@ -465,6 +504,15 @@ function FreelancerMilestoneCard({
                         canOpen={isEscrowFunded}
                     />
                 )}
+
+            <EscrowCasePanel
+                projectId={projectId}
+                viewerRole="Freelancer"
+                escrow={escrow}
+                milestone={milestone}
+                onChainIndex={onChainIndex}
+                isNextInLine={isNextInLine}
+            />
 
             {mutationError && (
                 <div
@@ -598,6 +646,9 @@ function MilestoneStatusBadge({
 
                 status === "Rejected" &&
                 "border-red-500/30 bg-red-500/10 text-red-400",
+
+                status === "Settled" &&
+                "border-blue-500/30 bg-blue-500/10 text-blue-300",
             )}
         >
             {status === "InProgress"
@@ -605,6 +656,13 @@ function MilestoneStatusBadge({
                 : status}
         </span>
     );
+}
+
+function formatSettledAmount(value: number) {
+    return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+    }).format(value);
 }
 
 function WorkspaceError({

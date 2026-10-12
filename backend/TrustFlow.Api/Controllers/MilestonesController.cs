@@ -67,6 +67,7 @@ public class MilestonesController(
             SequenceNumber = milestone.SequenceNumber,
             Deadline = milestone.Deadline,
             Status = milestone.Status,
+            PaidAmount = milestone.PaidAmount,
             FreelancerId = milestone.FreelancerId,
             FreelancerFullName = milestone.Freelancer?.FullName
         };
@@ -372,6 +373,8 @@ public class MilestonesController(
                 Deadline = milestone.Deadline,
 
                 Status = milestone.Status,
+
+                PaidAmount = milestone.PaidAmount,
 
                 FreelancerId = milestone.FreelancerId,
 

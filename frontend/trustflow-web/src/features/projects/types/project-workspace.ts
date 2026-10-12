@@ -8,7 +8,15 @@ export type ProjectWorkspaceMilestone = {
   amount: number;
   sequenceNumber: number;
   deadline: string;
-  status: "Pending" | "InProgress" | "Submitted" | "Approved" | "Rejected";
+  status:
+    | "Pending"
+    | "InProgress"
+    | "Submitted"
+    | "Approved"
+    | "Rejected"
+    | "Settled";
+
+  paidAmount: number | null;
 
   // Stages are assigned one freelancer at a time, so a split project has
   // several owners across its milestones.

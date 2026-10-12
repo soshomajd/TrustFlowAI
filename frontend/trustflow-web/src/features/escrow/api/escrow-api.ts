@@ -2,6 +2,7 @@ import "client-only";
 
 import type {
   CreateEscrowRequest,
+  EscrowCase,
   ProjectEscrow,
   ProjectEscrowParticipant,
 } from "@/features/escrow/types/escrow";
@@ -15,6 +16,19 @@ export async function getProjectEscrowParticipants(
 ): Promise<ProjectEscrowParticipant[]> {
   const response = await apiClient.get<ProjectEscrowParticipant[]>(
     `/projects/${projectId}/escrows`,
+    { signal },
+  );
+
+  return response.data;
+}
+
+// The cases on this project's escrows that the caller is a side of.
+export async function getProjectEscrowCases(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<EscrowCase[]> {
+  const response = await apiClient.get<EscrowCase[]>(
+    `/projects/${projectId}/escrow-cases`,
     { signal },
   );
 
