@@ -621,6 +621,57 @@ public sealed class DisputeTests
         Assert.Equal(0, Model.Calls);
     }
 
+    // ---- notifications ------------------------------------------------------
+
+    [Fact]
+    public async Task TheOtherSideIsToldAboutADispute_AndBothAreToldAboutTheRuling()
+    {
+        var scenario = await CreateSubmittedMilestoneAsync(_client);
+        var stranger = await NewPersonAsync(
+            _client, "Client", "Quiet Client");
+
+        var id = await OpenIdAsync(scenario, scenario.Freelancer);
+
+        // The client has to write their side. That is something to do.
+        var respondent = await NotificationsAsync(scenario.Client);
+
+        Assert.Equal("action", respondent[$"dispute-respond:{id}"]);
+
+        // The freelancer is only waiting.
+        var opener = await NotificationsAsync(scenario.Freelancer);
+
+        Assert.Equal("info", opener[$"dispute-open:{id}"]);
+
+        // Nobody else hears about it.
+        Assert.DoesNotContain(
+            (await NotificationsAsync(stranger)).Keys,
+            key => key.Contains(id.ToString()));
+
+        await SendAsync(
+            _client, HttpMethod.Post, $"/api/disputes/{id}/response",
+            scenario.Client.Token, new { Statement = Answer });
+
+        // Now there is something to do: ask for the ruling.
+        Assert.Equal(
+            "action",
+            (await NotificationsAsync(scenario.Freelancer))[
+                $"dispute-open:{id}"]);
+
+        await SendAsync(
+            _client, HttpMethod.Post, $"/api/disputes/{id}/ruling",
+            scenario.Freelancer.Token);
+
+        Assert.Equal(
+            "info",
+            (await NotificationsAsync(scenario.Client))[
+                $"dispute-ruled:{id}"]);
+
+        Assert.Equal(
+            "info",
+            (await NotificationsAsync(scenario.Freelancer))[
+                $"dispute-ruled:{id}"]);
+    }
+
     // ---- helpers -----------------------------------------------------------
 
     private static JsonObject Ruling(int share, double confidence) => new()
@@ -637,6 +688,22 @@ public sealed class DisputeTests
         ["reasoning"] = "Because of the findings.",
         ["manipulationAttempts"] = new JsonArray()
     };
+
+    // Notification ids with their severity, for one person.
+    private async Task<Dictionary<string, string>> NotificationsAsync(
+        Person person)
+    {
+        var response = await SendAsync(
+            _client, HttpMethod.Get, "/api/notifications", person.Token);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        return (await ReadAsync(response)).GetProperty("items")
+            .EnumerateArray()
+            .ToDictionary(
+                item => item.GetProperty("id").GetString()!,
+                item => item.GetProperty("severity").GetString()!);
+    }
 
     private static string MilestoneRoot(SubmittedMilestone scenario) =>
         $"/api/projects/{scenario.ProjectId}/milestones/" +

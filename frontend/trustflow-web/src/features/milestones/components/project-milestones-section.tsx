@@ -24,6 +24,10 @@ import { EditMilestoneDialog } from "@/features/milestones/components/edit-miles
 import {
     ClientMilestoneReviewActions,
 } from "@/features/milestones/components/client-milestone-review-actions";
+import { DisputePanel } from
+    "@/features/ai/components/dispute-panel";
+import { MilestoneAiReviewPanel } from
+    "@/features/ai/components/milestone-ai-review-panel";
 import { MilestoneSubmissionsPanel } from
     "@/features/milestones/components/milestone-submissions-panel";
 
@@ -352,10 +356,27 @@ function MilestoneCard({
                 />
             </div>
             {milestone.status !== "Pending" && milestone.status !== "InProgress" && (
-                <MilestoneSubmissionsPanel
-                    projectId={projectId}
-                    milestoneId={milestone.id}
-                />
+                <>
+                    <MilestoneSubmissionsPanel
+                        projectId={projectId}
+                        milestoneId={milestone.id}
+                    />
+
+                    {(milestone.status === "Submitted" ||
+                        milestone.status === "Rejected") && (
+                        <MilestoneAiReviewPanel
+                            projectId={projectId}
+                            milestoneId={milestone.id}
+                        />
+                    )}
+
+                    <DisputePanel
+                        projectId={projectId}
+                        milestoneId={milestone.id}
+                        milestoneStatus={milestone.status}
+                        canOpen={escrow?.status === "Funded"}
+                    />
+                </>
             )}
         </article>
     );

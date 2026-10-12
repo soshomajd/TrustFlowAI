@@ -23,7 +23,7 @@
 
 ## Standard commands
 
-- Backend (repo root): `dotnet restore backend/TrustFlow.slnx`; `dotnet build backend/TrustFlow.slnx --no-restore`; `dotnet run --project backend/TrustFlow.Api --launch-profile https`. Runtime requires `ConnectionStrings__DefaultConnection` and a 32+ byte `Jwt__Key`, plus `Email__Host` and `Email__FromAddress` (and `Email__User`/`Email__Password` if the server needs a login) outside Development; in Development an unset mail server logs each email, code included, to the API log. Apply EF migrations explicitly outside `Testing`.
+- Backend (repo root): `dotnet restore backend/TrustFlow.slnx`; `dotnet build backend/TrustFlow.slnx --no-restore`; `dotnet run --project backend/TrustFlow.Api --launch-profile https`. Runtime requires `ConnectionStrings__DefaultConnection` and a 32+ byte `Jwt__Key`, plus `Email__Host` and `Email__FromAddress` (and `Email__User`/`Email__Password` if the server needs a login) outside Development; in Development an unset mail server logs each email, code included, to the API log. The AI assistant defaults to `Ai__Provider=Mock` (free, labelled demo answers); `Ai__Provider=Anthropic` needs `Ai__ApiKey` from user secrets or an environment variable, never from a settings file. Apply EF migrations explicitly outside `Testing`.
 - Backend integration tests require an isolated PostgreSQL database: set `TRUSTFLOW_TEST_DB`, then run `dotnet test backend/TrustFlow.Api.IntegrationTests/TrustFlow.Api.IntegrationTests.csproj`.
 - Frontend (from `frontend/trustflow-web`, with valid `NEXT_PUBLIC_API_URL`): `npm ci`, `npm run dev`, `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build`.
 - Blockchain (from `blockchain`): `npm ci`, `npx hardhat compile`, `npx hardhat test nodejs` (or `npx hardhat test`), `npx hardhat node`; local deploy/read: `npx hardhat ignition deploy ignition/modules/TrustFlowLocalModule.ts --network localhost`, then `node scripts/readLocalEscrow.mjs`.
@@ -40,6 +40,7 @@
 - Keep private keys, JWT keys, database credentials, and environment files out of git. Runtime secrets come from environment variables/user secrets/Hardhat keystore.
 - Keep browser access tokens memory-only; retain the credentialed refresh-cookie flow rather than persisting tokens in browser storage.
 - No backend, admin, or AI custody of funds or final financial decisions. Client/freelancer wallet actions remain user-signed.
+- AI output is advice. It never signs, releases, refunds or decides where funds go, and nothing it writes is executed. Every call goes through `IAiGateway`; user text reaches the model only through `AiPrompt.Fenced`; people appear to it only by role. A dispute ruling is a recorded opinion that only the two parties can read: keep it advisory unless an on-chain arbiter is deliberately designed.
 - Preserve one escrow per project, complete-budget funding, ordered one-time milestone release, client-controlled releases, freelancer-controlled work start, and cancellation only before work starts.
 - On-chain token amounts are integer base units. MockUSDC has 6 decimals and is local/test-only; conversions must be explicit and exact.
 - Preserve `SafeERC20`, `ReentrancyGuard`, wallet ownership verification, role authorization, and the backend escrow's `PendingDeployment` state.

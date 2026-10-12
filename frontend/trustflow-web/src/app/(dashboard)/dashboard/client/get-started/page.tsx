@@ -31,7 +31,7 @@ const steps: GuideStep[] = [
     {
         title: "Create a project",
         description:
-            "Write a clear title and a short description. Set the full budget and final deadline. Keep the work easy to understand.",
+            "Write a clear title and a short description. Set the full budget and final deadline. Keep the work easy to understand. Not sure what to write or what it should cost? Use Draft with AI: describe your idea and it suggests a title, a description, a price and milestones. You can change everything before you create the project.",
         icon: FilePlus2,
         action: {
             label: "Create a project",
@@ -71,7 +71,7 @@ const steps: GuideStep[] = [
     {
         title: "Review work and release payment",
         description:
-            "Open each submitted milestone. Read the note, download its files and check its links. Ask for changes with a clear reason, or release payment and approve the work.",
+            "Open each submitted milestone. Read the note, download its files and check its links. You can use Check with AI to see if the work matches what you asked for. Then ask for changes with a clear reason, or release payment and approve the work. If you and the freelancer cannot agree, you can open a dispute.",
         icon: ClipboardCheck,
         action: {
             label: "Go to my projects",
@@ -89,6 +89,8 @@ const reminders = [
     "Fund each freelancer’s escrow before that freelancer starts work.",
     "You can cancel and get a refund only before work starts. Cancelling drops that one freelancer and puts their stages back on the marketplace. Your other freelancers keep working.",
     "Release payment only after you check the submitted work.",
+    "AI help is advice. It can be wrong. You decide, and you release payment yourself.",
+    "A dispute asks an AI to give an opinion on who is right. It does not move any money. While a dispute is open you cannot ask for changes on that milestone.",
 ];
 
 export default function ClientGettingStartedPage() {

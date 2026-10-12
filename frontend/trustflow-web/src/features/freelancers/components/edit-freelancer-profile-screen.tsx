@@ -18,6 +18,7 @@ import { getApiErrorMessage } from "@/lib/api/get-api-error-message";
 import { ProfilePhotoEditor } from "@/features/profile-photos/components/profile-photo-editor";
 import { UserAvatar } from "@/features/profile-photos/components/user-avatar";
 import { ResumeManager } from "@/features/freelancers/components/resume-manager";
+import { FreelancerAiCoach } from "@/features/ai/components/freelancer-ai-coach";
 
 export function EditFreelancerProfileScreen() {
   const query = useMyFreelancerProfile();
@@ -152,6 +153,13 @@ function ProfileEditor({ profile }: { profile: FreelancerProfile }) {
         </form>
 
         <aside className="space-y-5 lg:sticky lg:top-24">
+          <FreelancerAiCoach
+            portfolioSlotsLeft={3 - fields.length}
+            onApplyHeadline={(value) => form.setValue("headline", value, { shouldDirty: true, shouldValidate: true })}
+            onApplyAbout={(value) => form.setValue("about", value, { shouldDirty: true, shouldValidate: true })}
+            onApplySkills={(values) => form.setValue("skills", values.join(", "), { shouldDirty: true, shouldValidate: true })}
+            onAddPortfolioItem={(item) => append({ title: item.title, description: item.description, url: "" })}
+          />
           <ResumeManager profile={profile} />
           <section className="rounded-2xl border bg-card/70 p-5">
             <h2 className="font-semibold">A clear first impression</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Start with these three things. Everything else can wait.</p>

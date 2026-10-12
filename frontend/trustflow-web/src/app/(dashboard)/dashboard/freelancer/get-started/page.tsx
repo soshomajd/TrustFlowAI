@@ -21,7 +21,7 @@ const steps: GuideStep[] = [
     {
         title: "Build your profile",
         description:
-            "Add a short headline, your main skills and a simple introduction. Use Save changes in any section. Add work samples or one PDF resume if you have them. Add a photo, adjust the round preview and click Save photo. You can change or remove it any time.",
+            "Add a short headline, your main skills and a simple introduction. Use Save changes in any section. Add work samples or one PDF resume if you have them. Add a photo, adjust the round preview and click Save photo. You can change or remove it any time. Use AI help to review your profile, get wording ideas and draft a resume from your finished work. It only suggests: you choose what to keep and you save it.",
         icon: FileUser,
         action: {
             label: "Open my profile",
@@ -67,7 +67,7 @@ const steps: GuideStep[] = [
     {
         title: "Do and submit the work",
         description:
-            "When escrow is funded, use Start work. Finish the milestone, then submit a note with files or secure links. If the client asks for changes, read the feedback, fix the work and submit a new version.",
+            "When escrow is funded, use Start work. Finish the milestone, then submit a note with files or secure links. If the client asks for changes, read the feedback, fix the work and submit a new version. If you and the client cannot agree about your delivery, you can open a dispute.",
         icon: BriefcaseBusiness,
         action: {
             label: "Go to my projects",
@@ -85,6 +85,8 @@ const reminders = [
     "You cannot offer a lower price. The milestones you pick set the price you are paid.",
     "A project can stay on the marketplace after someone is hired. The milestones nobody has taken are still open to you.",
     "Keep your proposal and submitted work clear and short.",
+    "A dispute asks an AI to give an opinion on who is right, using the request, your delivered work and what you both write. It does not move any money, and the client still releases payment.",
+    "While a dispute is open you cannot restart that milestone. Put your best evidence in the delivery note and files, because the AI cannot open links.",
 ];
 
 export default function FreelancerGettingStartedPage() {

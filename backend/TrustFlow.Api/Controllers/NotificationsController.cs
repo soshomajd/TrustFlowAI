@@ -3,10 +3,12 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using TrustFlow.Api.Constants;
 using TrustFlow.Api.Data;
 using TrustFlow.Api.Dtos.Notifications;
 using TrustFlow.Api.Models.Enums;
+using TrustFlow.Api.Options;
 
 namespace TrustFlow.Api.Controllers;
 
@@ -17,7 +19,9 @@ namespace TrustFlow.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/notifications")]
-public sealed class NotificationsController(AppDbContext dbContext)
+public sealed class NotificationsController(
+    AppDbContext dbContext,
+    IOptions<AiOptions> aiOptions)
     : ControllerBase
 {
     private const string ActionSeverity = "action";
@@ -51,6 +55,12 @@ public sealed class NotificationsController(AppDbContext dbContext)
             );
         }
 
+        // Disputes involve whichever two people are on a milestone, so
+        // they are read for every signed-in user, not by role.
+        items.AddRange(
+            await BuildDisputeItemsAsync(userId, cancellationToken)
+        );
+
         var ordered = items
             .OrderBy(item => item.Severity switch
             {
@@ -70,6 +80,126 @@ public sealed class NotificationsController(AppDbContext dbContext)
             ActionCount = ordered.Count(item =>
                 item.Severity != InfoSeverity)
         });
+    }
+
+    private async Task<List<NotificationItemResponse>>
+        BuildDisputeItemsAsync(
+            Guid userId,
+            CancellationToken cancellationToken)
+    {
+        var settings = aiOptions.Value;
+        var now = DateTimeOffset.UtcNow;
+        var recently = now.AddDays(-7);
+
+        var disputes = await dbContext.Disputes
+            .AsNoTracking()
+            .Where(dispute =>
+                (dispute.OpenedByUserId == userId ||
+                 dispute.RespondentUserId == userId) &&
+                (dispute.Status == DisputeStatus.Open ||
+                 ((dispute.Status == DisputeStatus.Ruled ||
+                   dispute.Status == DisputeStatus.Inconclusive) &&
+                  dispute.RuledAt > recently)))
+            .Select(dispute => new
+            {
+                dispute.Id,
+                dispute.ProjectId,
+                dispute.Status,
+                dispute.OpenedByUserId,
+                dispute.OpenedByRole,
+                dispute.CreatedAt,
+                dispute.RulingAttempts,
+                HasResponse = dispute.RespondentStatement != null,
+                MilestoneTitle = dispute.Milestone.Title,
+                ProjectTitle = dispute.Milestone.Project.Title
+            })
+            .ToListAsync(cancellationToken);
+
+        var items = new List<NotificationItemResponse>();
+
+        foreach (var dispute in disputes)
+        {
+            var openedByMe = dispute.OpenedByUserId == userId;
+
+            var myRole = openedByMe
+                ? dispute.OpenedByRole
+                : dispute.OpenedByRole == "Client"
+                    ? "Freelancer"
+                    : "Client";
+
+            var otherRole = myRole == "Client" ? "freelancer" : "client";
+
+            var href = myRole == "Client"
+                ? $"/dashboard/client/projects/{dispute.ProjectId}"
+                : $"/dashboard/freelancer/projects/{dispute.ProjectId}";
+
+            if (dispute.Status == DisputeStatus.Open)
+            {
+                if (!openedByMe && !dispute.HasResponse)
+                {
+                    items.Add(new NotificationItemResponse
+                    {
+                        Id = $"dispute-respond:{dispute.Id}",
+                        Kind = "DisputeResponseNeeded",
+                        Severity = ActionSeverity,
+                        Title = "A dispute needs your side",
+                        Message =
+                            $"The {otherRole} opened a dispute about "
+                            + $"\"{dispute.MilestoneTitle}\". Write your "
+                            + "side so the AI can read both.",
+                        Href = href,
+                        ProjectTitle = dispute.ProjectTitle
+                    });
+                }
+                else
+                {
+                    var windowOver = now >= dispute.CreatedAt.AddHours(
+                        settings.DisputeResponseWindowHours);
+
+                    var canAskForRuling =
+                        settings.Enabled &&
+                        dispute.RulingAttempts < settings.MaxRulingAttempts &&
+                        (dispute.HasResponse || windowOver);
+
+                    items.Add(new NotificationItemResponse
+                    {
+                        Id = $"dispute-open:{dispute.Id}",
+                        Kind = "DisputeOpen",
+                        Severity = canAskForRuling
+                            ? ActionSeverity
+                            : InfoSeverity,
+                        Title = canAskForRuling
+                            ? "A dispute is ready for a ruling"
+                            : "A dispute is waiting for the other side",
+                        Message = canAskForRuling
+                            ? $"Ask the AI to rule on \"{dispute.MilestoneTitle}\"."
+                            : $"The {otherRole} can still write their side "
+                              + $"about \"{dispute.MilestoneTitle}\".",
+                        Href = href,
+                        ProjectTitle = dispute.ProjectTitle
+                    });
+                }
+            }
+            else
+            {
+                items.Add(new NotificationItemResponse
+                {
+                    Id = $"dispute-ruled:{dispute.Id}",
+                    Kind = "DisputeRuled",
+                    Severity = InfoSeverity,
+                    Title = dispute.Status == DisputeStatus.Ruled
+                        ? "The AI ruling is ready"
+                        : "The AI could not decide a dispute",
+                    Message =
+                        $"Read what the AI said about "
+                        + $"\"{dispute.MilestoneTitle}\".",
+                    Href = href,
+                    ProjectTitle = dispute.ProjectTitle
+                });
+            }
+        }
+
+        return items;
     }
 
     private async Task<List<NotificationItemResponse>>

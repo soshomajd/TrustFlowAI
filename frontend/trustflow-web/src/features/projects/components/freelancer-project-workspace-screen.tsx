@@ -29,6 +29,8 @@ import { useStartMilestone } from
     "@/features/milestones/hooks/use-start-milestone";
 import { SubmitMilestoneDialog } from
     "@/features/milestones/components/submit-milestone-dialog";
+import { DisputePanel } from
+    "@/features/ai/components/dispute-panel";
 import { MilestoneSubmissionsPanel } from
     "@/features/milestones/components/milestone-submissions-panel";
 import { useProjectEscrows } from
@@ -453,6 +455,16 @@ function FreelancerMilestoneCard({
                     milestoneId={milestone.id}
                 />
             )}
+
+            {milestone.status !== "Pending" &&
+                milestone.status !== "InProgress" && (
+                    <DisputePanel
+                        projectId={projectId}
+                        milestoneId={milestone.id}
+                        milestoneStatus={milestone.status}
+                        canOpen={isEscrowFunded}
+                    />
+                )}
 
             {mutationError && (
                 <div
