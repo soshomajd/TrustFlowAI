@@ -193,6 +193,15 @@ public sealed class MilestoneSubmissionsController(
             milestone.Status != MileStoneStatus.Submitted)
             return Conflict(new { message = "Only a submitted milestone can be returned for changes." });
 
+        if (await dbContext.Disputes.AnyAsync(
+                item => item.MilestoneId == milestoneId &&
+                        item.Status == DisputeStatus.Open,
+                cancellationToken))
+            return Conflict(new
+            {
+                message = "This milestone is under dispute. Changes cannot be requested until it is ruled on."
+            });
+
         var submission = await dbContext.MilestoneSubmissions
             .Where(item => item.MilestoneId == milestoneId)
             .OrderByDescending(item => item.Version)

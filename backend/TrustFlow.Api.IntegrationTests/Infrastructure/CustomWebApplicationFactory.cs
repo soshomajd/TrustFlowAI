@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using TrustFlow.Api.Blockchain;
+using TrustFlow.Api.Services.Ai;
 using TrustFlow.Api.Services.Email;
 using TrustFlow.Api.Services.Files;
 
@@ -16,6 +17,9 @@ public sealed class CustomWebApplicationFactory
 {
     private const string TestDatabaseEnvironmentVariable =
         "TRUSTFLOW_TEST_DB";
+
+    public ScriptedAiModel AiModel =>
+        Services.GetRequiredService<ScriptedAiModel>();
 
     protected override IHost CreateHost(
         IHostBuilder builder)
@@ -108,6 +112,11 @@ public sealed class CustomWebApplicationFactory
 
             services.RemoveAll<IEmailDelivery>();
             services.AddSingleton<IEmailDelivery, CapturingEmailDelivery>();
+
+            services.RemoveAll<IAiModel>();
+            services.AddSingleton<ScriptedAiModel>();
+            services.AddSingleton<IAiModel>(
+                provider => provider.GetRequiredService<ScriptedAiModel>());
         });
     }
 

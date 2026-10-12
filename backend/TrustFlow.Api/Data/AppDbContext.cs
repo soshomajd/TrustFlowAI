@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using TrustFlow.Api.Models;
+using TrustFlow.Api.Models.Ai;
 using TrustFlow.Api.Models.Enums;
 using TrustFlow.Api.Models.Identity;
 using TrustFlow.Api.Services.Files;
@@ -28,6 +29,13 @@ public class AppDbContext(
         Set<RefreshToken>();
 
     public DbSet<AuthCode> AuthCodes => Set<AuthCode>();
+
+    public DbSet<AiRun> AiRuns => Set<AiRun>();
+
+    public DbSet<Dispute> Disputes => Set<Dispute>();
+
+    public DbSet<MilestoneAiReview> MilestoneAiReviews =>
+        Set<MilestoneAiReview>();
 
     public DbSet<Escrow> Escrows =>
         Set<Escrow>();
@@ -66,6 +74,7 @@ public class AppDbContext(
         ConfigureEscrows(modelBuilder);
         ConfigureRefreshTokens(modelBuilder);
         ConfigureAuthCodes(modelBuilder);
+        ConfigureAi(modelBuilder);
         ConfigureWalletIdentity(modelBuilder);
         ConfigureFreelancerProfiles(modelBuilder);
         ConfigureFreelancerResumes(modelBuilder);
@@ -239,6 +248,94 @@ public class AppDbContext(
 
             authCode.HasIndex(item => item.ExpiresAt)
                 .HasDatabaseName("IX_AuthCodes_ExpiresAt");
+        });
+    }
+
+    private static void ConfigureAi(
+        ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AiRun>(run =>
+        {
+            run.Property(item => item.Purpose)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            run.Property(item => item.Status)
+                .HasConversion<string>()
+                .HasMaxLength(16);
+
+            run.Property(item => item.Provider).HasMaxLength(32);
+            run.Property(item => item.Model).HasMaxLength(100);
+            run.Property(item => item.ErrorCode).HasMaxLength(64);
+
+            // Quota counting reads a user's recent runs.
+            run.HasIndex(item => new { item.UserId, item.CreatedAt })
+                .HasDatabaseName("IX_AiRuns_UserId_CreatedAt");
+
+            run.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Dispute>(dispute =>
+        {
+            dispute.Property(item => item.Status)
+                .HasConversion<string>()
+                .HasMaxLength(16);
+
+            dispute.Property(item => item.Verdict)
+                .HasConversion<string>()
+                .HasMaxLength(16);
+
+            dispute.Property(item => item.OpenedByRole).HasMaxLength(16);
+            dispute.Property(item => item.OpenerStatement).HasMaxLength(2000);
+            dispute.Property(item => item.RespondentStatement).HasMaxLength(2000);
+            dispute.Property(item => item.EvidenceSha256).HasMaxLength(64);
+            dispute.Property(item => item.Confidence).HasPrecision(4, 3);
+
+            dispute.HasOne(item => item.Milestone)
+                .WithMany()
+                .HasForeignKey(item => item.MilestoneId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // People are never deleted out from under a ruling about them.
+            dispute.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(item => item.OpenedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            dispute.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(item => item.RespondentUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // One live dispute per milestone. A new one is possible only
+            // after an inconclusive ruling.
+            dispute.HasIndex(item => item.MilestoneId)
+                .IsUnique()
+                .HasFilter("\"Status\" IN ('Open', 'Ruled')")
+                .HasDatabaseName("IX_Disputes_Live_MilestoneId");
+
+            dispute.HasIndex(item => item.OpenedByUserId);
+            dispute.HasIndex(item => item.RespondentUserId);
+        });
+
+        modelBuilder.Entity<MilestoneAiReview>(review =>
+        {
+            review.HasKey(item => item.SubmissionId);
+
+            review.Property(item => item.Recommendation)
+                .HasConversion<string>()
+                .HasMaxLength(24);
+
+            review.Property(item => item.Confidence).HasPrecision(4, 3);
+
+            review.HasOne(item => item.Submission)
+                .WithOne()
+                .HasForeignKey<MilestoneAiReview>(
+                    item => item.SubmissionId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 

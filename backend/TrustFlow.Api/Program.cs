@@ -12,6 +12,7 @@ using TrustFlow.Api.Data;
 using TrustFlow.Api.Exceptions;
 using TrustFlow.Api.Models.Identity;
 using TrustFlow.Api.Options;
+using TrustFlow.Api.Services.Ai;
 using TrustFlow.Api.Services.Auth;
 using TrustFlow.Api.Services.Email;
 using TrustFlow.Api.Services.Files;
@@ -67,6 +68,9 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 });
 
 builder.Services.AddProblemDetails();
+
+// Handlers run in order: AI failures get their own answers first.
+builder.Services.AddExceptionHandler<AiExceptionHandler>();
 
 builder.Services.AddExceptionHandler<
     GlobalExceptionHandler
@@ -286,6 +290,49 @@ else
     );
 }
 
+var aiOptions = builder.Configuration
+    .GetSection(AiOptions.SectionName)
+    .Get<AiOptions>()
+    ?? new AiOptions();
+
+builder.Services.Configure<AiOptions>(
+    builder.Configuration.GetSection(AiOptions.SectionName));
+
+if (aiOptions.IsMock)
+{
+    builder.Services.AddSingleton<IAiModel, MockAiModel>();
+}
+else if (string.Equals(
+             aiOptions.Provider,
+             AiOptions.AnthropicProvider,
+             StringComparison.OrdinalIgnoreCase))
+{
+    if (aiOptions.Enabled &&
+        string.IsNullOrWhiteSpace(aiOptions.ApiKey))
+    {
+        throw new InvalidOperationException(
+            "Ai__ApiKey is missing. Set it, or set Ai__Provider=Mock."
+        );
+    }
+
+    builder.Services.AddHttpClient<IAiModel, AnthropicAiModel>(
+        client => client.Timeout =
+            TimeSpan.FromSeconds(aiOptions.TimeoutSeconds));
+}
+else
+{
+    throw new InvalidOperationException(
+        $"Ai__Provider {aiOptions.Provider} is not supported. " +
+        "Use Mock or Anthropic."
+    );
+}
+
+builder.Services.AddScoped<AiEvidenceBuilder>();
+builder.Services.AddScoped<IAiGateway, AiGateway>();
+builder.Services.AddScoped<ProjectDraftService>();
+builder.Services.AddScoped<MilestoneReviewService>();
+builder.Services.AddScoped<FreelancerCoachService>();
+builder.Services.AddScoped<DisputeService>();
 builder.Services.AddScoped<IAuthCodeService, AuthCodeService>();
 builder.Services.AddScoped<IAccountEmailService, AccountEmailService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -395,6 +442,25 @@ builder.Services.AddRateLimiter(options =>
                 factory: _ =>
                     CreateFixedWindowOptions(
                         permitLimit: 10,
+                        window: TimeSpan.FromMinutes(10)
+                    )
+            )
+    );
+
+    // Per signed-in user, not per address: a model call costs money, and
+    // one office sharing an address should not share a budget.
+    options.AddPolicy(
+        RateLimitPolicies.Ai,
+        httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey:
+                    httpContext.User.FindFirstValue(
+                        ClaimTypes.NameIdentifier)
+                    ?? GetClientRateLimitKey(httpContext),
+
+                factory: _ =>
+                    CreateFixedWindowOptions(
+                        permitLimit: 20,
                         window: TimeSpan.FromMinutes(10)
                     )
             )

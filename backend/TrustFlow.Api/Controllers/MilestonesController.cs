@@ -766,12 +766,31 @@ public class MilestonesController(
             }
         }
 
+        // New work during a dispute would change the evidence being ruled
+        // on, so the freelancer waits for the ruling.
+        if (await dbContext.Disputes.AnyAsync(
+                dispute =>
+                    dispute.MilestoneId == milestoneId &&
+                    dispute.Status == DisputeStatus.Open,
+                cancellationToken))
+        {
+            return Conflict(new
+            {
+                message =
+                    "This milestone is under dispute. Wait for the ruling " +
+                    "before starting it again."
+            });
+        }
+
         var affectedRows = await dbContext.Milestones
             .Where(milestone =>
                 milestone.Id == milestoneId &&
                 milestone.ProjectId == projectId &&
                 milestone.FreelancerId == freelancerId &&
                 milestone.Project.Status == ProjectStatus.InProgress &&
+                !dbContext.Disputes.Any(dispute =>
+                    dispute.MilestoneId == milestone.Id &&
+                    dispute.Status == DisputeStatus.Open) &&
                 milestone.Project.Escrows.Any(escrow =>
                     escrow.FreelancerId == milestone.FreelancerId &&
                     escrow.Status == EscrowStatus.Funded) &&
@@ -1287,6 +1306,20 @@ public class MilestonesController(
                         ProjectStatus.Completed;
                 }
 
+                // The client released the payment, so a dispute that was
+                // still waiting for a ruling is over. The release already
+                // happened on-chain, so approval is never held back by it.
+                await dbContext.Disputes
+                    .Where(dispute =>
+                        dispute.MilestoneId == milestoneId &&
+                        dispute.Status == DisputeStatus.Open)
+                    .ExecuteUpdateAsync(
+                        setters => setters.SetProperty(
+                            dispute => dispute.Status,
+                            DisputeStatus.Settled),
+                        cancellationToken
+                    );
+
                 await dbContext.SaveChangesAsync(
                     cancellationToken
                 );
@@ -1353,12 +1386,29 @@ public class MilestonesController(
             return Unauthorized();
         }
 
+        if (await dbContext.Disputes.AnyAsync(
+                dispute =>
+                    dispute.MilestoneId == milestoneId &&
+                    dispute.Status == DisputeStatus.Open,
+                cancellationToken))
+        {
+            return Conflict(new
+            {
+                message =
+                    "This milestone is under dispute. It cannot be " +
+                    "returned for changes until it is ruled on."
+            });
+        }
+
         var affectedRows = await dbContext.Milestones
             .Where(milestone =>
                 milestone.Id == milestoneId &&
                 milestone.ProjectId == projectId &&
                 milestone.Project.ClientId == clientId &&
                 milestone.Project.Status == ProjectStatus.InProgress &&
+                !dbContext.Disputes.Any(dispute =>
+                    dispute.MilestoneId == milestone.Id &&
+                    dispute.Status == DisputeStatus.Open) &&
                 milestone.Status == MileStoneStatus.Submitted)
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(

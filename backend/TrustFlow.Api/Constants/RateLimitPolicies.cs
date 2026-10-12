@@ -8,6 +8,8 @@ public static class RateLimitPolicies
 
     public const string AccountRecovery = "account-recovery";
 
+    public const string Ai = "ai";
+
     public const string RefreshToken = "refresh-token";
 
     public const string PublicMarketplace =
