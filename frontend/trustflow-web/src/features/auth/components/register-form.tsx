@@ -4,13 +4,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "motion/react";
 import { ArrowRight, BriefcaseBusiness, LoaderCircle, LockKeyhole, Mail, UserRound, } from "lucide-react";
 import Link from "next/link";
-import { Controller, useForm, useWatch, } from "react-hook-form";
+import { Controller, useForm, } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
-import { GoogleSignInButton } from "@/features/auth/components/google-sign-in-button";
 import { useRegister } from "@/features/auth/hooks/use-register";
 import { registerSchema, type RegisterFormValues, } from "@/features/auth/schemas/register-schema";
 
@@ -28,10 +27,6 @@ export function RegisterForm() {
             role: "Client",
         },
     });
-
-    // Subscribes without re-rendering through watch(), which the React
-    // Compiler cannot memoize safely.
-    const selectedRole = useWatch({ control, name: "role" });
 
     const isPending =
         registerMutation.isPending ||
@@ -295,10 +290,6 @@ export function RegisterForm() {
                             </Link>
                         </p>
                     </form>
-
-                    {/* Reuses the account type already chosen above,
-                        so Google sign-up needs no extra question. */}
-                    <GoogleSignInButton role={selectedRole} />
                 </CardContent>
             </Card>
         </motion.div>

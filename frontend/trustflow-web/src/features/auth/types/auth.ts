@@ -52,16 +52,3 @@ export type MessageResponse = {
   message: string;
 };
 
-export type GoogleSignInRequest = {
-  credential: string;
-  role?: Exclude<AuthRole, "Admin">;
-};
-
-// Returned as HTTP 409 the first time a Google account signs in, because a
-// TrustFlow account cannot exist without a role.
-export type GoogleRoleRequiredResponse = {
-  code: "role_required";
-  message: string;
-  email: string;
-  fullName: string | null;
-};

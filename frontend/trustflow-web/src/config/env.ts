@@ -2,8 +2,6 @@ import * as z from "zod";
 
 const clientEnvironmentSchema = z.object({
   NEXT_PUBLIC_API_URL: z.url(),
-  // Optional: Google sign-in stays hidden until this is set.
-  NEXT_PUBLIC_GOOGLE_CLIENT_ID: z.string().trim().optional(),
   NEXT_PUBLIC_CHAIN_ID: z.coerce.number().int().positive().default(31_337),
   NEXT_PUBLIC_CHAIN_NAME: z.string().trim().min(1).default("Localhost"),
   NEXT_PUBLIC_RPC_URL: z.url().default("http://127.0.0.1:8545"),
@@ -21,8 +19,6 @@ const clientEnvironmentSchema = z.object({
 
 const parsedEnvironment = clientEnvironmentSchema.safeParse({
   NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  NEXT_PUBLIC_GOOGLE_CLIENT_ID:
-    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || undefined,
   NEXT_PUBLIC_CHAIN_ID: process.env.NEXT_PUBLIC_CHAIN_ID,
   NEXT_PUBLIC_CHAIN_NAME: process.env.NEXT_PUBLIC_CHAIN_NAME,
   NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL,
@@ -46,7 +42,6 @@ if (!parsedEnvironment.success) {
 
 export const env = {
   apiUrl: parsedEnvironment.data.NEXT_PUBLIC_API_URL.replace(/\/+$/, ""),
-  googleClientId: parsedEnvironment.data.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
   chainId: parsedEnvironment.data.NEXT_PUBLIC_CHAIN_ID,
   chainName: parsedEnvironment.data.NEXT_PUBLIC_CHAIN_NAME,
   rpcUrl: parsedEnvironment.data.NEXT_PUBLIC_RPC_URL,
