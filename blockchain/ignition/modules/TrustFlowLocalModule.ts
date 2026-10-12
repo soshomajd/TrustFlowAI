@@ -5,6 +5,8 @@ export default buildModule("TrustFlowLocalModule", (m) => {
 
   const freelancer = m.getAccount(2);
 
+  const arbiter = m.getAccount(3);
+
   const milestoneAmounts = [500_000_000n, 800_000_000n, 700_000_000n];
 
   const totalAmount = 2_000_000_000n;
@@ -17,6 +19,7 @@ export default buildModule("TrustFlowLocalModule", (m) => {
     mockUSDC,
     client,
     freelancer,
+    arbiter,
     milestoneAmounts,
   ]);
 

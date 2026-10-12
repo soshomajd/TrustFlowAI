@@ -7,12 +7,15 @@ export default buildModule("TrustFlowEscrowModule", (m) => {
 
   const freelancerAddress = m.getParameter<string>("freelancerAddress");
 
+  const arbiterAddress = m.getParameter<string>("arbiterAddress");
+
   const milestoneAmounts = m.getParameter<bigint[]>("milestoneAmounts");
 
   const escrow = m.contract("TrustFlowEscrow", [
     tokenAddress,
     clientAddress,
     freelancerAddress,
+    arbiterAddress,
     milestoneAmounts,
   ]);
 

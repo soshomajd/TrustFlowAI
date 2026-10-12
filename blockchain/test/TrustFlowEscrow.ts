@@ -18,7 +18,7 @@ const totalAmount = milestoneAmounts.reduce(
 );
 
 async function deployEscrowFixture() {
-  const [deployer, client, freelancer, outsider] =
+  const [deployer, client, freelancer, outsider, arbiter] =
     await viem.getWalletClients();
 
   const publicClient = await viem.getPublicClient();
@@ -40,6 +40,7 @@ async function deployEscrowFixture() {
     token.address,
     client.account.address,
     freelancer.account.address,
+    arbiter.account.address,
     milestoneAmounts,
   ]);
 
@@ -51,6 +52,7 @@ async function deployEscrowFixture() {
     client,
     freelancer,
     outsider,
+    arbiter,
   };
 }
 
