@@ -159,6 +159,7 @@ public sealed class FreelancerResumeTests(CustomWebApplicationFactory factory)
         var register = await client.PostAsJsonAsync("/api/auth/register",
             new { FullName = $"Resume {role}", Email = email, Password = password, Role = role });
         Assert.Equal(HttpStatusCode.Created, register.StatusCode);
+        await TestAuth.ConfirmEmailAsync(client, email);
         var registered = await register.Content.ReadFromJsonAsync<JsonElement>();
         var login = await client.PostAsJsonAsync("/api/auth/login", new { Email = email, Password = password });
         login.EnsureSuccessStatusCode();

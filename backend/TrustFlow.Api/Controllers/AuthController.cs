@@ -25,7 +25,8 @@ public class AuthController(
     IRefreshTokenService refreshTokenService,
     AppDbContext dbContext,
     IWebHostEnvironment environment,
-    IOptions<GoogleAuthOptions> googleAuthOptions)
+    IOptions<GoogleAuthOptions> googleAuthOptions,
+    IAccountEmailService accountEmails)
     : ControllerBase
 {
     private const string RefreshTokenCookieName =
@@ -37,7 +38,8 @@ public class AuthController(
     [EnableRateLimiting(RateLimitPolicies.Register)]
     [HttpPost("register")]
     public async Task<IActionResult> Register(
-        RegisterRequest request)
+        RegisterRequest request,
+        CancellationToken cancellationToken)
     {
         var role = request.Role.Trim();
 
@@ -106,6 +108,15 @@ public class AuthController(
             });
         }
 
+        // The account exists but cannot sign in until the address is
+        // confirmed. A failed send is not an error here: the user can ask
+        // for another code from the verification screen.
+        var emailResult =
+            await accountEmails.SendEmailVerificationAsync(
+                user,
+                cancellationToken
+            );
+
         return Created(
             $"/api/users/{user.Id}",
             new
@@ -114,7 +125,10 @@ public class AuthController(
                 user.FullName,
                 user.Email,
                 Role = role,
-                user.CreatedAt
+                user.CreatedAt,
+                VerificationRequired = true,
+                VerificationEmailSent =
+                    emailResult == AccountEmailResult.Sent
             }
         );
     }
@@ -154,6 +168,23 @@ public class AuthController(
                 message =
                     "Invalid email or password."
             });
+        }
+
+        // Checked after the password so that only someone who knows it
+        // learns the account is waiting on verification.
+        if (!user.EmailConfirmed)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    code = "email_not_verified",
+                    message =
+                        "Verify your email before signing in. " +
+                        "We sent a code to your address.",
+                    email = user.Email
+                }
+            );
         }
 
         return await IssueSessionAsync(
@@ -255,6 +286,42 @@ public class AuthController(
                             .Select(error =>
                                 error.Description)
                     });
+                }
+
+                if (!existingUser.EmailConfirmed)
+                {
+                    // Someone may have registered this address with a
+                    // password they chose without owning the mailbox.
+                    // Google has now proven the real owner, so that
+                    // password is thrown away rather than inherited.
+                    if (await userManager.HasPasswordAsync(
+                            existingUser))
+                    {
+                        await userManager.RemovePasswordAsync(
+                            existingUser
+                        );
+                    }
+
+                    existingUser.EmailConfirmed = true;
+
+                    await userManager.UpdateAsync(existingUser);
+
+                    await userManager.UpdateSecurityStampAsync(
+                        existingUser
+                    );
+
+                    await dbContext.RefreshTokens
+                        .Where(refreshToken =>
+                            refreshToken.UserId == existingUser.Id &&
+                            refreshToken.RevokedAt == null)
+                        .ExecuteUpdateAsync(
+                            setters => setters.SetProperty(
+                                refreshToken =>
+                                    refreshToken.RevokedAt,
+                                (DateTimeOffset?)DateTimeOffset.UtcNow
+                            ),
+                            cancellationToken
+                        );
                 }
 
                 user = existingUser;
@@ -502,6 +569,26 @@ public class AuthController(
             {
                 message =
                     "User account is locked."
+            });
+        }
+
+        if (!user.EmailConfirmed)
+        {
+            // A session that predates the verification rule must not
+            // outlive it.
+            await RevokeTokenFamilyAsync(
+                storedToken.UserId,
+                storedToken.FamilyId,
+                now,
+                cancellationToken
+            );
+
+            DeleteRefreshTokenCookie();
+
+            return Unauthorized(new
+            {
+                message =
+                    "Verify your email to keep signing in."
             });
         }
 

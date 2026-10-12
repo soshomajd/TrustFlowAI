@@ -13,6 +13,7 @@ using TrustFlow.Api.Exceptions;
 using TrustFlow.Api.Models.Identity;
 using TrustFlow.Api.Options;
 using TrustFlow.Api.Services.Auth;
+using TrustFlow.Api.Services.Email;
 using TrustFlow.Api.Services.Files;
 using System.Globalization;
 using System.Threading.RateLimiting;
@@ -256,6 +257,37 @@ builder.Services.AddCors(options =>
     );
 });
 
+var emailOptions = builder.Configuration
+    .GetSection(EmailOptions.SectionName)
+    .Get<EmailOptions>()
+    ?? new EmailOptions();
+
+builder.Services.Configure<EmailOptions>(
+    builder.Configuration.GetSection(EmailOptions.SectionName));
+
+if (emailOptions.IsConfigured)
+{
+    builder.Services.AddSingleton<IEmailDelivery, SmtpEmailDelivery>();
+}
+else if (builder.Environment.IsDevelopment() ||
+         builder.Environment.IsEnvironment("Testing"))
+{
+    // Nothing is sent: the message, code included, goes to the log.
+    builder.Services.AddSingleton<IEmailDelivery, LogEmailDelivery>();
+}
+else
+{
+    // Accounts cannot be verified or recovered without a mail server, so
+    // a deployment without one should not start.
+    throw new InvalidOperationException(
+        "Email settings are missing. Set Email__Host and " +
+        "Email__FromAddress, plus Email__User and Email__Password " +
+        "if the server needs a login."
+    );
+}
+
+builder.Services.AddScoped<IAuthCodeService, AuthCodeService>();
+builder.Services.AddScoped<IAccountEmailService, AccountEmailService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 builder.Services.AddScoped<IEscrowChainDeployer, EscrowChainDeployer>();
@@ -350,6 +382,21 @@ builder.Services.AddRateLimiter(options =>
                 factory: _ =>
                     CreateFixedWindowOptions(
                         permitLimit: 5,
+                        window: TimeSpan.FromMinutes(10)
+                    )
+            )
+    );
+
+    options.AddPolicy(
+        RateLimitPolicies.AccountRecovery,
+        httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey:
+                    GetClientRateLimitKey(httpContext),
+
+                factory: _ =>
+                    CreateFixedWindowOptions(
+                        permitLimit: 10,
                         window: TimeSpan.FromMinutes(10)
                     )
             )

@@ -1,12 +1,14 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
+import axios from "axios";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { login } from "@/features/auth/api/auth-api";
 import type { LoginRequest } from "@/features/auth/types/auth";
 import { getApiErrorMessage } from "@/lib/api/get-api-error-message";
 import { useAuthStore } from "@/stores/auth-store";
+import type { ApiProblemDetails } from "@/types/api";
 
 export function useLogin() {
   const router = useRouter();
@@ -25,7 +27,24 @@ export function useLogin() {
       router.refresh();
     },
 
-    onError: (error) => {
+    onError: (error, request) => {
+      if (
+        axios.isAxiosError<ApiProblemDetails>(error) &&
+        error.response?.status === 403 &&
+        error.response.data?.code === "email_not_verified"
+      ) {
+        // The password was right; the address still needs confirming.
+        toast.info("Verify your email to finish signing in.");
+
+        router.push(
+          `/verify-email?email=${encodeURIComponent(
+            error.response.data.email ?? request.email,
+          )}`,
+        );
+
+        return;
+      }
+
       toast.error(
         getApiErrorMessage(error, "Login failed. Check your credentials."),
       );

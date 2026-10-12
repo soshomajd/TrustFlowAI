@@ -31,6 +31,25 @@ export type RegisterResponse = {
   email: string;
   role: Exclude<AuthRole, "Admin">;
   createdAt: string;
+
+  // The account cannot sign in until the mailed code is entered.
+  verificationRequired: boolean;
+  verificationEmailSent: boolean;
+};
+
+export type VerifyEmailRequest = {
+  email: string;
+  code: string;
+};
+
+export type ResetPasswordRequest = {
+  email: string;
+  code: string;
+  newPassword: string;
+};
+
+export type MessageResponse = {
+  message: string;
 };
 
 export type GoogleSignInRequest = {

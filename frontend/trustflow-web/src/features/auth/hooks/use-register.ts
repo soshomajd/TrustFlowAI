@@ -15,9 +15,16 @@ export function useRegister() {
     mutationFn: (request: RegisterRequest) => register(request),
 
     onSuccess: (user) => {
-      toast.success(`Account created for ${user.fullName}.`);
+      toast.success(
+        user.verificationEmailSent
+          ? `Account created. We emailed a code to ${user.email}.`
+          : "Account created. Ask for a verification code to continue.",
+      );
 
-      router.replace("/login?registered=true");
+      router.replace(
+        `/verify-email?email=${encodeURIComponent(user.email)}` +
+          `&sent=${user.verificationEmailSent}`,
+      );
     },
 
     onError: (error) => {

@@ -487,6 +487,50 @@ namespace TrustFlow.Api.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("TrustFlow.Api.Models.Identity.AuthCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("IX_AuthCodes_ExpiresAt");
+
+                    b.HasIndex("UserId", "Purpose")
+                        .IsUnique()
+                        .HasDatabaseName("IX_AuthCodes_Live_UserId_Purpose")
+                        .HasFilter("\"ConsumedAt\" IS NULL");
+
+                    b.ToTable("AuthCodes");
+                });
+
             modelBuilder.Entity("TrustFlow.Api.Models.Identity.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -927,6 +971,17 @@ namespace TrustFlow.Api.Migrations
                         .HasForeignKey("TrustFlow.Api.Models.FreelancerResume", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.Identity.AuthCode", b =>
+                {
+                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("TrustFlow.Api.Models.Identity.RefreshToken", b =>

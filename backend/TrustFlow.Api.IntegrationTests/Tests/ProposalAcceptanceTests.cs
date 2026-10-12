@@ -283,6 +283,7 @@ public sealed class ProposalAcceptanceTests
             HttpStatusCode.Created,
             response.StatusCode
         );
+        await TestAuth.ConfirmEmailAsync(_client, email);
     }
 
     private async Task<string> LoginAsync(

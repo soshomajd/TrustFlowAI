@@ -178,6 +178,7 @@ public sealed class ProjectAuthorizationTests
             HttpStatusCode.Created,
             response.StatusCode
         );
+        await TestAuth.ConfirmEmailAsync(_client, email);
     }
 
     private async Task<string> LoginAsync(

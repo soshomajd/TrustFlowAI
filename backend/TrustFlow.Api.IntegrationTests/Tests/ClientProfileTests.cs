@@ -171,6 +171,7 @@ public sealed class ClientProfileTests(CustomWebApplicationFactory factory)
         var register = await client.PostAsJsonAsync("/api/auth/register",
             new { FullName = $"Profile {role}", Email = email, Password = password, Role = role });
         Assert.Equal(HttpStatusCode.Created, register.StatusCode);
+        await TestAuth.ConfirmEmailAsync(client, email);
         var registered = await register.Content.ReadFromJsonAsync<JsonElement>();
         if (login) await LoginAsync(client, email);
         return new Account(registered.GetProperty("id").GetGuid(), email, client);

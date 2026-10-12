@@ -203,6 +203,7 @@ public sealed class FreelancerProfileTests(CustomWebApplicationFactory factory)
         const string password = "Testpass1";
         var register = await client.PostAsJsonAsync("/api/auth/register", new { FullName = $"Profile {role}", Email = email, Password = password, Role = role });
         Assert.Equal(HttpStatusCode.Created, register.StatusCode);
+        await TestAuth.ConfirmEmailAsync(client, email);
         var registered = await register.Content.ReadFromJsonAsync<JsonElement>();
         var login = await client.PostAsJsonAsync("/api/auth/login", new { Email = email, Password = password });
         login.EnsureSuccessStatusCode();

@@ -67,6 +67,15 @@ public sealed class RefreshTokenCleanupService(
                     deletedTokens
                 );
             }
+
+            // Mailed codes expire within minutes, so a day of grace is
+            // plenty before the rows are only clutter.
+            var staleCodeCutoff = now.AddDays(-1);
+
+            await dbContext.AuthCodes
+                .Where(authCode =>
+                    authCode.ExpiresAt <= staleCodeCutoff)
+                .ExecuteDeleteAsync(cancellationToken);
         }
         catch (OperationCanceledException)
             when (cancellationToken

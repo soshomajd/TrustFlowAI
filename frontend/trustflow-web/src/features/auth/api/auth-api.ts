@@ -4,8 +4,11 @@ import type {
   AuthSessionResponse,
   GoogleSignInRequest,
   LoginRequest,
+  MessageResponse,
   RegisterRequest,
   RegisterResponse,
+  ResetPasswordRequest,
+  VerifyEmailRequest,
 } from "@/features/auth/types/auth";
 import { apiClient } from "@/lib/api/api-client";
 
@@ -30,6 +33,42 @@ export async function register(request: RegisterRequest) {
 export async function googleSignIn(request: GoogleSignInRequest) {
   const response = await apiClient.post<AuthSessionResponse>(
     "/auth/google",
+    request,
+  );
+
+  return response.data;
+}
+
+export async function verifyEmail(request: VerifyEmailRequest) {
+  const response = await apiClient.post<MessageResponse>(
+    "/auth/verify-email",
+    request,
+  );
+
+  return response.data;
+}
+
+export async function resendVerification(email: string) {
+  const response = await apiClient.post<MessageResponse>(
+    "/auth/resend-verification",
+    { email },
+  );
+
+  return response.data;
+}
+
+export async function forgotPassword(email: string) {
+  const response = await apiClient.post<MessageResponse>(
+    "/auth/forgot-password",
+    { email },
+  );
+
+  return response.data;
+}
+
+export async function resetPassword(request: ResetPasswordRequest) {
+  const response = await apiClient.post<MessageResponse>(
+    "/auth/reset-password",
     request,
   );
 

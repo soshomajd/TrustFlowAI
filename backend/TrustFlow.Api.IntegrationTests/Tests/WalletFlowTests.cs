@@ -326,6 +326,7 @@ public sealed class WalletFlowTests
             HttpStatusCode.Created,
             registerResponse.StatusCode
         );
+        await TestAuth.ConfirmEmailAsync(_client, email);
 
         var loginResponse =
             await _client.PostAsJsonAsync(

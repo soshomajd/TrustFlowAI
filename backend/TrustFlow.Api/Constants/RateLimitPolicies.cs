@@ -6,6 +6,8 @@ public static class RateLimitPolicies
 
     public const string Register = "register";
 
+    public const string AccountRecovery = "account-recovery";
+
     public const string RefreshToken = "refresh-token";
 
     public const string PublicMarketplace =

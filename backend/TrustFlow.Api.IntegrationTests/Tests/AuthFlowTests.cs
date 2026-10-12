@@ -55,6 +55,8 @@ public sealed class AuthFlowTests
             registerResponse.StatusCode
         );
 
+        await TestAuth.ConfirmEmailAsync(_client, email);
+
         var loginResponse =
             await _client.PostAsJsonAsync(
                 "/api/auth/login",

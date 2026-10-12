@@ -488,6 +488,7 @@ public sealed class MilestoneWorkflowTests
             HttpStatusCode.Created,
             response.StatusCode
         );
+        await TestAuth.ConfirmEmailAsync(_client, email);
     }
 
     private async Task<string> LoginAsync(

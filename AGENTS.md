@@ -23,7 +23,7 @@
 
 ## Standard commands
 
-- Backend (repo root): `dotnet restore backend/TrustFlow.slnx`; `dotnet build backend/TrustFlow.slnx --no-restore`; `dotnet run --project backend/TrustFlow.Api --launch-profile https`. Runtime requires `ConnectionStrings__DefaultConnection` and a 32+ byte `Jwt__Key`; apply EF migrations explicitly outside `Testing`.
+- Backend (repo root): `dotnet restore backend/TrustFlow.slnx`; `dotnet build backend/TrustFlow.slnx --no-restore`; `dotnet run --project backend/TrustFlow.Api --launch-profile https`. Runtime requires `ConnectionStrings__DefaultConnection` and a 32+ byte `Jwt__Key`, plus `Email__Host` and `Email__FromAddress` (and `Email__User`/`Email__Password` if the server needs a login) outside Development; in Development an unset mail server logs each email, code included, to the API log. Apply EF migrations explicitly outside `Testing`.
 - Backend integration tests require an isolated PostgreSQL database: set `TRUSTFLOW_TEST_DB`, then run `dotnet test backend/TrustFlow.Api.IntegrationTests/TrustFlow.Api.IntegrationTests.csproj`.
 - Frontend (from `frontend/trustflow-web`, with valid `NEXT_PUBLIC_API_URL`): `npm ci`, `npm run dev`, `npm run lint`, `npx tsc --noEmit --incremental false`, `npm run build`.
 - Blockchain (from `blockchain`): `npm ci`, `npx hardhat compile`, `npx hardhat test nodejs` (or `npx hardhat test`), `npx hardhat node`; local deploy/read: `npx hardhat ignition deploy ignition/modules/TrustFlowLocalModule.ts --network localhost`, then `node scripts/readLocalEscrow.mjs`.

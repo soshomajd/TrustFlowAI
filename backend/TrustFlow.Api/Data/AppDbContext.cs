@@ -27,6 +27,8 @@ public class AppDbContext(
     public DbSet<RefreshToken> RefreshTokens =>
         Set<RefreshToken>();
 
+    public DbSet<AuthCode> AuthCodes => Set<AuthCode>();
+
     public DbSet<Escrow> Escrows =>
         Set<Escrow>();
 
@@ -63,6 +65,7 @@ public class AppDbContext(
         ConfigureProposalMilestones(modelBuilder);
         ConfigureEscrows(modelBuilder);
         ConfigureRefreshTokens(modelBuilder);
+        ConfigureAuthCodes(modelBuilder);
         ConfigureWalletIdentity(modelBuilder);
         ConfigureFreelancerProfiles(modelBuilder);
         ConfigureFreelancerResumes(modelBuilder);
@@ -205,6 +208,39 @@ public class AppDbContext(
     }
 
 
+
+    private static void ConfigureAuthCodes(
+        ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AuthCode>(authCode =>
+        {
+            authCode.Property(item => item.CodeHash)
+                .HasMaxLength(64);
+
+            authCode.Property(item => item.Purpose)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            authCode.HasOne(item => item.User)
+                .WithMany()
+                .HasForeignKey(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // One live code per user and purpose. A second concurrent
+            // request loses the insert instead of leaving two valid codes.
+            authCode.HasIndex(item => new
+            {
+                item.UserId,
+                item.Purpose
+            })
+                .IsUnique()
+                .HasFilter("\"ConsumedAt\" IS NULL")
+                .HasDatabaseName("IX_AuthCodes_Live_UserId_Purpose");
+
+            authCode.HasIndex(item => item.ExpiresAt)
+                .HasDatabaseName("IX_AuthCodes_ExpiresAt");
+        });
+    }
 
     private static void ConfigureWalletIdentity(
         ModelBuilder modelBuilder)

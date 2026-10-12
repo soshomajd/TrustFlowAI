@@ -97,6 +97,7 @@ public sealed class DecimalValidationTests
             HttpStatusCode.Created,
             response.StatusCode
         );
+        await TestAuth.ConfirmEmailAsync(_client, email);
     }
 
     private async Task<string> LoginAsync(
