@@ -294,9 +294,9 @@ function AssignedProjectCard({
                 <div className="grid shrink-0 gap-3 sm:grid-cols-2 lg:min-w-64 lg:grid-cols-1">
                     <ProjectMeta
                         icon={CircleDollarSign}
-                        label="Project budget"
+                        label="You will be paid"
                         value={formatAmount(
-                            project.budget,
+                            project.myTotalAmount,
                         )}
                     />
 

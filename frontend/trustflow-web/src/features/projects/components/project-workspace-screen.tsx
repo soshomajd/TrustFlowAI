@@ -108,6 +108,34 @@ export function ProjectWorkspaceScreen({
         0,
     );
 
+    // Work is assigned per milestone, so a project can have several
+    // freelancers. Group the stages by owner to list them.
+    const assignedFreelancers = [
+        ...project.milestones
+            .reduce((owners, milestone) => {
+                if (!milestone.freelancerId) {
+                    return owners;
+                }
+
+                const existing = owners.get(milestone.freelancerId);
+
+                owners.set(milestone.freelancerId, {
+                    id: milestone.freelancerId,
+                    fullName:
+                        milestone.freelancerFullName ??
+                        existing?.fullName ??
+                        null,
+                    milestoneCount: (existing?.milestoneCount ?? 0) + 1,
+                    total: (existing?.total ?? 0) + milestone.amount,
+                });
+
+                return owners;
+            }, new Map())
+            .values(),
+    ].sort((left, right) =>
+        (left.fullName ?? "").localeCompare(right.fullName ?? ""),
+    );
+
     return (
         <AnimatedSection className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
             <header className="mb-8">
@@ -195,18 +223,47 @@ export function ProjectWorkspaceScreen({
 
             <div className="mt-6 rounded-2xl border bg-card/70 p-5 backdrop-blur sm:p-6">
                 <p className="text-sm font-medium text-muted-foreground">
-                    Assigned freelancer
+                    {assignedFreelancers.length === 1
+                        ? "Assigned freelancer"
+                        : "Assigned freelancers"}
                 </p>
 
-                <p className="mt-2 font-medium">
-                    {project.freelancerId ? <MemberName userId={project.freelancerId} name={project.freelancerFullName} /> : "No freelancer assigned yet"}
-                </p>
-                {project.freelancerId && (
-                    <Button asChild variant="outline" size="sm" className="mt-4">
-                        <Link href={`/dashboard/freelancers/${project.freelancerId}`}>
-                            <UserRound className="size-4" />View freelancer profile
-                        </Link>
-                    </Button>
+                {assignedFreelancers.length === 0 ? (
+                    <p className="mt-2 font-medium">
+                        No freelancer assigned yet
+                    </p>
+                ) : (
+                    <ul className="mt-3 space-y-3">
+                        {assignedFreelancers.map((freelancer) => (
+                            <li
+                                key={freelancer.id}
+                                className="flex flex-wrap items-center justify-between gap-3"
+                            >
+                                <div className="min-w-0">
+                                    <p className="font-medium">
+                                        <MemberName
+                                            userId={freelancer.id}
+                                            name={freelancer.fullName}
+                                        />
+                                    </p>
+
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        {freelancer.milestoneCount === 1
+                                            ? "1 stage"
+                                            : `${freelancer.milestoneCount} stages`}
+                                        {" · "}
+                                        {formatAmount(freelancer.total)}
+                                    </p>
+                                </div>
+
+                                <Button asChild variant="outline" size="sm">
+                                    <Link href={`/dashboard/freelancers/${freelancer.id}`}>
+                                        <UserRound className="size-4" />View profile
+                                    </Link>
+                                </Button>
+                            </li>
+                        ))}
+                    </ul>
                 )}
             </div>
             <div className="mt-6">

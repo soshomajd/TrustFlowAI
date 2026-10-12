@@ -1,5 +1,15 @@
 export type ProposalStatus = "Pending" | "Accepted" | "Rejected" | "Withdrawn";
 
+// The stages a proposal covers. Its price is their total, which is why the
+// client compares the agreed price against these rather than the whole
+// project budget: a partial proposal is never meant to equal it.
+export type ProposalMilestone = {
+  id: string;
+  title: string;
+  amount: number;
+  sequenceNumber: number;
+};
+
 export type ClientProjectProposal = {
   id: string;
   projectId: string;
@@ -13,6 +23,8 @@ export type ClientProjectProposal = {
 
   status: ProposalStatus;
   createdAt: string;
+
+  milestones: ProposalMilestone[];
 };
 
 export type GetProjectProposalsParams = {
@@ -37,6 +49,8 @@ export type CreatedProposal = {
 
   status: ProposalStatus;
   createdAt: string;
+
+  milestones: ProposalMilestone[];
 };
 
 export type MyProposal = {
@@ -50,6 +64,8 @@ export type MyProposal = {
 
   status: ProposalStatus;
   createdAt: string;
+
+  milestones: ProposalMilestone[];
 };
 
 export type GetMyProposalsParams = {

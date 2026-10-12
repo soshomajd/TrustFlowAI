@@ -12,6 +12,11 @@ public class AssignedProjectResponse
     public string Description { get; set; } = string.Empty;
     public decimal Budget { get; set; }
     public decimal AllocatedAmount { get; set; }
+
+    // Budget and AllocatedAmount describe the whole project. These describe
+    // only the stages this freelancer holds, which is what they are paid and
+    // what they have to deliver.
+    public decimal MyTotalAmount { get; set; }
     public int MilestoneCount { get; set; }
     public int RejectedMilestoneCount { get; set; }
     public DateTimeOffset Deadline { get; set; }

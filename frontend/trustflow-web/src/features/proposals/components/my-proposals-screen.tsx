@@ -282,6 +282,28 @@ function MyProposalCard({
                         )}
                     </p>
 
+                    {proposal.milestones.length > 0 && (
+                        <div className="mt-4">
+                            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                                Stages you applied for
+                            </p>
+
+                            <ul className="mt-2 flex flex-wrap gap-2">
+                                {proposal.milestones.map((milestone) => (
+                                    <li
+                                        key={milestone.id}
+                                        className="rounded-full border px-3 py-1 text-xs"
+                                    >
+                                        {milestone.sequenceNumber}. {milestone.title}
+                                        <span className="ml-2 text-muted-foreground">
+                                            {formatAmount(milestone.amount)}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
                     <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
                         <CalendarDays className="size-3.5" />
 

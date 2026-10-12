@@ -1206,9 +1206,14 @@ public class MilestonesController(
                     });
                 }
 
+                // One escrow per freelancer, so the release has to be
+                // credited to the escrow that pays this milestone's owner.
                 var escrow = await dbContext.Escrows
                     .FirstOrDefaultAsync(
-                        item => item.ProjectId == projectId,
+                        item =>
+                            item.ProjectId == projectId &&
+                            item.FreelancerId ==
+                                milestone.FreelancerId,
                         cancellationToken
                     );
 
@@ -1221,6 +1226,25 @@ public class MilestonesController(
                     });
                 }
 
+                // This escrow is finished once every stage it pays for is
+                // approved.
+                var hasOtherUnapprovedMilestonesForFreelancer =
+                    await dbContext.Milestones
+                        .AnyAsync(
+                            otherMilestone =>
+                                otherMilestone.ProjectId ==
+                                    projectId &&
+                                otherMilestone.FreelancerId ==
+                                    milestone.FreelancerId &&
+                                otherMilestone.Id !=
+                                    milestoneId &&
+                                otherMilestone.Status !=
+                                    MileStoneStatus.Approved,
+                            cancellationToken
+                        );
+
+                // The project is finished only once every stage is approved,
+                // including those held by other freelancers.
                 var hasOtherUnapprovedMilestones =
                     await dbContext.Milestones
                         .AnyAsync(
@@ -1242,7 +1266,7 @@ public class MilestonesController(
                 escrow.ReleasedAmount += milestone.Amount;
                 escrow.UpdatedAt = now;
 
-                if (!hasOtherUnapprovedMilestones)
+                if (!hasOtherUnapprovedMilestonesForFreelancer)
                 {
                     if (!escrowCompletedOnChain)
                     {
@@ -1253,11 +1277,14 @@ public class MilestonesController(
                         );
                     }
 
-                    project.Status =
-                        ProjectStatus.Completed;
-
                     escrow.Status = EscrowStatus.Completed;
                     escrow.CompletedAt = now;
+                }
+
+                if (!hasOtherUnapprovedMilestones)
+                {
+                    project.Status =
+                        ProjectStatus.Completed;
                 }
 
                 await dbContext.SaveChangesAsync(

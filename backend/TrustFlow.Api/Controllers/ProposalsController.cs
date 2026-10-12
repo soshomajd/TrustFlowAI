@@ -192,7 +192,9 @@ public class ProposalsController(AppDbContext dbContext)
                     .Select(milestone => new
                     {
                         milestone.Id,
+                        milestone.Title,
                         milestone.Amount,
+                        milestone.SequenceNumber,
                         milestone.FreelancerId
                     })
                     .ToListAsync(cancellationToken);
@@ -270,7 +272,21 @@ public class ProposalsController(AppDbContext dbContext)
                     EstimatedDays =
                         proposal.EstimatedDays,
                     Status = proposal.Status,
-                    CreatedAt = proposal.CreatedAt
+                    CreatedAt = proposal.CreatedAt,
+
+                    Milestones = chosenMilestones
+                        .OrderBy(milestone =>
+                            milestone.SequenceNumber)
+                        .Select(milestone =>
+                            new ProposalMilestoneResponse
+                            {
+                                Id = milestone.Id,
+                                Title = milestone.Title,
+                                Amount = milestone.Amount,
+                                SequenceNumber =
+                                    milestone.SequenceNumber
+                            })
+                        .ToList()
                 };
 
                 return Created(
@@ -387,7 +403,20 @@ public class ProposalsController(AppDbContext dbContext)
                     BidAmount = proposal.BidAmount,
                     EstimatedDays = proposal.EstimatedDays,
                     Status = proposal.Status,
-                    CreatedAt = proposal.CreatedAt
+                    CreatedAt = proposal.CreatedAt,
+
+                    Milestones = proposal.ProposalMilestones
+                        .OrderBy(link => link.Milestone.SequenceNumber)
+                        .Select(link =>
+                            new ProposalMilestoneResponse
+                            {
+                                Id = link.MilestoneId,
+                                Title = link.Milestone.Title,
+                                Amount = link.Milestone.Amount,
+                                SequenceNumber =
+                                    link.Milestone.SequenceNumber
+                            })
+                        .ToList()
                 })
             .ToListAsync(cancellationToken);
 
@@ -461,7 +490,20 @@ public class ProposalsController(AppDbContext dbContext)
                     BidAmount = proposal.BidAmount,
                     EstimatedDays = proposal.EstimatedDays,
                     Status = proposal.Status,
-                    CreatedAt = proposal.CreatedAt
+                    CreatedAt = proposal.CreatedAt,
+
+                    Milestones = proposal.ProposalMilestones
+                        .OrderBy(link => link.Milestone.SequenceNumber)
+                        .Select(link =>
+                            new ProposalMilestoneResponse
+                            {
+                                Id = link.MilestoneId,
+                                Title = link.Milestone.Title,
+                                Amount = link.Milestone.Amount,
+                                SequenceNumber =
+                                    link.Milestone.SequenceNumber
+                            })
+                        .ToList()
                 })
             .ToListAsync(cancellationToken);
 

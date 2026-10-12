@@ -124,8 +124,9 @@ export function ProjectProposalsSection({
                         </div>
 
                         <p className="mt-2 text-sm text-muted-foreground">
-                            Review bids submitted
-                            by freelancers.
+                            Review the proposals
+                            freelancers sent, and the
+                            stages each one covers.
                         </p>
                     </div>
 
@@ -223,10 +224,17 @@ function ProposalCard({
     projectBudget: number;
     proposal: ClientProjectProposal;
 }) {
-    // The freelancer applied at the price the project showed then, so a
-    // mismatch means the client edited the budget afterwards.
-    const agreedPriceMatchesBudget =
-        proposal.bidAmount === projectBudget;
+    // The freelancer applied at what their chosen stages paid then, so a
+    // mismatch means those amounts changed afterwards. A proposal covering
+    // only some stages is below the project budget by design, so comparing
+    // against the budget would reject every partial proposal.
+    const claimedTotal = proposal.milestones.reduce(
+        (total, milestone) => total + milestone.amount,
+        0,
+    );
+
+    const agreedPriceMatchesClaimed =
+        proposal.bidAmount === claimedTotal;
 
     return (
         <article className="rounded-xl border bg-background/40 p-4 transition hover:border-primary/40 hover:bg-background/70 sm:p-5">
@@ -264,6 +272,28 @@ function ProposalCard({
                         </Link>
                     </Button>
 
+                    {proposal.milestones.length > 0 && (
+                        <div className="mt-4">
+                            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                                Stages they will deliver
+                            </p>
+
+                            <ul className="mt-2 flex flex-wrap gap-2">
+                                {proposal.milestones.map((milestone) => (
+                                    <li
+                                        key={milestone.id}
+                                        className="rounded-full border px-3 py-1 text-xs"
+                                    >
+                                        {milestone.sequenceNumber}. {milestone.title}
+                                        <span className="ml-2 text-muted-foreground">
+                                            {formatAmount(milestone.amount)}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
                     <p className="mt-4 text-xs text-muted-foreground">
                         Submitted{" "}
                         {formatDateTime(
@@ -296,11 +326,11 @@ function ProposalCard({
             </div>
             {proposal.status === "Pending" && (
                 <div className="mt-5 space-y-3 border-t pt-5">
-                    {!agreedPriceMatchesBudget && (
+                    {!agreedPriceMatchesClaimed && (
                         <div className="flex gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 text-sm leading-6">
                             <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-400" />
                             <p className="text-muted-foreground">
-                                This freelancer applied when the price was {formatAmount(proposal.bidAmount)}, but the budget is now {formatAmount(projectBudget)}. They have not agreed to the new price. Set the budget and milestone total back to {formatAmount(proposal.bidAmount)}, or ask them to apply again.
+                                This freelancer applied when these stages paid {formatAmount(proposal.bidAmount)}, but they now pay {formatAmount(claimedTotal)}. They have not agreed to the new amount. Set those milestone amounts back to {formatAmount(proposal.bidAmount)} in total, or ask them to apply again.
                             </p>
                         </div>
                     )}
@@ -342,8 +372,14 @@ function AcceptProposalDialog({
 
     const isAccepting =
         acceptMutation.isPending;
-    const agreedPriceMatchesBudget =
-        proposal.bidAmount === projectBudget;
+
+    const claimedTotal = proposal.milestones.reduce(
+        (total, milestone) => total + milestone.amount,
+        0,
+    );
+
+    const agreedPriceMatchesClaimed =
+        proposal.bidAmount === claimedTotal;
 
     const errorMessage =
         acceptMutation.isError
@@ -389,11 +425,11 @@ function AcceptProposalDialog({
                 <Button
                     type="button"
                     size="sm"
-                    disabled={!agreedPriceMatchesBudget}
-                    title={!agreedPriceMatchesBudget ? "The budget changed after this freelancer applied, so they have not agreed to the current price." : undefined}
+                    disabled={!agreedPriceMatchesClaimed}
+                    title={!agreedPriceMatchesClaimed ? "These milestone amounts changed after this freelancer applied, so they have not agreed to the current price." : undefined}
                 >
                     <CheckCircle2 className="size-4" />
-                    {agreedPriceMatchesBudget ? "Accept proposal" : "Price changed"}
+                    {agreedPriceMatchesClaimed ? "Accept proposal" : "Price changed"}
                 </Button>
             </DialogTrigger>
 
@@ -454,11 +490,11 @@ function AcceptProposalDialog({
                 </div>
 
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm leading-6 text-muted-foreground">
-                    Accepting this proposal will
-                    change the project status to
-                    InProgress. All other pending
-                    proposals will automatically
-                    be rejected.
+                    This gives the stages above to this freelancer and sets
+                    the project to InProgress. Other proposals that asked for
+                    any of the same stages are rejected; proposals for the
+                    stages nobody has taken stay pending, and the project
+                    keeps accepting new ones until every stage is given out.
                 </div>
 
                 {errorMessage && (
@@ -495,7 +531,7 @@ function AcceptProposalDialog({
 
                     <Button
                         type="button"
-                        disabled={isAccepting || !agreedPriceMatchesBudget}
+                        disabled={isAccepting || !agreedPriceMatchesClaimed}
                         onClick={handleAccept}
                     >
                         {isAccepting ? (

@@ -541,14 +541,22 @@ function EscrowDetailsCard({
                             </>
                         )}
 
-                    {(viewerRole === "Client" ||
-                        workStartedQuery.data === true) && (
+                    {workStartedQuery.data === true && (
                         <p className="text-sm text-muted-foreground">
                             Escrow is funded and work has
                             started. Approve submitted milestones
                             to release payment.
                         </p>
                     )}
+
+                    {viewerRole === "Client" &&
+                        workStartedQuery.data === false && (
+                            <p className="text-sm text-muted-foreground">
+                                Escrow is funded. The freelancer has not
+                                started work on-chain yet, so you can still
+                                cancel and get a refund.
+                            </p>
+                        )}
                 </div>
             )}
 

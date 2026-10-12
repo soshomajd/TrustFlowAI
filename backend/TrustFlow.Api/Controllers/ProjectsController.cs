@@ -697,12 +697,26 @@ namespace TrustFlow.Api.Controllers
                                     (decimal?)milestone.Amount)
                             ?? 0m,
 
+                        MyTotalAmount =
+                            project.Milestones
+                                .Where(milestone =>
+                                    milestone.FreelancerId ==
+                                        freelancerId)
+                                .Sum(milestone =>
+                                    (decimal?)milestone.Amount)
+                            ?? 0m,
+
                         MilestoneCount =
-                            project.Milestones.Count,
+                            project.Milestones.Count(
+                                milestone =>
+                                    milestone.FreelancerId ==
+                                        freelancerId),
 
                         RejectedMilestoneCount =
                             project.Milestones.Count(
                               milestone =>
+                                 milestone.FreelancerId ==
+                                     freelancerId &&
                                  milestone.Status ==
                                   MileStoneStatus.Rejected
                           ),

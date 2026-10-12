@@ -29,6 +29,142 @@ public sealed class MilestoneWorkflowTests
         );
     }
 
+    // A project can be split between freelancers, so completion has two
+    // different conditions: an escrow is finished once its own freelancer's
+    // stages are approved, while the project waits for every stage. Before
+    // this was separated, one stage nobody had taken left a fully paid
+    // escrow stuck on Funded forever.
+    [Fact]
+    public async Task ApprovingAFreelancersLastStage_CompletesTheirEscrow_ButNotAPartlyStaffedProject()
+    {
+        var uniqueValue = Guid.NewGuid().ToString("N");
+        const string password = "Testpass1";
+        var clientEmail = $"split-client-{uniqueValue}@trustflow.test";
+        var freelancerEmail = $"split-freelancer-{uniqueValue}@trustflow.test";
+
+        await RegisterAsync(clientEmail, password, "Split Client", "Client");
+        await RegisterAsync(
+            freelancerEmail,
+            password,
+            "Split Freelancer",
+            "Freelancer"
+        );
+
+        var clientToken = await LoginAsync(clientEmail, password);
+        var freelancerToken = await LoginAsync(freelancerEmail, password);
+
+        var projectDeadline = DateTimeOffset.UtcNow.AddDays(90);
+        var projectId = await CreateProjectAsync(
+            clientToken,
+            projectDeadline
+        );
+
+        var minePaidStage = await CreateMilestoneAsync(
+            projectId,
+            clientToken,
+            title: "Design",
+            amount: 1000.00m,
+            deadline: DateTimeOffset.UtcNow.AddDays(30),
+            sequenceNumber: 1
+        );
+
+        // Nobody applies for this stage, so it stays unassigned and the
+        // project cannot finish.
+        await CreateMilestoneAsync(
+            projectId,
+            clientToken,
+            title: "Back end",
+            amount: 1500.00m,
+            deadline: DateTimeOffset.UtcNow.AddDays(60),
+            sequenceNumber: 2
+        );
+
+        var proposalId = await CreateProposalAsync(
+            projectId,
+            freelancerToken,
+            minePaidStage
+        );
+
+        await AcceptProposalAsync(projectId, proposalId, clientToken);
+
+        await ConnectWalletAsync(clientToken);
+        await ConnectWalletAsync(freelancerToken);
+
+        var contractAddress = await SetUpFundedEscrowAsync(
+            projectId,
+            clientToken
+        );
+
+        await ChangeMilestoneStatusAsync(
+            projectId,
+            minePaidStage,
+            "start",
+            freelancerToken,
+            HttpStatusCode.OK
+        );
+
+        await ChangeMilestoneStatusAsync(
+            projectId,
+            minePaidStage,
+            "submit",
+            freelancerToken,
+            HttpStatusCode.OK
+        );
+
+        FakeEscrowChainDeployer.MarkMilestoneReleased(contractAddress, 0);
+
+        await ChangeMilestoneStatusAsync(
+            projectId,
+            minePaidStage,
+            "approve",
+            clientToken,
+            HttpStatusCode.OK
+        );
+
+        using var escrowRequest = CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/projects/{projectId}/escrow",
+            clientToken
+        );
+
+        var escrowResponse = await _client.SendAsync(escrowRequest);
+        Assert.Equal(HttpStatusCode.OK, escrowResponse.StatusCode);
+
+        var escrow = await escrowResponse.Content
+            .ReadFromJsonAsync<JsonElement>();
+
+        // The freelancer delivered everything they took, so their contract
+        // is closed and fully released.
+        Assert.Equal("Completed", escrow.GetProperty("status").GetString());
+        Assert.Equal(
+            1000.00m,
+            escrow.GetProperty("releasedAmount").GetDecimal()
+        );
+        Assert.Equal(
+            1000.00m,
+            escrow.GetProperty("totalAmount").GetDecimal()
+        );
+
+        using var workspaceRequest = CreateAuthorizedRequest(
+            HttpMethod.Get,
+            $"/api/projects/{projectId}/workspace",
+            clientToken
+        );
+
+        var workspaceResponse = await _client.SendAsync(workspaceRequest);
+        Assert.Equal(HttpStatusCode.OK, workspaceResponse.StatusCode);
+
+        var workspace = await workspaceResponse.Content
+            .ReadFromJsonAsync<JsonElement>();
+
+        // The unassigned stage is still outstanding, so the project is not
+        // finished and stays open to proposals for it.
+        Assert.Equal(
+            "InProgress",
+            workspace.GetProperty("status").GetString()
+        );
+    }
+
     [Fact]
     public async Task Milestones_MustRunSequentially_AndCompleteProject()
     {

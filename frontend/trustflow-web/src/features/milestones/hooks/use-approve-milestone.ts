@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { escrowQueryKeys } from "@/features/escrow/queries/escrow-query-keys";
 import { approveMilestone } from "@/features/milestones/api/milestones-api";
 import { milestoneQueryKeys } from "@/features/milestones/queries/milestone-query-keys";
 import { projectQueryKeys } from "@/features/projects/queries/project-query-keys";
@@ -43,6 +44,11 @@ export function useApproveMilestone(projectId: string, milestoneId: string) {
 
         queryClient.invalidateQueries({
           queryKey: projectQueryKeys.clientDashboardSummary(),
+        }),
+
+        // The release moved funds, so the escrow's released total changed.
+        queryClient.invalidateQueries({
+          queryKey: escrowQueryKeys.participants(normalizedProjectId),
         }),
       ]);
 

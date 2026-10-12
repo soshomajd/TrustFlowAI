@@ -3,6 +3,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { escrowQueryKeys } from "@/features/escrow/queries/escrow-query-keys";
+import { milestoneQueryKeys } from "@/features/milestones/queries/milestone-query-keys";
 import { acceptProposal } from "@/features/proposals/api/proposals-api";
 import { proposalQueryKeys } from "@/features/proposals/queries/proposal-query-keys";
 import { projectQueryKeys } from "@/features/projects/queries/project-query-keys";
@@ -46,6 +48,16 @@ export function useAcceptProposal(projectId: string, proposalId: string) {
 
         queryClient.invalidateQueries({
           queryKey: projectQueryKeys.clientDashboardSummary(),
+        }),
+
+        // Acceptance assigns the milestones, which is what the escrow
+        // participants and the milestone list are built from.
+        queryClient.invalidateQueries({
+          queryKey: escrowQueryKeys.participants(normalizedProjectId),
+        }),
+
+        queryClient.invalidateQueries({
+          queryKey: milestoneQueryKeys.projectList(normalizedProjectId),
         }),
       ]);
 

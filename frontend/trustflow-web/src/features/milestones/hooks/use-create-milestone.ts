@@ -29,6 +29,12 @@ export function useCreateMilestone(projectId: string) {
         queryClient.invalidateQueries({
           queryKey: projectQueryKeys.clientLists(),
         }),
+
+        // The workspace response carries the allocated total that decides
+        // whether the project is visible to freelancers.
+        queryClient.invalidateQueries({
+          queryKey: projectQueryKeys.workspace(normalizedProjectId),
+        }),
       ]);
 
       toast.success(`"${createdMilestone.title}" was created successfully.`);

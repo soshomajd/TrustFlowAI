@@ -31,8 +31,11 @@ import { SubmitMilestoneDialog } from
     "@/features/milestones/components/submit-milestone-dialog";
 import { MilestoneSubmissionsPanel } from
     "@/features/milestones/components/milestone-submissions-panel";
+import { useProjectEscrows } from
+    "@/features/escrow/hooks/use-project-escrows";
 import { useProjectWorkspace } from
     "@/features/projects/hooks/use-project-workspace";
+import { useAuthStore } from "@/stores/auth-store";
 import { getApiErrorMessage } from
     "@/lib/api/get-api-error-message";
 import { cn } from "@/lib/utils";
@@ -46,6 +49,12 @@ export function FreelancerProjectWorkspaceScreen({
 }: FreelancerProjectWorkspaceScreenProps) {
     const workspaceQuery =
         useProjectWorkspace(projectId);
+
+    const viewerId = useAuthStore((state) => state.user?.id ?? null);
+
+    // A project can be split between freelancers, and each one is paid by
+    // their own escrow. Work can only start once that escrow is funded.
+    const escrowsQuery = useProjectEscrows(projectId);
 
     if (workspaceQuery.isPending) {
         return (
@@ -73,13 +82,22 @@ export function FreelancerProjectWorkspaceScreen({
     const workspace =
         workspaceQuery.data;
 
-    const milestones = [
-        ...workspace.milestones,
-    ].sort(
-        (firstMilestone, secondMilestone) =>
-            firstMilestone.sequenceNumber -
-            secondMilestone.sequenceNumber,
-    );
+    // Other freelancers may hold the remaining stages; those are not this
+    // freelancer's to see or act on.
+    const milestones = workspace.milestones
+        .filter((milestone) => milestone.freelancerId === viewerId)
+        .sort(
+            (firstMilestone, secondMilestone) =>
+                firstMilestone.sequenceNumber -
+                secondMilestone.sequenceNumber,
+        );
+
+    const myEscrow =
+        escrowsQuery.data?.find(
+            (participant) => participant.freelancerId === viewerId,
+        )?.escrow ?? null;
+
+    const isEscrowFunded = myEscrow?.status === "Funded";
 
     const approvedCount =
         milestones.filter(
@@ -231,6 +249,9 @@ export function FreelancerProjectWorkspaceScreen({
                                             milestones={
                                                 milestones
                                             }
+                                            isEscrowFunded={
+                                                isEscrowFunded
+                                            }
                                         />
                                     </StaggerItem>
                                 ),
@@ -261,12 +282,14 @@ function FreelancerMilestoneCard({
     projectStatus,
     milestone,
     milestones,
+    isEscrowFunded,
 }: {
     projectId: string;
     projectStatus:
     WorkspaceData["status"];
     milestone: WorkspaceMilestone;
     milestones: WorkspaceMilestone[];
+    isEscrowFunded: boolean;
 }) {
     const startMutation =
         useStartMilestone(
@@ -288,6 +311,7 @@ function FreelancerMilestoneCard({
 
     const canStart =
         projectStatus === "InProgress" &&
+        isEscrowFunded &&
         (
             milestone.status === "Pending" ||
             milestone.status === "Rejected"
@@ -386,6 +410,22 @@ function FreelancerMilestoneCard({
                             must be approved before
                             this milestone can be
                             started.
+                        </p>
+                    </div>
+                )}
+
+            {!isEscrowFunded &&
+                (
+                    milestone.status === "Pending" ||
+                    milestone.status === "Rejected"
+                ) && (
+                    <div className="mt-5 flex gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-muted-foreground">
+                        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-400" />
+
+                        <p>
+                            Do not start yet. Your escrow must say Funded
+                            before your payment is protected, and the client
+                            has not funded it yet.
                         </p>
                     </div>
                 )}

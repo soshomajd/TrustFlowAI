@@ -13,4 +13,9 @@ public class ProposalForClientResponse
     public int EstimatedDays { get; set; }
     public ProposalStatus Status { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+
+    // The stages this proposal covers. BidAmount is their total, so the
+    // client can check what they are agreeing to rather than comparing
+    // against the whole project budget.
+    public List<ProposalMilestoneResponse> Milestones { get; set; } = [];
 }

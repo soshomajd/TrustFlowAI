@@ -60,6 +60,10 @@ export type AssignedProject = {
   deadline: string;
   status: ProjectStatus;
   createdAt: string;
+
+  // Budget describes the whole project; this is the total of the stages
+  // this freelancer holds, which is what they are paid.
+  myTotalAmount: number;
 };
 
 export type GetAssignedProjectsParams = {

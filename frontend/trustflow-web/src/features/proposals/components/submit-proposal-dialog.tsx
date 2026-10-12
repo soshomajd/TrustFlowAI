@@ -71,9 +71,10 @@ export function SubmitProposalDialog({
                     </DialogTitle>
 
                     <DialogDescription>
-                        Introduce yourself, enter
-                        your bid and estimate how
-                        long the project will take.
+                        Introduce yourself, pick
+                        the stages you will deliver
+                        and estimate how long they
+                        will take.
                     </DialogDescription>
                 </DialogHeader>
 
