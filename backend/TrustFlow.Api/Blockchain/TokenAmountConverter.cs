@@ -63,4 +63,57 @@ public static class TokenAmountConverter
 
         return unscaledValue * multiplier;
     }
+
+    // The exact inverse of ToBaseUnits. An amount that does not fit a
+    // decimal, or loses digits on the way, is an error, never a rounding.
+    public static decimal FromBaseUnits(
+        BigInteger baseUnits,
+        int tokenDecimals)
+    {
+        if (baseUnits.Sign < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(baseUnits),
+                baseUnits,
+                "Amount must not be negative."
+            );
+        }
+
+        if (tokenDecimals < 0 || tokenDecimals > 18)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(tokenDecimals),
+                tokenDecimals,
+                "Token decimals must be between 0 and 18."
+            );
+        }
+
+        if (baseUnits > new BigInteger(decimal.MaxValue))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(baseUnits),
+                baseUnits,
+                "Amount is too large."
+            );
+        }
+
+        var divisor = 1m;
+
+        for (var i = 0; i < tokenDecimals; i++)
+        {
+            divisor *= 10m;
+        }
+
+        var amount = (decimal)baseUnits / divisor;
+
+        if (ToBaseUnits(amount, tokenDecimals) != baseUnits)
+        {
+            throw new ArgumentException(
+                $"Amount {baseUnits} cannot be represented exactly.",
+                nameof(baseUnits)
+            );
+        }
+
+        return amount;
+    }
 }

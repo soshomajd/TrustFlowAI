@@ -98,7 +98,8 @@ public sealed class AiEvidenceBuilder(AppDbContext dbContext)
     public async Task<AiEvidence?> BuildForMilestoneAsync(
         Guid projectId,
         Guid milestoneId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? deliveredBy = null)
     {
         var milestone = await dbContext.Milestones
             .AsNoTracking()
@@ -142,9 +143,16 @@ public sealed class AiEvidenceBuilder(AppDbContext dbContext)
             $"Deadline: {milestone.Deadline:yyyy-MM-dd}\n\n" +
             milestone.Description);
 
+        // Only the freelancer who holds the milestone has delivered for it.
+        // A stage handed on after a resignation must not show the earlier
+        // freelancer's work to its next owner.
         var submissions = await dbContext.MilestoneSubmissions
             .AsNoTracking()
-            .Where(item => item.MilestoneId == milestoneId)
+            .Where(item =>
+                item.MilestoneId == milestoneId &&
+                (deliveredBy == null
+                    ? item.FreelancerId == item.Milestone.FreelancerId
+                    : item.FreelancerId == deliveredBy))
             .OrderByDescending(item => item.Version)
             .Take(MaximumSubmissions)
             .Select(item => new

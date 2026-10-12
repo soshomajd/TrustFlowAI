@@ -34,6 +34,8 @@ public class AppDbContext(
 
     public DbSet<Dispute> Disputes => Set<Dispute>();
 
+    public DbSet<EscrowCase> EscrowCases => Set<EscrowCase>();
+
     public DbSet<MilestoneAiReview> MilestoneAiReviews =>
         Set<MilestoneAiReview>();
 
@@ -75,6 +77,7 @@ public class AppDbContext(
         ConfigureRefreshTokens(modelBuilder);
         ConfigureAuthCodes(modelBuilder);
         ConfigureAi(modelBuilder);
+        ConfigureEscrowCases(modelBuilder);
         ConfigureWalletIdentity(modelBuilder);
         ConfigureFreelancerProfiles(modelBuilder);
         ConfigureFreelancerResumes(modelBuilder);
@@ -251,6 +254,54 @@ public class AppDbContext(
         });
     }
 
+    private static void ConfigureEscrowCases(
+        ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<EscrowCase>(item =>
+        {
+            item.Property(row => row.Kind)
+                .HasConversion<string>()
+                .HasMaxLength(16);
+
+            item.Property(row => row.Status)
+                .HasConversion<string>()
+                .HasMaxLength(16);
+
+            item.Property(row => row.PaidToFreelancer)
+                .HasPrecision(18, 2);
+
+            item.Property(row => row.ReturnedToClient)
+                .HasPrecision(18, 2);
+
+            item.Property(row => row.ReviewNote)
+                .HasMaxLength(2000);
+
+            item.Property(row => row.AdviceConfidence)
+                .HasPrecision(4, 3);
+
+            item.HasOne(row => row.Escrow)
+                .WithMany()
+                .HasForeignKey(row => row.EscrowId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            item.HasOne(row => row.Milestone)
+                .WithMany()
+                .HasForeignKey(row => row.MilestoneId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // The contract allows one open case at a time, so the copy
+            // does too.
+            item.HasIndex(row => row.EscrowId)
+                .IsUnique()
+                .HasFilter("\"Status\" = 'Open'")
+                .HasDatabaseName("IX_EscrowCases_Open_EscrowId");
+
+            item.HasIndex(row => new { row.Status, row.OpenedAt });
+
+            item.HasIndex(row => row.MilestoneId);
+        });
+    }
+
     private static void ConfigureAi(
         ModelBuilder modelBuilder)
     {
@@ -406,6 +457,10 @@ public class AppDbContext(
 
             escrow.Property(
                     item => item.FreelancerWalletAddress)
+                .HasMaxLength(42);
+
+            escrow.Property(
+                    item => item.ArbiterWalletAddress)
                 .HasMaxLength(42);
 
             escrow.Property(

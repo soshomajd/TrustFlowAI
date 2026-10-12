@@ -384,6 +384,10 @@ namespace TrustFlow.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ArbiterWalletAddress")
+                        .HasMaxLength(42)
+                        .HasColumnType("character varying(42)");
+
                     b.Property<string>("CancellationTransactionHash")
                         .HasMaxLength(66)
                         .HasColumnType("character varying(66)");
@@ -479,6 +483,88 @@ namespace TrustFlow.Api.Migrations
 
                             t.HasCheckConstraint("CK_Escrows_TotalAmount_Positive", "\"TotalAmount\" > 0");
                         });
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.EscrowCase", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AdviceAiRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AdviceAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("AdviceConfidence")
+                        .HasPrecision(4, 3)
+                        .HasColumnType("numeric(4,3)");
+
+                    b.Property<int?>("AdviceFreelancerSharePercent")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("AdviceJson")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("AdviceStartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("EscrowEnded")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("EscrowId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("MilestoneId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("OpenedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("PaidToFreelancer")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("ReturnedToClient")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset?>("ReviewNoteAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EscrowId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_EscrowCases_Open_EscrowId")
+                        .HasFilter("\"Status\" = 'Open'");
+
+                    b.HasIndex("MilestoneId");
+
+                    b.HasIndex("Status", "OpenedAt");
+
+                    b.ToTable("EscrowCases");
                 });
 
             modelBuilder.Entity("TrustFlow.Api.Models.FreelancerProfile", b =>
@@ -773,6 +859,9 @@ namespace TrustFlow.Api.Migrations
 
                     b.Property<Guid?>("FreelancerId")
                         .HasColumnType("uuid");
+
+                    b.Property<decimal?>("PaidAmount")
+                        .HasColumnType("numeric");
 
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
@@ -1168,6 +1257,25 @@ namespace TrustFlow.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.EscrowCase", b =>
+                {
+                    b.HasOne("TrustFlow.Api.Models.Escrow", "Escrow")
+                        .WithMany()
+                        .HasForeignKey("EscrowId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TrustFlow.Api.Models.MileStone", "Milestone")
+                        .WithMany()
+                        .HasForeignKey("MilestoneId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Escrow");
+
+                    b.Navigation("Milestone");
                 });
 
             modelBuilder.Entity("TrustFlow.Api.Models.FreelancerProfile", b =>

@@ -191,7 +191,9 @@ public sealed class MilestoneReviewService(
     {
         var query = dbContext.MilestoneSubmissions
             .AsNoTracking()
-            .Where(item => item.MilestoneId == milestoneId);
+            .Where(item =>
+                item.MilestoneId == milestoneId &&
+                item.FreelancerId == item.Milestone.FreelancerId);
 
         if (submissionId is { } id)
         {

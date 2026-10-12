@@ -1077,7 +1077,9 @@ namespace TrustFlow.Api.Controllers
                             project.Milestones.Count(
                                 milestone =>
                                     milestone.Status ==
-                                    MileStoneStatus.Approved
+                                        MileStoneStatus.Approved ||
+                                    milestone.Status ==
+                                        MileStoneStatus.Settled
                             ),
                         SubmittedMilestoneCount =
                             project.Milestones.Count(

@@ -16,6 +16,7 @@ using TrustFlow.Api.Services.Ai;
 using TrustFlow.Api.Services.Auth;
 using TrustFlow.Api.Services.Email;
 using TrustFlow.Api.Services.Files;
+using TrustFlow.Api.Services.Identity;
 using System.Globalization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
@@ -194,6 +195,21 @@ if (string.IsNullOrWhiteSpace(blockchainOptions.TokenAddress) ||
     );
 }
 
+if (string.IsNullOrWhiteSpace(blockchainOptions.ArbiterAddress) ||
+    blockchainOptions.ArbiterAddress.Length != 42 ||
+    !blockchainOptions.ArbiterAddress.StartsWith(
+        "0x",
+        StringComparison.OrdinalIgnoreCase) ||
+    !blockchainOptions.ArbiterAddress
+        .AsSpan(2)
+        .ToString()
+        .All(Uri.IsHexDigit))
+{
+    throw new InvalidOperationException(
+        "Blockchain arbiter address is missing or invalid."
+    );
+}
+
 if (string.IsNullOrWhiteSpace(blockchainOptions.DeployerPrivateKey))
 {
     throw new InvalidOperationException(
@@ -333,6 +349,7 @@ builder.Services.AddScoped<ProjectDraftService>();
 builder.Services.AddScoped<MilestoneReviewService>();
 builder.Services.AddScoped<FreelancerCoachService>();
 builder.Services.AddScoped<DisputeService>();
+builder.Services.AddScoped<CaseAdviceService>();
 builder.Services.AddScoped<IAuthCodeService, AuthCodeService>();
 builder.Services.AddScoped<IAccountEmailService, AccountEmailService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -537,6 +554,7 @@ if (app.Environment.IsEnvironment("Testing"))
 }
 
 await app.SeedRolesAsync();
+await ReviewerAccess.SeedAsync(app);
 
 app.UseExceptionHandler();
 

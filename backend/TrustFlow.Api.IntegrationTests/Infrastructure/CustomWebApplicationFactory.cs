@@ -70,6 +70,10 @@ public sealed class CustomWebApplicationFactory
                 ["Blockchain:TokenAddress"] =
                     "0x5FbDB2315678afecb367f032d93F642f64180aa3",
 
+                // Hardhat account #4, a local test address.
+                ["Blockchain:ArbiterAddress"] =
+                    "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+
                 ["Blockchain:DeployerPrivateKey"] =
                     // Well-known local Hardhat/Anvil test account #0 key.
                     // Not a real secret; used only so config

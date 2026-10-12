@@ -14,6 +14,7 @@ public sealed record EscrowDeploymentRequest(
     string TokenAddress,
     string ClientAddress,
     string FreelancerAddress,
+    string ArbiterAddress,
     IReadOnlyList<BigInteger> MilestoneAmounts);
 
 public sealed record EscrowDeploymentSubmission(
@@ -30,7 +31,15 @@ public enum OnChainEscrowState
     AwaitingFunding,
     Funded,
     Completed,
-    Cancelled
+    Cancelled,
+    Terminated
+}
+
+public enum OnChainCaseKind
+{
+    None,
+    PaymentRequest,
+    RefundRequest
 }
 
 public sealed record OnChainEscrowSnapshot(
@@ -39,11 +48,21 @@ public sealed record OnChainEscrowSnapshot(
     string Freelancer,
     BigInteger TotalAmount,
     OnChainEscrowState State,
-    bool WorkStarted);
+    bool WorkStarted,
+    string Arbiter,
+    BigInteger ReleasedAmount,
+    BigInteger RefundedAmount,
+    int NextMilestoneIndex,
+    OnChainCaseKind OpenCaseKind,
+    DateTimeOffset? OpenCaseOpenedAt);
 
+// Paid is what the freelancer received for the milestone: all of Amount for a
+// normal release, anything from nothing to Amount after a settlement.
 public sealed record OnChainMilestone(
     BigInteger Amount,
-    bool Released);
+    bool Released,
+    BigInteger Paid,
+    bool SettledByCase);
 
 public interface IEscrowChainDeployer
 {
@@ -119,6 +138,7 @@ public sealed class EscrowChainDeployer(
             Token = request.TokenAddress,
             Client = request.ClientAddress,
             Freelancer = request.FreelancerAddress,
+            Arbiter = request.ArbiterAddress,
             MilestoneAmounts = request.MilestoneAmounts.ToList()
         };
 
@@ -225,13 +245,38 @@ public sealed class EscrowChainDeployer(
         var workStarted = await contract.GetFunction("workStarted")
             .CallAsync<bool>();
 
+        var arbiter = await contract.GetFunction("arbiter")
+            .CallAsync<string>();
+
+        var releasedAmount = await contract.GetFunction("releasedAmount")
+            .CallAsync<BigInteger>();
+
+        var refundedAmount = await contract.GetFunction("refundedAmount")
+            .CallAsync<BigInteger>();
+
+        var nextMilestoneIndex = await contract
+            .GetFunction("nextMilestoneIndex")
+            .CallAsync<BigInteger>();
+
+        var openCase = await contract.GetFunction("getOpenCase")
+            .CallDeserializingToObjectAsync<OpenCaseOutput>();
+
         return new OnChainEscrowSnapshot(
             token,
             client,
             freelancer,
             totalAmount,
             (OnChainEscrowState)state,
-            workStarted
+            workStarted,
+            arbiter,
+            releasedAmount,
+            refundedAmount,
+            (int)nextMilestoneIndex,
+            (OnChainCaseKind)openCase.Kind,
+            openCase.Kind == 0
+                ? null
+                : DateTimeOffset.FromUnixTimeSeconds(
+                    (long)openCase.OpenedAt)
         );
     }
 
@@ -253,9 +298,19 @@ public sealed class EscrowChainDeployer(
                 milestoneIndex
             );
 
+        var paid = await contract
+            .GetFunction("getMilestonePaid")
+            .CallAsync<BigInteger>(milestoneIndex);
+
+        var settledByCase = await contract
+            .GetFunction("isSettledByCase")
+            .CallAsync<bool>(milestoneIndex);
+
         return new OnChainMilestone(
             output.Amount,
-            output.Released
+            output.Released,
+            paid,
+            settledByCase
         );
     }
 
@@ -297,8 +352,21 @@ public sealed class EscrowChainDeployer(
         [Parameter("address", "freelancer_", 3)]
         public string Freelancer { get; set; } = string.Empty;
 
-        [Parameter("uint256[]", "milestoneAmounts_", 4)]
+        [Parameter("address", "arbiter_", 4)]
+        public string Arbiter { get; set; } = string.Empty;
+
+        [Parameter("uint256[]", "milestoneAmounts_", 5)]
         public List<BigInteger> MilestoneAmounts { get; set; } = [];
+    }
+
+    [FunctionOutput]
+    private sealed class OpenCaseOutput : IFunctionOutputDTO
+    {
+        [Parameter("uint8", "kind", 1)]
+        public byte Kind { get; set; }
+
+        [Parameter("uint256", "openedAt", 2)]
+        public BigInteger OpenedAt { get; set; }
     }
 
     [FunctionOutput]

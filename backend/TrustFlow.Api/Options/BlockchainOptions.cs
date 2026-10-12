@@ -12,5 +12,10 @@ namespace TrustFlow.Api.Options
         public string TokenAddress { get; set; } = string.Empty;
 
         public string DeployerPrivateKey { get; set; } = string.Empty;
+
+        // The one address allowed to settle a case between a client and a
+        // freelancer, fixed into each escrow when it is deployed. It should
+        // belong to a multisig or a person, never to this server.
+        public string ArbiterAddress { get; set; } = string.Empty;
     }
 }

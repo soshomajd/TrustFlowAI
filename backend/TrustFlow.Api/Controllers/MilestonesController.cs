@@ -809,7 +809,9 @@ public class MilestonesController(
                     previousMilestone.SequenceNumber <
                         milestone.SequenceNumber &&
                     previousMilestone.Status !=
-                        MileStoneStatus.Approved
+                        MileStoneStatus.Approved &&
+                    previousMilestone.Status !=
+                        MileStoneStatus.Settled
                 ))
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(
@@ -898,10 +900,13 @@ public class MilestonesController(
             .AsNoTracking()
             .Where(previousMilestone =>
                 previousMilestone.ProjectId == projectId &&
+                previousMilestone.FreelancerId == freelancerId &&
                 previousMilestone.SequenceNumber <
                     milestoneInfo.SequenceNumber &&
                 previousMilestone.Status !=
-                    MileStoneStatus.Approved)
+                    MileStoneStatus.Approved &&
+                previousMilestone.Status !=
+                    MileStoneStatus.Settled)
             .OrderBy(previousMilestone =>
                 previousMilestone.SequenceNumber)
             .Select(previousMilestone => new
@@ -1097,9 +1102,12 @@ public class MilestonesController(
             });
         }
 
+        // Each freelancer's contract holds only that freelancer's stages,
+        // so the on-chain position counts only those.
         var onChainIndex = await dbContext.Milestones
             .Where(otherMilestone =>
                 otherMilestone.ProjectId == projectId &&
+                otherMilestone.FreelancerId == preCheck.FreelancerId &&
                 otherMilestone.SequenceNumber <
                     preCheck.SequenceNumber)
             .CountAsync(cancellationToken);
@@ -1131,6 +1139,19 @@ public class MilestonesController(
                     "milestone on-chain yet. Call the contract's " +
                     "releaseMilestone() before approving.",
                 onChainMilestoneIndex = onChainIndex
+            });
+        }
+
+        // The arbiter closed this stage, so there is nothing to approve. The
+        // chain sync records the outcome; approving here would credit the
+        // freelancer with money that may have gone back to the client.
+        if (onChainMilestone.SettledByCase)
+        {
+            return Conflict(new
+            {
+                message =
+                    "This milestone was settled by the reviewer. " +
+                    "Refresh the page to see the result."
             });
         }
 
@@ -1258,7 +1279,9 @@ public class MilestonesController(
                                 otherMilestone.Id !=
                                     milestoneId &&
                                 otherMilestone.Status !=
-                                    MileStoneStatus.Approved,
+                                    MileStoneStatus.Approved &&
+                                otherMilestone.Status !=
+                                    MileStoneStatus.Settled,
                             cancellationToken
                         );
 
@@ -1273,7 +1296,9 @@ public class MilestonesController(
                                 otherMilestone.Id !=
                                     milestoneId &&
                                 otherMilestone.Status !=
-                                    MileStoneStatus.Approved,
+                                    MileStoneStatus.Approved &&
+                                otherMilestone.Status !=
+                                    MileStoneStatus.Settled,
                             cancellationToken
                         );
 
@@ -1285,7 +1310,11 @@ public class MilestonesController(
                 escrow.ReleasedAmount += milestone.Amount;
                 escrow.UpdatedAt = now;
 
-                if (!hasOtherUnapprovedMilestonesForFreelancer)
+                // An escrow the freelancer ended by resigning stays
+                // Terminated; approving the stage the client released before
+                // that does not complete it.
+                if (!hasOtherUnapprovedMilestonesForFreelancer &&
+                    escrow.Status != EscrowStatus.Terminated)
                 {
                     if (!escrowCompletedOnChain)
                     {

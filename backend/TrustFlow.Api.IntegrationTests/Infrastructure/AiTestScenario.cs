@@ -17,7 +17,8 @@ public sealed record SubmittedMilestone(
     Person Freelancer,
     Guid ProjectId,
     Guid MilestoneId,
-    string ContractAddress);
+    string ContractAddress,
+    IReadOnlyList<Guid>? AllMilestoneIds = null);
 
 // Builds the situation every AI feature starts from: a project in progress,
 // a funded escrow whose work has started, and one milestone delivered and
@@ -92,9 +93,13 @@ public static class AiTestScenario
         HttpResponseMessage response) =>
         await response.Content.ReadFromJsonAsync<JsonElement>();
 
+    // milestoneCount above one adds later stages for the same freelancer, so
+    // a test can see what happens to the stages that are still ahead. The
+    // first one, worth the rest of the 1000 budget, is the delivered one.
     public static async Task<SubmittedMilestone> CreateSubmittedMilestoneAsync(
         HttpClient client,
-        string note = "The work is finished and attached.")
+        string note = "The work is finished and attached.",
+        int milestoneCount = 1)
     {
         var clientPerson = await NewPersonAsync(
             client, "Client", "Dispute Client");
@@ -114,20 +119,31 @@ public static class AiTestScenario
 
         var projectId = project.GetProperty("id").GetGuid();
 
-        var milestone = await ReadAsync(await SendAsync(
-            client, HttpMethod.Post,
-            $"/api/projects/{projectId}/milestones", clientPerson.Token,
-            new
-            {
-                Title = "Landing page",
-                Description =
-                    "Responsive landing page with a working contact form.",
-                Amount = 1000m,
-                SequenceNumber = 1,
-                Deadline = DateTimeOffset.UtcNow.AddDays(30)
-            }));
+        var milestoneIds = new List<Guid>();
 
-        var milestoneId = milestone.GetProperty("id").GetGuid();
+        for (var number = 1; number <= milestoneCount; number++)
+        {
+            var amount = number == 1
+                ? 1000m - 100m * (milestoneCount - 1)
+                : 100m;
+
+            var created = await ReadAsync(await SendAsync(
+                client, HttpMethod.Post,
+                $"/api/projects/{projectId}/milestones", clientPerson.Token,
+                new
+                {
+                    Title = number == 1 ? "Landing page" : $"Stage {number}",
+                    Description =
+                        "Responsive landing page with a working contact form.",
+                    Amount = amount,
+                    SequenceNumber = number,
+                    Deadline = DateTimeOffset.UtcNow.AddDays(20 * number)
+                }));
+
+            milestoneIds.Add(created.GetProperty("id").GetGuid());
+        }
+
+        var milestoneId = milestoneIds[0];
 
         var proposal = await ReadAsync(await SendAsync(
             client, HttpMethod.Post,
@@ -136,7 +152,7 @@ public static class AiTestScenario
             {
                 CoverLetter = "I can build this.",
                 EstimatedDays = 14,
-                MilestoneIds = new[] { milestoneId }
+                MilestoneIds = milestoneIds
             }));
 
         var accepted = await SendAsync(
@@ -214,7 +230,8 @@ public static class AiTestScenario
             freelancer,
             projectId,
             milestoneId,
-            contractAddress);
+            contractAddress,
+            milestoneIds);
     }
 
     private static async Task ConnectWalletAsync(

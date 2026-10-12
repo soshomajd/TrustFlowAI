@@ -146,7 +146,8 @@ public sealed class MilestoneSubmissionsController(
             return NotFound(new { message = "Milestone not found." });
 
         var submissions = await dbContext.MilestoneSubmissions.AsNoTracking()
-            .Where(item => item.MilestoneId == milestoneId)
+            .Where(item => item.MilestoneId == milestoneId &&
+                           item.FreelancerId == item.Milestone.FreelancerId)
             .Include(item => item.Attachments)
             .OrderByDescending(item => item.Version)
             .ToListAsync(cancellationToken);
@@ -164,7 +165,8 @@ public sealed class MilestoneSubmissionsController(
 
         var attachment = await dbContext.MilestoneSubmissionAttachments.AsNoTracking()
             .Where(item => item.Id == attachmentId && item.SubmissionId == submissionId &&
-                           item.Submission.MilestoneId == milestoneId)
+                           item.Submission.MilestoneId == milestoneId &&
+                           item.Submission.FreelancerId == item.Submission.Milestone.FreelancerId)
             .Select(item => new { item.Content, item.ContentType, item.OriginalFileName })
             .SingleOrDefaultAsync(cancellationToken);
         if (attachment is null) return NotFound(new { message = "Delivery file not found." });

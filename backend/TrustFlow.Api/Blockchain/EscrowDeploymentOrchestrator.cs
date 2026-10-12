@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using TrustFlow.Api.Data;
 using TrustFlow.Api.Models;
 using TrustFlow.Api.Models.Enums;
+using TrustFlow.Api.Options;
 
 namespace TrustFlow.Api.Blockchain;
 
@@ -14,7 +16,8 @@ public interface IEscrowDeploymentOrchestrator
 
 public sealed class EscrowDeploymentOrchestrator(
     AppDbContext dbContext,
-    IEscrowChainDeployer deployer)
+    IEscrowChainDeployer deployer,
+    IOptions<BlockchainOptions> blockchainOptions)
     : IEscrowDeploymentOrchestrator
 {
     public async Task<bool> TryDeployAsync(
@@ -259,6 +262,10 @@ public sealed class EscrowDeploymentOrchestrator(
             escrow.TokenAddress,
             escrow.ClientWalletAddress!,
             escrow.FreelancerWalletAddress!,
+            // An escrow keeps the arbiter it was deployed with, so a retry
+            // after the setting changed still matches the contract.
+            escrow.ArbiterWalletAddress ??
+                blockchainOptions.Value.ArbiterAddress,
             baseUnitAmounts
         );
     }
@@ -299,6 +306,10 @@ public sealed class EscrowDeploymentOrchestrator(
                 snapshot.Freelancer,
                 request.FreelancerAddress,
                 StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                snapshot.Arbiter,
+                request.ArbiterAddress,
+                StringComparison.OrdinalIgnoreCase) ||
             snapshot.TotalAmount != expectedTotal ||
             snapshot.State != OnChainEscrowState.AwaitingFunding ||
             snapshot.WorkStarted)
@@ -323,6 +334,10 @@ public sealed class EscrowDeploymentOrchestrator(
                     .SetProperty(
                         item => item.DeployedAt,
                         result.DeployedAt
+                    )
+                    .SetProperty(
+                        item => item.ArbiterWalletAddress,
+                        request.ArbiterAddress
                     )
                     .SetProperty(
                         item => item.Status,

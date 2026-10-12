@@ -11,6 +11,7 @@ using TrustFlow.Api.Dtos.Auth;
 using TrustFlow.Api.Models.Identity;
 using TrustFlow.Api.Options;
 using TrustFlow.Api.Services.Auth;
+using TrustFlow.Api.Services.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace TrustFlow.Api.Controllers;
@@ -24,7 +25,8 @@ public class AuthController(
     IRefreshTokenService refreshTokenService,
     AppDbContext dbContext,
     IWebHostEnvironment environment,
-    IAccountEmailService accountEmails)
+    IAccountEmailService accountEmails,
+    IConfiguration configuration)
     : ControllerBase
 {
     private const string RefreshTokenCookieName =
@@ -102,6 +104,13 @@ public class AuthController(
                     .Select(error =>
                         error.Description)
             });
+        }
+
+        // A configured reviewer also gets the reviewer role. They still
+        // cannot sign in until the address is confirmed.
+        if (ReviewerAccess.IsReviewer(configuration, user.Email!))
+        {
+            await userManager.AddToRoleAsync(user, AppRoles.Admin);
         }
 
         // The account exists but cannot sign in until the address is

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Numerics;
 using TrustFlow.Api.Blockchain;
 
 namespace TrustFlow.Api.IntegrationTests.Infrastructure;
@@ -27,6 +28,61 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
 
     private static readonly ConcurrentDictionary<string, bool>
         CancelledEscrows = new();
+
+    private sealed record FakeCase(
+        OnChainCaseKind Kind,
+        DateTimeOffset OpenedAt);
+
+    private static readonly ConcurrentDictionary<string, FakeCase>
+        OpenCases = new();
+
+    // What the freelancer received for a milestone the arbiter closed.
+    private static readonly ConcurrentDictionary<
+        (string ContractAddress, int MilestoneIndex),
+        BigInteger> SettledMilestones = new();
+
+    private static readonly ConcurrentDictionary<string, bool>
+        TerminatedEscrows = new();
+
+    public static void OpenCase(
+        string contractAddress,
+        OnChainCaseKind kind,
+        DateTimeOffset openedAt)
+    {
+        OpenCases[contractAddress] = new FakeCase(kind, openedAt);
+    }
+
+    public static void WithdrawCase(string contractAddress)
+    {
+        OpenCases.TryRemove(contractAddress, out _);
+    }
+
+    public static void SettleMilestone(
+        string contractAddress,
+        int milestoneIndex,
+        BigInteger paidBaseUnits,
+        bool endEscrow)
+    {
+        SettledMilestones[(contractAddress, milestoneIndex)] =
+            paidBaseUnits;
+
+        OpenCases.TryRemove(contractAddress, out _);
+
+        // Like the contract: settling the last stage completes the escrow
+        // whatever was asked, there is nothing left to end.
+        if (endEscrow &&
+            milestoneIndex + 1 < DeployedEscrows[contractAddress]
+                .MilestoneAmounts.Count)
+        {
+            TerminatedEscrows[contractAddress] = true;
+        }
+    }
+
+    public static void Resign(string contractAddress)
+    {
+        OpenCases.TryRemove(contractAddress, out _);
+        TerminatedEscrows[contractAddress] = true;
+    }
 
     public static void MarkMilestoneReleased(
         string contractAddress,
@@ -115,13 +171,34 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
         var totalBaseUnits = request.MilestoneAmounts
             .Aggregate((left, right) => left + right);
 
+        bool IsClosed(int index) =>
+            ReleasedMilestones.ContainsKey((contractAddress, index)) ||
+            SettledMilestones.ContainsKey((contractAddress, index));
+
         var allReleased = Enumerable
             .Range(0, request.MilestoneAmounts.Count)
-            .All(index =>
-                ReleasedMilestones.ContainsKey(
-                    (contractAddress, index)
-                )
-            );
+            .All(IsClosed);
+
+        var nextIndex = 0;
+
+        while (nextIndex < request.MilestoneAmounts.Count &&
+               IsClosed(nextIndex))
+        {
+            nextIndex++;
+        }
+
+        var released = Enumerable
+            .Range(0, nextIndex)
+            .Aggregate(
+                BigInteger.Zero,
+                (sum, index) => sum + (
+                    SettledMilestones.TryGetValue(
+                        (contractAddress, index),
+                        out var paid)
+                        ? paid
+                        : request.MilestoneAmounts[index]));
+
+        OpenCases.TryGetValue(contractAddress, out var openCase);
 
         var isDeploymentValidation =
             AwaitingDeploymentValidation.TryRemove(
@@ -137,12 +214,22 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
                 totalBaseUnits,
                 CancelledEscrows.ContainsKey(contractAddress)
                     ? OnChainEscrowState.Cancelled
+                    : TerminatedEscrows.ContainsKey(contractAddress)
+                        ? OnChainEscrowState.Terminated
                     : allReleased
                         ? OnChainEscrowState.Completed
                         : isDeploymentValidation
                             ? OnChainEscrowState.AwaitingFunding
                             : OnChainEscrowState.Funded,
-                StartedEscrows.ContainsKey(contractAddress)
+                StartedEscrows.ContainsKey(contractAddress),
+                request.ArbiterAddress,
+                released,
+                TerminatedEscrows.ContainsKey(contractAddress)
+                    ? totalBaseUnits - released
+                    : BigInteger.Zero,
+                nextIndex,
+                openCase?.Kind ?? OnChainCaseKind.None,
+                openCase?.OpenedAt
             )
         );
     }
@@ -154,14 +241,25 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
     {
         var request = GetDeployedRequest(contractAddress);
 
-        var released = ReleasedMilestones.ContainsKey(
+        var settled = SettledMilestones.TryGetValue(
+            (contractAddress, milestoneIndex),
+            out var settledPaid
+        );
+
+        var released = settled || ReleasedMilestones.ContainsKey(
             (contractAddress, milestoneIndex)
         );
 
+        var amount = request.MilestoneAmounts[milestoneIndex];
+
         return Task.FromResult(
             new OnChainMilestone(
-                request.MilestoneAmounts[milestoneIndex],
-                released
+                amount,
+                released,
+                settled
+                    ? settledPaid
+                    : released ? amount : BigInteger.Zero,
+                settled
             )
         );
     }

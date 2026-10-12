@@ -27,6 +27,8 @@ public sealed class EscrowResponse
         set;
     }
 
+    public string? ArbiterWalletAddress { get; set; }
+
     public decimal TotalAmount { get; set; }
 
     public decimal ReleasedAmount { get; set; }

@@ -4,9 +4,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using TrustFlow.Api.Blockchain;
 using TrustFlow.Api.Constants;
 using TrustFlow.Api.Data;
 using TrustFlow.Api.Dtos.Notifications;
+using TrustFlow.Api.Models;
 using TrustFlow.Api.Models.Enums;
 using TrustFlow.Api.Options;
 
@@ -61,6 +63,10 @@ public sealed class NotificationsController(
             await BuildDisputeItemsAsync(userId, cancellationToken)
         );
 
+        items.AddRange(
+            await BuildCaseItemsAsync(userId, cancellationToken)
+        );
+
         var ordered = items
             .OrderBy(item => item.Severity switch
             {
@@ -80,6 +86,129 @@ public sealed class NotificationsController(
             ActionCount = ordered.Count(item =>
                 item.Severity != InfoSeverity)
         });
+    }
+
+    // Cases on the escrow contract: the two sides are told when the other
+    // opened one and when it was settled, and the reviewer is told which are
+    // ready to decide.
+    private async Task<List<NotificationItemResponse>>
+        BuildCaseItemsAsync(
+            Guid userId,
+            CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var recently = now.AddDays(-7);
+        var isReviewer = User.IsInRole(AppRoles.Admin);
+
+        var cases = await dbContext.EscrowCases
+            .AsNoTracking()
+            .Where(item =>
+                (isReviewer ||
+                 item.Escrow.FreelancerId == userId ||
+                 item.Milestone.Project.ClientId == userId) &&
+                (item.Status == EscrowCaseStatus.Open ||
+                 (item.Status == EscrowCaseStatus.Settled &&
+                  item.ClosedAt > recently)))
+            .Select(item => new
+            {
+                item.Id,
+                item.Kind,
+                item.Status,
+                item.OpenedAt,
+                item.PaidToFreelancer,
+                item.ReturnedToClient,
+                ProjectId = item.Milestone.ProjectId,
+                MilestoneTitle = item.Milestone.Title,
+                ProjectTitle = item.Milestone.Project.Title,
+                FreelancerId = item.Escrow.FreelancerId,
+                ClientId = item.Milestone.Project.ClientId
+            })
+            .ToListAsync(cancellationToken);
+
+        var items = new List<NotificationItemResponse>();
+
+        foreach (var row in cases)
+        {
+            var isClient = row.ClientId == userId;
+            var isFreelancer = row.FreelancerId == userId;
+            var settleAt = row.OpenedAt + EscrowCaseRules.ResponseWindow;
+            var settleDate = settleAt.ToString(
+                "d MMM yyyy",
+                CultureInfo.InvariantCulture);
+
+            if (!isClient && !isFreelancer)
+            {
+                // A reviewer who is not on the project.
+                if (row.Status == EscrowCaseStatus.Open && now >= settleAt)
+                {
+                    items.Add(new NotificationItemResponse
+                    {
+                        Id = $"review-ready:{row.Id}",
+                        Kind = "ReviewReady",
+                        Severity = ActionSeverity,
+                        Title = "A case is ready to settle",
+                        Message =
+                            $"The 14 days are over for \"{row.MilestoneTitle}\".",
+                        Href = $"/dashboard/review/{row.Id}",
+                        ProjectTitle = row.ProjectTitle
+                    });
+                }
+
+                continue;
+            }
+
+            var href = isClient
+                ? $"/dashboard/client/projects/{row.ProjectId}"
+                : $"/dashboard/freelancer/projects/{row.ProjectId}";
+
+            var openedByMe =
+                (row.Kind == EscrowCaseKind.PaymentRequest && isFreelancer) ||
+                (row.Kind == EscrowCaseKind.RefundRequest && isClient);
+
+            if (row.Status == EscrowCaseStatus.Open)
+            {
+                items.Add(new NotificationItemResponse
+                {
+                    Id = $"case-open:{row.Id}",
+                    Kind = "CaseOpen",
+                    Severity = openedByMe ? InfoSeverity : ActionSeverity,
+                    Title = openedByMe
+                        ? "Your request is with the reviewer"
+                        : row.Kind == EscrowCaseKind.PaymentRequest
+                            ? "The freelancer asked to be paid"
+                            : "The client asked for a refund",
+                    Message = openedByMe
+                        ? $"A person can settle \"{row.MilestoneTitle}\" "
+                          + $"from {settleDate}."
+                        : row.Kind == EscrowCaseKind.PaymentRequest
+                            ? $"Release payment for \"{row.MilestoneTitle}\" "
+                              + $"or a person decides from {settleDate}."
+                            : $"Answer for \"{row.MilestoneTitle}\" before "
+                              + $"{settleDate}, when a person can decide.",
+                    Href = href,
+                    ProjectTitle = row.ProjectTitle
+                });
+            }
+            else
+            {
+                items.Add(new NotificationItemResponse
+                {
+                    Id = $"case-settled:{row.Id}",
+                    Kind = "CaseSettled",
+                    Severity = InfoSeverity,
+                    Title = "A case was settled",
+                    Message =
+                        $"\"{row.MilestoneTitle}\": the freelancer received "
+                        + $"{row.PaidToFreelancer:0.##} and "
+                        + $"{row.ReturnedToClient:0.##} went back to the "
+                        + "client.",
+                    Href = href,
+                    ProjectTitle = row.ProjectTitle
+                });
+            }
+        }
+
+        return items;
     }
 
     private async Task<List<NotificationItemResponse>>

@@ -30,6 +30,11 @@ public class Escrow
 
     public string? FreelancerWalletAddress { get; set; }
 
+    // Who can settle a case on this contract. Fixed on-chain at deployment;
+    // kept here so a later change of the server setting cannot make the
+    // backend trust the wrong address for an escrow that already exists.
+    public string? ArbiterWalletAddress { get; set; }
+
     public decimal TotalAmount { get; set; }
 
     public decimal ReleasedAmount { get; set; }

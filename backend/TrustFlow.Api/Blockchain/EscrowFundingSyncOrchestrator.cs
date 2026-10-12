@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using TrustFlow.Api.Data;
+using TrustFlow.Api.Models;
 using TrustFlow.Api.Models.Enums;
 
 namespace TrustFlow.Api.Blockchain;
@@ -70,24 +72,63 @@ public sealed class EscrowChainSyncOrchestrator(
             );
         }
 
-        return snapshot.State switch
+        if (escrow.ArbiterWalletAddress is not null &&
+            !string.Equals(
+                snapshot.Arbiter,
+                escrow.ArbiterWalletAddress,
+                StringComparison.OrdinalIgnoreCase))
         {
-            OnChainEscrowState.AwaitingFunding => false,
-            OnChainEscrowState.Funded =>
-                await SyncFundedAsync(escrowId, cancellationToken),
-            OnChainEscrowState.Cancelled =>
-                await SyncCancelledAsync(
+            throw new InvalidOperationException(
+                $"On-chain escrow {escrow.ContractAddress} has a " +
+                $"different arbiter than escrow {escrow.Id}."
+            );
+        }
+
+        switch (snapshot.State)
+        {
+            case OnChainEscrowState.AwaitingFunding:
+                return false;
+
+            case OnChainEscrowState.Funded:
+            {
+                var funded = await SyncFundedAsync(
+                    escrowId,
+                    cancellationToken
+                );
+
+                var progressed = await SyncProgressAsync(
+                    escrow,
+                    snapshot,
+                    tokenDecimals,
+                    cancellationToken
+                );
+
+                return funded || progressed;
+            }
+
+            case OnChainEscrowState.Cancelled:
+                return await SyncCancelledAsync(
                     escrowId,
                     escrow.ProjectId,
                     escrow.FreelancerId,
                     cancellationToken
-                ),
-            OnChainEscrowState.Completed => false,
-            _ => throw new InvalidOperationException(
-                $"Unsupported on-chain escrow state " +
-                $"{snapshot.State}."
-            )
-        };
+                );
+
+            case OnChainEscrowState.Completed:
+            case OnChainEscrowState.Terminated:
+                return await SyncProgressAsync(
+                    escrow,
+                    snapshot,
+                    tokenDecimals,
+                    cancellationToken
+                );
+
+            default:
+                throw new InvalidOperationException(
+                    $"Unsupported on-chain escrow state " +
+                    $"{snapshot.State}."
+                );
+        }
     }
 
     private async Task<bool> SyncFundedAsync(
@@ -218,5 +259,525 @@ public sealed class EscrowChainSyncOrchestrator(
 
         await transaction.CommitAsync(cancellationToken);
         return true;
+    }
+
+    // Brings the backend's copy in line with what the contract says happened
+    // after funding: cases opened or taken back, milestones the arbiter
+    // settled, and an escrow that ended early. The chain is read, never
+    // trusted from the caller, and every change is an atomic claim, so
+    // running it twice or from two requests does the work once.
+    private async Task<bool> SyncProgressAsync(
+        Escrow escrow,
+        OnChainEscrowSnapshot snapshot,
+        int tokenDecimals,
+        CancellationToken cancellationToken)
+    {
+        if (escrow.Status is not (EscrowStatus.AwaitingFunding or
+            EscrowStatus.Funded))
+        {
+            return false;
+        }
+
+        var milestones = await dbContext.Milestones
+            .AsNoTracking()
+            .Where(item =>
+                item.ProjectId == escrow.ProjectId &&
+                item.FreelancerId == escrow.FreelancerId)
+            .OrderBy(item => item.SequenceNumber)
+            .ToListAsync(cancellationToken);
+
+        var changed = false;
+
+        var released = Math.Min(
+            snapshot.NextMilestoneIndex,
+            milestones.Count
+        );
+
+        for (var index = 0; index < released; index++)
+        {
+            var milestone = milestones[index];
+
+            if (milestone.Status is MileStoneStatus.Approved or
+                MileStoneStatus.Settled)
+            {
+                continue;
+            }
+
+            var onChain = await deployer.GetMilestoneAsync(
+                escrow.ContractAddress!,
+                index,
+                cancellationToken
+            );
+
+            // A release by the client is finished by the client's own
+            // approval. Only a settlement is the arbiter's to report.
+            if (!onChain.Released || !onChain.SettledByCase)
+            {
+                continue;
+            }
+
+            changed |= await ApplySettlementAsync(
+                escrow,
+                milestone,
+                onChain,
+                tokenDecimals,
+                snapshot.State == OnChainEscrowState.Terminated &&
+                    index == snapshot.NextMilestoneIndex - 1,
+                cancellationToken
+            );
+        }
+
+        if (snapshot.State == OnChainEscrowState.Terminated)
+        {
+            changed |= await ApplyTerminationAsync(
+                escrow,
+                milestones,
+                snapshot.NextMilestoneIndex,
+                cancellationToken
+            );
+        }
+
+        changed |= await ReconcileOpenCaseAsync(
+            escrow,
+            milestones,
+            snapshot,
+            cancellationToken
+        );
+
+        if (snapshot.State == OnChainEscrowState.Completed)
+        {
+            changed |= await ApplyCompletionAsync(
+                escrow,
+                cancellationToken
+            );
+        }
+
+        return changed;
+    }
+
+    private async Task<bool> ApplySettlementAsync(
+        Escrow escrow,
+        MileStone milestone,
+        OnChainMilestone onChain,
+        int tokenDecimals,
+        bool escrowEnded,
+        CancellationToken cancellationToken)
+    {
+        var amount = TokenAmountConverter.FromBaseUnits(
+            onChain.Amount,
+            tokenDecimals
+        );
+
+        var paid = TokenAmountConverter.FromBaseUnits(
+            onChain.Paid,
+            tokenDecimals
+        );
+
+        if (amount != milestone.Amount || paid > amount)
+        {
+            throw new InvalidOperationException(
+                $"On-chain milestone for {milestone.Id} " +
+                $"(amount {amount}, paid {paid}) does not match the " +
+                $"backend amount {milestone.Amount}."
+            );
+        }
+
+        var now = DateTimeOffset.UtcNow;
+
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken);
+
+        var claimed = await dbContext.Milestones
+            .Where(item =>
+                item.Id == milestone.Id &&
+                item.Status != MileStoneStatus.Approved &&
+                item.Status != MileStoneStatus.Settled)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        item => item.Status,
+                        MileStoneStatus.Settled)
+                    .SetProperty(
+                        item => item.PaidAmount,
+                        (decimal?)paid),
+                cancellationToken
+            );
+
+        if (claimed == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+
+        await dbContext.Escrows
+            .Where(item => item.Id == escrow.Id)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        item => item.ReleasedAmount,
+                        item => item.ReleasedAmount + paid)
+                    .SetProperty(
+                        item => item.UpdatedAt,
+                        now),
+                cancellationToken
+            );
+
+        var closedCases = await dbContext.EscrowCases
+            .Where(item =>
+                item.EscrowId == escrow.Id &&
+                item.MilestoneId == milestone.Id &&
+                item.Status == EscrowCaseStatus.Open)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        item => item.Status,
+                        EscrowCaseStatus.Settled)
+                    .SetProperty(
+                        item => item.ClosedAt,
+                        (DateTimeOffset?)now)
+                    .SetProperty(
+                        item => item.PaidToFreelancer,
+                        (decimal?)paid)
+                    .SetProperty(
+                        item => item.ReturnedToClient,
+                        (decimal?)(amount - paid))
+                    .SetProperty(
+                        item => item.EscrowEnded,
+                        escrowEnded),
+                cancellationToken
+            );
+
+        if (closedCases == 0)
+        {
+            // The case was settled before this backend ever saw it open.
+            // The kind is the only thing that cannot be recovered, so it is
+            // read from the outcome.
+            dbContext.EscrowCases.Add(new EscrowCase
+            {
+                EscrowId = escrow.Id,
+                MilestoneId = milestone.Id,
+                Kind = paid > 0m
+                    ? EscrowCaseKind.PaymentRequest
+                    : EscrowCaseKind.RefundRequest,
+                OpenedAt = now,
+                Status = EscrowCaseStatus.Settled,
+                ClosedAt = now,
+                PaidToFreelancer = paid,
+                ReturnedToClient = amount - paid,
+                EscrowEnded = escrowEnded
+            });
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        await SettleDisputesAsync(
+            [milestone.Id],
+            cancellationToken
+        );
+
+        await transaction.CommitAsync(cancellationToken);
+
+        dbContext.ChangeTracker.Clear();
+
+        return true;
+    }
+
+    // The escrow ended early. What was settled or approved stays; every
+    // stage still ahead goes back on the marketplace for another freelancer.
+    private async Task<bool> ApplyTerminationAsync(
+        Escrow escrow,
+        IReadOnlyList<MileStone> milestones,
+        int nextMilestoneIndex,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken);
+
+        var claimed = await dbContext.Escrows
+            .Where(item =>
+                item.Id == escrow.Id &&
+                (item.Status == EscrowStatus.Funded ||
+                 item.Status == EscrowStatus.AwaitingFunding))
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        item => item.Status,
+                        EscrowStatus.Terminated)
+                    .SetProperty(
+                        item => item.UpdatedAt,
+                        now),
+                cancellationToken
+            );
+
+        if (claimed == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+
+        // Stages the client already released on-chain keep their owner; the
+        // client's approval will close them. Everything from the contract's
+        // next position onwards was never paid.
+        var ahead = milestones
+            .Skip(Math.Min(nextMilestoneIndex, milestones.Count))
+            .Select(item => item.Id)
+            .ToList();
+
+        await SettleDisputesAsync(ahead, cancellationToken);
+
+        await dbContext.Milestones
+            .Where(item =>
+                ahead.Contains(item.Id) &&
+                item.Status != MileStoneStatus.Approved &&
+                item.Status != MileStoneStatus.Settled)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        item => item.FreelancerId,
+                        (Guid?)null)
+                    .SetProperty(
+                        item => item.Status,
+                        MileStoneStatus.Pending)
+                    .SetProperty(
+                        item => item.PaidAmount,
+                        (decimal?)null),
+                cancellationToken
+            );
+
+        await dbContext.Proposals
+            .Where(item =>
+                item.ProjectId == escrow.ProjectId &&
+                item.FreelancerId == escrow.FreelancerId &&
+                item.Status == ProposalStatus.Accepted)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    item => item.Status,
+                    ProposalStatus.Rejected),
+                cancellationToken
+            );
+
+        await dbContext.EscrowCases
+            .Where(item =>
+                item.EscrowId == escrow.Id &&
+                item.Status == EscrowCaseStatus.Open)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        item => item.Status,
+                        EscrowCaseStatus.Withdrawn)
+                    .SetProperty(
+                        item => item.ClosedAt,
+                        (DateTimeOffset?)now),
+                cancellationToken
+            );
+
+        // The project is finished only when no stage is left unfinished.
+        await CompleteProjectIfDoneAsync(
+            escrow.ProjectId,
+            cancellationToken
+        );
+
+        await transaction.CommitAsync(cancellationToken);
+
+        dbContext.ChangeTracker.Clear();
+
+        return true;
+    }
+
+    private async Task<bool> ReconcileOpenCaseAsync(
+        Escrow escrow,
+        IReadOnlyList<MileStone> milestones,
+        OnChainEscrowSnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        var openRow = await dbContext.EscrowCases
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                item =>
+                    item.EscrowId == escrow.Id &&
+                    item.Status == EscrowCaseStatus.Open,
+                cancellationToken
+            );
+
+        var onChainOpen =
+            snapshot.State == OnChainEscrowState.Funded &&
+            snapshot.OpenCaseKind != OnChainCaseKind.None &&
+            snapshot.OpenCaseOpenedAt is not null &&
+            snapshot.NextMilestoneIndex < milestones.Count;
+
+        var kind = snapshot.OpenCaseKind == OnChainCaseKind.RefundRequest
+            ? EscrowCaseKind.RefundRequest
+            : EscrowCaseKind.PaymentRequest;
+
+        var milestoneId = onChainOpen
+            ? milestones[snapshot.NextMilestoneIndex].Id
+            : Guid.Empty;
+
+        if (openRow is not null &&
+            onChainOpen &&
+            openRow.Kind == kind &&
+            openRow.MilestoneId == milestoneId &&
+            openRow.OpenedAt.ToUnixTimeSeconds() ==
+                snapshot.OpenCaseOpenedAt!.Value.ToUnixTimeSeconds())
+        {
+            return false;
+        }
+
+        var changed = false;
+
+        // Taken back, or closed by a release or a resignation.
+        if (openRow is not null)
+        {
+            changed = await dbContext.EscrowCases
+                .Where(item =>
+                    item.Id == openRow.Id &&
+                    item.Status == EscrowCaseStatus.Open)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(
+                            item => item.Status,
+                            EscrowCaseStatus.Withdrawn)
+                        .SetProperty(
+                            item => item.ClosedAt,
+                            (DateTimeOffset?)now),
+                    cancellationToken
+                ) > 0;
+        }
+
+        if (!onChainOpen)
+        {
+            return changed;
+        }
+
+        dbContext.EscrowCases.Add(new EscrowCase
+        {
+            EscrowId = escrow.Id,
+            MilestoneId = milestoneId,
+            Kind = kind,
+            OpenedAt = snapshot.OpenCaseOpenedAt!.Value
+        });
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (
+            exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation
+            })
+        {
+            // Another request recorded the same case first.
+            dbContext.ChangeTracker.Clear();
+            return changed;
+        }
+
+        dbContext.ChangeTracker.Clear();
+
+        return true;
+    }
+
+    private async Task<bool> ApplyCompletionAsync(
+        Escrow escrow,
+        CancellationToken cancellationToken)
+    {
+        // The escrow is finished in the backend's eyes only when every stage
+        // it pays for is closed. A stage the client released but has not yet
+        // approved is closed by that approval, which also completes this.
+        var anyOpen = await dbContext.Milestones
+            .AsNoTracking()
+            .AnyAsync(
+                item =>
+                    item.ProjectId == escrow.ProjectId &&
+                    item.FreelancerId == escrow.FreelancerId &&
+                    item.Status != MileStoneStatus.Approved &&
+                    item.Status != MileStoneStatus.Settled,
+                cancellationToken
+            );
+
+        if (anyOpen)
+        {
+            return false;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken);
+
+        var claimed = await dbContext.Escrows
+            .Where(item =>
+                item.Id == escrow.Id &&
+                item.Status == EscrowStatus.Funded)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        item => item.Status,
+                        EscrowStatus.Completed)
+                    .SetProperty(
+                        item => item.CompletedAt,
+                        (DateTimeOffset?)now)
+                    .SetProperty(
+                        item => item.UpdatedAt,
+                        now),
+                cancellationToken
+            );
+
+        if (claimed == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+
+        await CompleteProjectIfDoneAsync(
+            escrow.ProjectId,
+            cancellationToken
+        );
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return true;
+    }
+
+    private async Task CompleteProjectIfDoneAsync(
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        await dbContext.Projects
+            .Where(item =>
+                item.Id == projectId &&
+                item.Status == ProjectStatus.InProgress &&
+                !item.Milestones.Any(milestone =>
+                    milestone.Status != MileStoneStatus.Approved &&
+                    milestone.Status != MileStoneStatus.Settled))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    item => item.Status,
+                    ProjectStatus.Completed),
+                cancellationToken
+            );
+    }
+
+    // A dispute is advice about a milestone that was still waiting on the
+    // client. Once the milestone is settled or sent back it has no purpose.
+    private async Task SettleDisputesAsync(
+        IReadOnlyCollection<Guid> milestoneIds,
+        CancellationToken cancellationToken)
+    {
+        await dbContext.Disputes
+            .Where(item =>
+                milestoneIds.Contains(item.MilestoneId) &&
+                (item.Status == DisputeStatus.Open ||
+                 item.Status == DisputeStatus.Ruled))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    item => item.Status,
+                    DisputeStatus.Settled),
+                cancellationToken
+            );
     }
 }

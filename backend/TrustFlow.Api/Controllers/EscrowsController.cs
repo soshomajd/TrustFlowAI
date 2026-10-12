@@ -647,6 +647,8 @@ public sealed class EscrowsController(
                 escrow.ClientWalletAddress,
             FreelancerWalletAddress =
                 escrow.FreelancerWalletAddress,
+            ArbiterWalletAddress =
+                escrow.ArbiterWalletAddress,
             TotalAmount =
                 escrow.TotalAmount,
             ReleasedAmount =

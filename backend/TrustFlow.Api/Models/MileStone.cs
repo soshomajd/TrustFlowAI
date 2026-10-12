@@ -22,6 +22,10 @@ namespace TrustFlow.Api.Models
 
         public MileStoneStatus Status { get; set; } = MileStoneStatus.Pending;
 
+        // Only set when the arbiter settled the milestone: what the
+        // freelancer actually received for it.
+        public decimal? PaidAmount { get; set; }
+
         // Set when the client accepts a proposal that covers this milestone.
         // Different milestones of one project can belong to different
         // freelancers, each paid from their own escrow.
