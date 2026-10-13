@@ -22,3 +22,5 @@
 
 # Logs
 *.log
+# browser-test logs and snapshots
+.playwright-mcp/
