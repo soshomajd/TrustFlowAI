@@ -3,6 +3,7 @@ import {
     BriefcaseBusiness,
     CircleDollarSign,
     FileUser,
+    MessageSquare,
     Search,
     Send,
     Wallet,
@@ -52,6 +53,16 @@ const steps: GuideStep[] = [
         action: {
             label: "Open my proposals",
             href: "/dashboard/freelancer/proposals",
+        },
+    },
+    {
+        title: "Answer questions in Messages",
+        description:
+            "Once you send a proposal, you can message the client, and the client can message you. You can send plain text only. Phone numbers, email addresses, links and messenger accounts are blocked, so the conversation and your payment stay protected by the escrow. Put your work samples on your profile and send finished work through the delivery form. A red number on the bell tells you when you have a new message.",
+        icon: MessageSquare,
+        action: {
+            label: "Open Messages",
+            href: "/dashboard/messages",
         },
     },
     {

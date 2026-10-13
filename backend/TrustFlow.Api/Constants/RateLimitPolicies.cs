@@ -18,4 +18,5 @@ public static class RateLimitPolicies
     public const string ResumeUpload = "resume-upload";
     public const string ProfilePhotoUpload = "profile-photo-upload";
     public const string MilestoneDelivery = "milestone-delivery";
+    public const string Chat = "chat";
 }

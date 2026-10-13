@@ -67,6 +67,10 @@ public sealed class NotificationsController(
             await BuildCaseItemsAsync(userId, cancellationToken)
         );
 
+        items.AddRange(
+            await BuildChatItemsAsync(userId, cancellationToken)
+        );
+
         var ordered = items
             .OrderBy(item => item.Severity switch
             {
@@ -86,6 +90,65 @@ public sealed class NotificationsController(
             ActionCount = ordered.Count(item =>
                 item.Severity != InfoSeverity)
         });
+    }
+
+    // A conversation with messages the viewer has not opened yet. Unread is
+    // worked out from the time each side last looked, so nothing is stored
+    // per message.
+    private async Task<List<NotificationItemResponse>>
+        BuildChatItemsAsync(
+            Guid userId,
+            CancellationToken cancellationToken)
+    {
+        var rows = await dbContext.ChatThreads
+            .AsNoTracking()
+            .Where(thread =>
+                thread.FreelancerId == userId ||
+                thread.Project.ClientId == userId)
+            .Select(thread => new
+            {
+                thread.ProjectId,
+                thread.FreelancerId,
+                ProjectTitle = thread.Project.Title,
+                ViewerIsFreelancer = thread.FreelancerId == userId,
+                FreelancerName = thread.Freelancer.FullName,
+                ClientName = thread.Project.Client!.FullName,
+                FromClient = thread.Messages.Count(message =>
+                    message.SenderId == thread.Project.ClientId &&
+                    message.SentAt > thread.FreelancerLastReadAt),
+                FromFreelancer = thread.Messages.Count(message =>
+                    message.SenderId == thread.FreelancerId &&
+                    message.SentAt > thread.ClientLastReadAt)
+            })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .Select(row => new
+            {
+                Row = row,
+                Unread = row.ViewerIsFreelancer
+                    ? row.FromClient
+                    : row.FromFreelancer
+            })
+            .Where(item => item.Unread > 0)
+            .Select(item => new NotificationItemResponse
+            {
+                Id = $"chat:{item.Row.ProjectId}:{item.Row.FreelancerId}",
+                Kind = "NewMessages",
+                Severity = ActionSeverity,
+                Title = item.Unread == 1
+                    ? "1 new message"
+                    : $"{item.Unread} new messages",
+                Message =
+                    "From " + (item.Row.ViewerIsFreelancer
+                        ? item.Row.ClientName
+                        : item.Row.FreelancerName) + ".",
+                Href =
+                    $"/dashboard/messages/{item.Row.ProjectId}/" +
+                    item.Row.FreelancerId,
+                ProjectTitle = item.Row.ProjectTitle
+            })
+            .ToList();
     }
 
     // Cases on the escrow contract: the two sides are told when the other

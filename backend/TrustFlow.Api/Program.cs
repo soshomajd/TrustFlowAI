@@ -530,6 +530,18 @@ builder.Services.AddRateLimiter(options =>
                 permitLimit: 4,
                 window: TimeSpan.FromMinutes(30))));
 
+    // Per signed-in user, so a flood from one account stops there and a
+    // shared office address does not share a limit.
+    options.AddPolicy(
+        RateLimitPolicies.Chat,
+        httpContext => RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey:
+                httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? GetClientRateLimitKey(httpContext),
+            factory: _ => CreateFixedWindowOptions(
+                permitLimit: 30,
+                window: TimeSpan.FromMinutes(1))));
+
     options.AddPolicy(
         RateLimitPolicies.MilestoneDelivery,
         httpContext => RateLimitPartition.GetFixedWindowLimiter(

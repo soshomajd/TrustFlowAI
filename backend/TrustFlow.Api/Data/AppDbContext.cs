@@ -36,6 +36,10 @@ public class AppDbContext(
 
     public DbSet<EscrowCase> EscrowCases => Set<EscrowCase>();
 
+    public DbSet<ChatThread> ChatThreads => Set<ChatThread>();
+
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+
     public DbSet<MilestoneAiReview> MilestoneAiReviews =>
         Set<MilestoneAiReview>();
 
@@ -93,6 +97,7 @@ public class AppDbContext(
         ConfigureAuthCodes(modelBuilder);
         ConfigureAi(modelBuilder);
         ConfigureEscrowCases(modelBuilder);
+        ConfigureChat(modelBuilder);
         ConfigureWalletIdentity(modelBuilder);
         ConfigureFreelancerProfiles(modelBuilder);
         ConfigureFreelancerResumes(modelBuilder);
@@ -266,6 +271,47 @@ public class AppDbContext(
 
             authCode.HasIndex(item => item.ExpiresAt)
                 .HasDatabaseName("IX_AuthCodes_ExpiresAt");
+        });
+    }
+
+    private static void ConfigureChat(
+        ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ChatThread>(item =>
+        {
+            item.HasOne(row => row.Project)
+                .WithMany()
+                .HasForeignKey(row => row.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            item.HasOne(row => row.Freelancer)
+                .WithMany()
+                .HasForeignKey(row => row.FreelancerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // One conversation per freelancer on a project.
+            item.HasIndex(row => new { row.ProjectId, row.FreelancerId })
+                .IsUnique();
+
+            item.HasIndex(row => row.FreelancerId);
+        });
+
+        modelBuilder.Entity<ChatMessage>(item =>
+        {
+            item.Property(row => row.Body)
+                .HasMaxLength(2000);
+
+            item.HasOne(row => row.Thread)
+                .WithMany(row => row.Messages)
+                .HasForeignKey(row => row.ThreadId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            item.HasOne(row => row.Sender)
+                .WithMany()
+                .HasForeignKey(row => row.SenderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            item.HasIndex(row => new { row.ThreadId, row.SentAt });
         });
     }
 

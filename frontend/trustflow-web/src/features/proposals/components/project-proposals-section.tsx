@@ -1,4 +1,5 @@
 "use client";
+import { MessageButton } from "@/features/chat/components/message-button";
 import { MemberName } from "@/features/profile-photos/components/user-avatar";
 
 
@@ -266,11 +267,21 @@ function ProposalCard({
                         </p>
                     </div>
 
-                    <Button asChild variant="outline" size="sm" className="mt-4">
-                        <Link href={`/dashboard/freelancers/${proposal.freelancerId}`}>
-                            <UserRound className="size-4" />View profile
-                        </Link>
-                    </Button>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                        <Button asChild variant="outline" size="sm">
+                            <Link href={`/dashboard/freelancers/${proposal.freelancerId}`}>
+                                <UserRound className="size-4" />View profile
+                            </Link>
+                        </Button>
+
+                        {(proposal.status === "Pending" ||
+                            proposal.status === "Accepted") && (
+                            <MessageButton
+                                projectId={projectId}
+                                freelancerId={proposal.freelancerId}
+                            />
+                        )}
+                    </div>
 
                     {proposal.milestones.length > 0 && (
                         <div className="mt-4">

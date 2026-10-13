@@ -5,6 +5,7 @@ import {
     ClipboardCheck,
     FilePlus2,
     ListChecks,
+    MessageSquare,
     UserRoundCheck,
 } from "lucide-react";
 
@@ -56,6 +57,16 @@ const steps: GuideStep[] = [
         action: {
             label: "Review my projects",
             href: "/dashboard/client/projects",
+        },
+    },
+    {
+        title: "Ask questions in Messages",
+        description:
+            "Before you accept, you can message a freelancer from their proposal. Ask about the work, the plan or the time. You can send plain text only. Phone numbers, email addresses, links and messenger accounts are blocked, so the conversation and the payment stay protected by the escrow. To share files, use the delivery form. A red number on the bell tells you when someone has written to you.",
+        icon: MessageSquare,
+        action: {
+            label: "Open Messages",
+            href: "/dashboard/messages",
         },
     },
     {

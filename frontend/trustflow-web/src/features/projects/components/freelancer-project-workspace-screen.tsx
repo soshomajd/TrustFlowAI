@@ -1,4 +1,5 @@
 "use client";
+import { MessageButton } from "@/features/chat/components/message-button";
 import { MemberName } from "@/features/profile-photos/components/user-avatar";
 
 
@@ -157,6 +158,14 @@ export function FreelancerProjectWorkspaceScreen({
                                     Client:{" "}
                                     {workspace.clientId ? <Link className="font-medium text-foreground hover:text-electric hover:underline" href={`/dashboard/clients/${workspace.clientId}`}><MemberName userId={workspace.clientId} name={workspace.clientFullName} /></Link> : workspace.clientFullName}
                                 </span>
+
+                                {viewerId && (
+                                    <MessageButton
+                                        projectId={workspace.id}
+                                        freelancerId={viewerId}
+                                        label="Message the client"
+                                    />
+                                )}
 
                                 <span className="flex items-center gap-2">
                                     <CalendarDays className="size-4" />

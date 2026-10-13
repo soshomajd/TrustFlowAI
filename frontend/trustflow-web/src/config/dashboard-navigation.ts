@@ -6,6 +6,7 @@ import {
   FolderKanban,
   Gavel,
   LayoutDashboard,
+  MessageSquare,
   Search,
   Send,
   UserRound,
@@ -31,6 +32,12 @@ export const dashboardNavigationItems: DashboardNavigationItem[] = [
     label: "My projects",
     href: "/dashboard/client/projects",
     icon: FolderKanban,
+    roles: ["Client"],
+  },
+  {
+    label: "Messages",
+    href: "/dashboard/messages",
+    icon: MessageSquare,
     roles: ["Client"],
   },
   {
@@ -85,6 +92,12 @@ export const dashboardNavigationItems: DashboardNavigationItem[] = [
     label: "Assigned projects",
     href: "/dashboard/freelancer/projects",
     icon: BriefcaseBusiness,
+    roles: ["Freelancer"],
+  },
+  {
+    label: "Messages",
+    href: "/dashboard/messages",
+    icon: MessageSquare,
     roles: ["Freelancer"],
   },
   {

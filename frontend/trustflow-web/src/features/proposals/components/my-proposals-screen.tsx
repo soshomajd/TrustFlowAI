@@ -37,6 +37,8 @@ import type {
     "@/features/proposals/types/proposal";
 import { getApiErrorMessage } from
     "@/lib/api/get-api-error-message";
+import { MessageButton } from "@/features/chat/components/message-button";
+import { useAuthStore } from "@/stores/auth-store";
 import { cn } from
     "@/lib/utils";
 
@@ -257,6 +259,13 @@ function MyProposalCard({
     const canWithdraw =
         proposal.status === "Pending";
 
+    const myId = useAuthStore((state) => state.user?.id);
+
+    const canMessage =
+        Boolean(myId) &&
+        (proposal.status === "Pending" ||
+            proposal.status === "Accepted");
+
     return (
         <article className="rounded-xl border bg-background/40 p-5 transition hover:border-primary/40 hover:bg-background/70">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -336,6 +345,14 @@ function MyProposalCard({
             </div>
 
             <div className="mt-5 flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-end">
+                {canMessage && myId && (
+                    <MessageButton
+                        projectId={proposal.projectId}
+                        freelancerId={myId}
+                        label="Message the client"
+                    />
+                )}
+
                 {proposal.status ===
                     "Pending" && (
                         <Button

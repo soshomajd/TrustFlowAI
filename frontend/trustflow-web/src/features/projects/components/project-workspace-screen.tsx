@@ -1,4 +1,5 @@
 "use client";
+import { MessageButton } from "@/features/chat/components/message-button";
 import { MemberName } from "@/features/profile-photos/components/user-avatar";
 
 
@@ -256,11 +257,18 @@ export function ProjectWorkspaceScreen({
                                     </p>
                                 </div>
 
-                                <Button asChild variant="outline" size="sm">
-                                    <Link href={`/dashboard/freelancers/${freelancer.id}`}>
-                                        <UserRound className="size-4" />View profile
-                                    </Link>
-                                </Button>
+                                <div className="flex flex-wrap gap-2">
+                                    <MessageButton
+                                        projectId={project.id}
+                                        freelancerId={freelancer.id}
+                                    />
+
+                                    <Button asChild variant="outline" size="sm">
+                                        <Link href={`/dashboard/freelancers/${freelancer.id}`}>
+                                            <UserRound className="size-4" />View profile
+                                        </Link>
+                                    </Button>
+                                </div>
                             </li>
                         ))}
                     </ul>

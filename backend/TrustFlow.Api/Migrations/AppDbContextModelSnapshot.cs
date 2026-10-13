@@ -325,6 +325,69 @@ namespace TrustFlow.Api.Migrations
                     b.ToTable("MilestoneAiReviews");
                 });
 
+            modelBuilder.Entity("TrustFlow.Api.Models.ChatMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("SenderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ThreadId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SenderId");
+
+                    b.HasIndex("ThreadId", "SentAt");
+
+                    b.ToTable("ChatMessages");
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.ChatThread", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ClientLastReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("FreelancerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("FreelancerLastReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("LastMessageAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FreelancerId");
+
+                    b.HasIndex("ProjectId", "FreelancerId")
+                        .IsUnique();
+
+                    b.ToTable("ChatThreads");
+                });
+
             modelBuilder.Entity("TrustFlow.Api.Models.ClientProfile", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -1295,6 +1358,44 @@ namespace TrustFlow.Api.Migrations
                     b.Navigation("Submission");
                 });
 
+            modelBuilder.Entity("TrustFlow.Api.Models.ChatMessage", b =>
+                {
+                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", "Sender")
+                        .WithMany()
+                        .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TrustFlow.Api.Models.ChatThread", "Thread")
+                        .WithMany("Messages")
+                        .HasForeignKey("ThreadId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Sender");
+
+                    b.Navigation("Thread");
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.ChatThread", b =>
+                {
+                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", "Freelancer")
+                        .WithMany()
+                        .HasForeignKey("FreelancerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TrustFlow.Api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Freelancer");
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("TrustFlow.Api.Models.ClientProfile", b =>
                 {
                     b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", null)
@@ -1488,6 +1589,11 @@ namespace TrustFlow.Api.Migrations
                     b.Navigation("Milestone");
 
                     b.Navigation("Proposal");
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.ChatThread", b =>
+                {
+                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("TrustFlow.Api.Models.Identity.ApplicationUser", b =>
