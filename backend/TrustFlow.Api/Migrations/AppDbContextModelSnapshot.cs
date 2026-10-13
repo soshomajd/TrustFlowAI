@@ -836,6 +836,68 @@ namespace TrustFlow.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TrustFlow.Api.Models.LandingImageAsset", b =>
+                {
+                    b.Property<string>("Slug")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("AltText")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GenerationPrompt")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<byte[]>("OriginalContent")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("OriginalContentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("PixelHeight")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PixelWidth")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SuggestedPlacement")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Slug");
+
+                    b.ToTable("LandingImageAssets");
+                });
+
             modelBuilder.Entity("TrustFlow.Api.Models.MileStone", b =>
                 {
                     b.Property<Guid>("Id")

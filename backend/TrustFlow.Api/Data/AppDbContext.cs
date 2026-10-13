@@ -53,6 +53,8 @@ public class AppDbContext(
 
     public DbSet<ProfilePhoto> ProfilePhotos => Set<ProfilePhoto>();
 
+    public DbSet<LandingImageAsset> LandingImageAssets => Set<LandingImageAsset>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
@@ -60,6 +62,19 @@ public class AppDbContext(
 
 
         base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<LandingImageAsset>(asset =>
+        {
+            asset.HasKey(item => item.Slug);
+            asset.Property(item => item.Slug).HasMaxLength(100);
+            asset.Property(item => item.Title).HasMaxLength(200);
+            asset.Property(item => item.AltText).HasMaxLength(500);
+            asset.Property(item => item.SuggestedPlacement).HasMaxLength(200);
+            asset.Property(item => item.Content).HasColumnType("bytea");
+            asset.Property(item => item.OriginalContent).HasColumnType("bytea");
+            asset.Property(item => item.ContentType).HasMaxLength(50);
+            asset.Property(item => item.OriginalContentType).HasMaxLength(50);
+            asset.Property(item => item.Sha256).HasMaxLength(64);
+        });
         modelBuilder.Entity<ProfilePhoto>(photo =>
         {
             photo.HasKey(item => item.UserId);

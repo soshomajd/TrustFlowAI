@@ -1,0 +1,112 @@
+[
+  {
+    "slug": "01-trust-bridge-hero",
+    "title": "Trust bridge",
+    "altText": "A luminous bridge connects two workspaces above a protected glass escrow chamber.",
+    "suggestedPlacement": "Hero background or feature banner",
+    "src": "/images/landing/01-trust-bridge-hero.webp",
+    "width": 1536,
+    "height": 1024,
+    "sha256": "02e8488b346bff3f4262777e300fee9eedb8a72afa16183c743bc77dc8a78be6",
+    "bytes": 189982
+  },
+  {
+    "slug": "02-protected-project-budget",
+    "title": "Protected project budget",
+    "altText": "A sealed glass chamber protects the complete project budget.",
+    "suggestedPlacement": "Budget locked / Protection",
+    "src": "/images/landing/02-protected-project-budget.webp",
+    "width": 1536,
+    "height": 1024,
+    "sha256": "4407906416344facbebf36dd63d80970092e0dd453850aeca21424fde8e34e8a",
+    "bytes": 175260
+  },
+  {
+    "slug": "03-milestone-path",
+    "title": "Milestone payments",
+    "altText": "Three ordered milestone platforms lead from finished work to the next stage.",
+    "suggestedPlacement": "Paid per milestone / Lifecycle",
+    "src": "/images/landing/03-milestone-path.webp",
+    "width": 1536,
+    "height": 1024,
+    "sha256": "1b9da82773df4d12b169b7d51f9a624ac39d09335ad875c323cb9192a5f2df4b",
+    "bytes": 140104
+  },
+  {
+    "slug": "04-client-project-planning",
+    "title": "Client project planning",
+    "altText": "A client plans the scope and milestones of a project at a calm modern desk.",
+    "suggestedPlacement": "How it works / Client",
+    "src": "/images/landing/04-client-project-planning.webp",
+    "width": 1536,
+    "height": 1024,
+    "sha256": "f74929df1d4ce149ef9ff8c394ebef5ae117d3ea4d56397afe4dbb77f37e948d",
+    "bytes": 153436
+  },
+  {
+    "slug": "05-freelancer-creative-work",
+    "title": "Freelancer focused work",
+    "altText": "A freelancer creates a delivery in a focused blue-lit workspace.",
+    "suggestedPlacement": "How it works / Freelancer",
+    "src": "/images/landing/05-freelancer-creative-work.webp",
+    "width": 1536,
+    "height": 1024,
+    "sha256": "b17baed5dd7321feeb2ffa0da0b69796e3f3b472beb5cfd9233379bb2dce6536",
+    "bytes": 162538
+  },
+  {
+    "slug": "06-user-owned-wallet",
+    "title": "Your wallet, your signature",
+    "altText": "A person holds their own wallet device beside an independent escrow chamber.",
+    "suggestedPlacement": "Wallet ownership / User-signed actions",
+    "src": "/images/landing/06-user-owned-wallet.webp",
+    "width": 1536,
+    "height": 1024,
+    "sha256": "b1909fc635e9d619fd723bf4638e47b867006f7569509a8feaa284f4c0ad86fc",
+    "bytes": 151896
+  },
+  {
+    "slug": "07-specialists-one-project",
+    "title": "Several specialists, one project",
+    "altText": "Three specialist workspaces connect to one project, each with its own escrow capsule.",
+    "suggestedPlacement": "Hiring / Per-freelancer milestones",
+    "src": "/images/landing/07-specialists-one-project.webp",
+    "width": 1536,
+    "height": 1024,
+    "sha256": "1ee3c39b36110b6b451f62d2029923316a0ff71378f7ec329a872ab6e1f38d12",
+    "bytes": 187114
+  },
+  {
+    "slug": "08-ai-advice-for-delivery",
+    "title": "AI reads and advises",
+    "altText": "A small AI light sculpture illuminates a delivery for a person to review.",
+    "suggestedPlacement": "AI help / Check a delivery",
+    "src": "/images/landing/08-ai-advice-for-delivery.webp",
+    "width": 1536,
+    "height": 1024,
+    "sha256": "8e8a9b06d90f992f825a50be7c5651106f5dea61051bee6ec3572edafcc4f00d",
+    "bytes": 155456
+  },
+  {
+    "slug": "09-human-dispute-review",
+    "title": "Human evidence review",
+    "altText": "A human reviewer compares two sets of project evidence at a neutral desk.",
+    "suggestedPlacement": "Disputes / Human reviewer",
+    "src": "/images/landing/09-human-dispute-review.webp",
+    "width": 1536,
+    "height": 1024,
+    "sha256": "8dd19e8eb17129e41f891289effea56548ed55e0904fbd80e4405da5118d2ac9",
+    "bytes": 115274
+  },
+  {
+    "slug": "10-completed-collaboration",
+    "title": "A project brought together",
+    "altText": "Completed milestone pieces form one luminous structure between two workspaces.",
+    "suggestedPlacement": "Final CTA / Completion",
+    "src": "/images/landing/10-completed-collaboration.webp",
+    "width": 1536,
+    "height": 1024,
+    "sha256": "c1984909bc5ce6209ee817e41d5dc5f3585a39790f0032c7965ebdf6f93bcf71",
+    "bytes": 210502
+  }
+]
