@@ -14,11 +14,17 @@ const stateLabel = {
   waiting: "Locked in escrow",
 } as const;
 
-export function EscrowPreview() {
+export function EscrowPreview({
+  className,
+  compact = false,
+}: {
+  className?: string;
+  compact?: boolean;
+}) {
   return (
     <figure
       aria-label="Example of a funded project escrow"
-      className="relative mx-auto w-full max-w-md"
+      className={className ?? "relative mx-auto w-full max-w-md"}
     >
       <div
         aria-hidden="true"
@@ -41,6 +47,7 @@ export function EscrowPreview() {
           </span>
         </div>
 
+        {!compact && (
         <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
           <div className="rounded-xl border bg-background/50 p-3">
             <dt className="text-xs text-muted-foreground">In escrow</dt>
@@ -54,6 +61,7 @@ export function EscrowPreview() {
             <dd className="mt-1 text-xl font-semibold tabular-nums">$400</dd>
           </div>
         </dl>
+        )}
 
         <ol className="mt-5 space-y-2.5">
           {milestones.map((item) => (
@@ -93,6 +101,7 @@ export function EscrowPreview() {
           ))}
         </ol>
 
+        {!compact && (
         <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/10 p-3">
           <p className="text-xs leading-5 text-foreground/90">
             Happy with the delivery? Release this milestone from your own
@@ -103,6 +112,7 @@ export function EscrowPreview() {
             Release $350
           </span>
         </div>
+        )}
       </div>
 
       <figcaption className="mt-3 text-center text-xs text-muted-foreground">

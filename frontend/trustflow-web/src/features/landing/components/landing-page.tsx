@@ -5,6 +5,7 @@ import {
   Minus,
   ShieldCheck,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -13,6 +14,8 @@ import { LandingHeader } from "@/features/landing/components/landing-header";
 import { Reveal } from "@/features/landing/components/reveal";
 import {
   aiFeatures,
+  images,
+  type LandingImage,
   clientSteps,
   comparison,
   faqs,
@@ -29,6 +32,33 @@ const primaryButton =
 
 const secondaryButton =
   "inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-border bg-card/60 px-6 text-base font-semibold transition-colors hover:border-primary/50 hover:bg-card focus-visible:ring-3 focus-visible:ring-ring/60 focus-visible:outline-none";
+
+// One place for how every illustration is drawn: the real size, so the page
+// does not jump while it loads, and a size hint so phones get a small file.
+function Picture({
+  image,
+  className,
+  sizes,
+  eager = false,
+}: {
+  image: LandingImage;
+  className?: string;
+  sizes: string;
+  eager?: boolean;
+}) {
+  return (
+    <Image
+      src={image.src}
+      alt={image.alt}
+      width={1536}
+      height={1024}
+      sizes={sizes}
+      loading={eager ? "eager" : "lazy"}
+      fetchPriority={eager ? "high" : "auto"}
+      className={className}
+    />
+  );
+}
 
 export function LandingPage() {
   return (
@@ -51,6 +81,7 @@ export function LandingPage() {
         <Hero />
         <Problems />
         <HowItWorks />
+        <Specialists />
         <Protection />
         <AiHelp />
         <Comparison />
@@ -122,8 +153,27 @@ function Hero() {
           </ul>
         </div>
 
-        <Reveal delay={0.1}>
-          <EscrowPreview />
+        <Reveal delay={0.1} className="relative pb-6 lg:pb-16">
+          <div className="relative overflow-hidden rounded-3xl border border-primary/25 shadow-2xl shadow-black/50">
+            <Picture
+              image={images.hero}
+              eager
+              sizes="(max-width: 1024px) 100vw, 45vw"
+              className="aspect-4/3 w-full object-cover"
+            />
+
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 bg-linear-to-t from-background/70 via-transparent to-transparent"
+            />
+          </div>
+
+          <EscrowPreview className="relative mx-auto mt-6 w-full max-w-md xl:hidden" />
+
+          <EscrowPreview
+            compact
+            className="absolute -bottom-2 -left-24 z-10 hidden w-72 xl:block"
+          />
         </Reveal>
       </div>
     </section>
@@ -184,7 +234,14 @@ function Problems() {
         <div className="mt-12 grid gap-5 md:grid-cols-3">
           {problems.map((problem, index) => (
             <Reveal key={problem.after} delay={index * 0.06}>
-              <article className="h-full rounded-2xl border bg-card/70 p-6">
+              <article className="h-full overflow-hidden rounded-2xl border bg-card/70">
+                <Picture
+                  image={problem.image}
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  className="aspect-3/2 w-full object-cover"
+                />
+
+                <div className="p-6">
                 <span
                   aria-hidden="true"
                   className="flex size-11 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-electric"
@@ -201,6 +258,7 @@ function Problems() {
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">
                   {problem.detail}
                 </p>
+                </div>
               </article>
             </Reveal>
           ))}
@@ -214,13 +272,22 @@ function StepList({
   title,
   steps,
   cta,
+  image,
 }: {
   title: string;
   steps: Step[];
   cta: ReactNode;
+  image: LandingImage;
 }) {
   return (
-    <div className="rounded-2xl border bg-card/70 p-6 sm:p-8">
+    <div className="overflow-hidden rounded-2xl border bg-card/70">
+      <Picture
+        image={image}
+        sizes="(max-width: 1024px) 100vw, 50vw"
+        className="aspect-16/9 w-full object-cover"
+      />
+
+      <div className="p-6 sm:p-8">
       <h3 className="text-xl font-semibold">{title}</h3>
 
       <ol className="mt-6 space-y-5">
@@ -245,6 +312,7 @@ function StepList({
       </ol>
 
       <div className="mt-8">{cta}</div>
+      </div>
     </div>
   );
 }
@@ -272,6 +340,7 @@ function HowItWorks() {
           <Reveal>
             <StepList
               title="If you are hiring"
+              image={images.client}
               steps={clientSteps}
               cta={
                 <Link href="/register?role=Client" className={primaryButton}>
@@ -285,6 +354,7 @@ function HowItWorks() {
           <Reveal delay={0.08}>
             <StepList
               title="If you are working"
+              image={images.freelancer}
               steps={freelancerSteps}
               cta={
                 <Link
@@ -298,6 +368,78 @@ function HowItWorks() {
             />
           </Reveal>
         </div>
+      </div>
+    </section>
+  );
+}
+
+function SplitFeature({
+  image,
+  eyebrow,
+  title,
+  children,
+  flip = false,
+}: {
+  image: LandingImage;
+  eyebrow: string;
+  title: string;
+  children: ReactNode;
+  flip?: boolean;
+}) {
+  return (
+    <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-14">
+      <div className={flip ? "lg:order-2" : undefined}>
+        <div className="overflow-hidden rounded-3xl border border-primary/20 shadow-xl shadow-black/40">
+          <Picture
+            image={image}
+            sizes="(max-width: 1024px) 100vw, 50vw"
+            className="aspect-3/2 w-full object-cover"
+          />
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-electric">
+          {eyebrow}
+        </p>
+
+        <h3 className="mt-3 text-balance text-2xl font-bold tracking-tight sm:text-3xl">
+          {title}
+        </h3>
+
+        <div className="mt-4 space-y-3 text-pretty leading-7 text-muted-foreground">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Specialists() {
+  return (
+    <section
+      aria-label="Hiring more than one person"
+      className="border-y border-border/60 bg-card/30 py-20 sm:py-24"
+    >
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        <Reveal>
+          <SplitFeature
+            image={images.specialists}
+            eyebrow="One project, several people"
+            title="Each freelancer gets their own escrow"
+          >
+            <p>
+              Hire a designer for the first milestones and a developer for the
+              rest. Every freelancer is paid from a separate escrow that holds
+              only their own milestones.
+            </p>
+
+            <p>
+              One person running late never blocks another, and if someone
+              leaves, only their unpaid milestones go back on the market.
+            </p>
+          </SplitFeature>
+        </Reveal>
       </div>
     </section>
   );
@@ -346,7 +488,29 @@ function Protection() {
           </ol>
         </Reveal>
 
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-14">
+          <Reveal>
+            <SplitFeature
+              image={images.wallet}
+              flip
+              eyebrow="Your wallet, your signature"
+              title="Every payment action is signed by you"
+            >
+              <p>
+                Funding, releasing and getting paid all happen from your own
+                wallet. TrustFlow never holds a key to your money and cannot
+                sign on your behalf.
+              </p>
+
+              <p>
+                You prove the wallet is yours once, by signing a message. After
+                that, each action asks for your confirmation.
+              </p>
+            </SplitFeature>
+          </Reveal>
+        </div>
+
+        <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {rules.map((rule, index) => (
             <Reveal key={rule.title} delay={(index % 3) * 0.05}>
               <article className="h-full rounded-2xl border bg-card/70 p-6">
@@ -390,25 +554,39 @@ function AiHelp() {
           </SectionHeading>
         </Reveal>
 
-        <div className="mt-12 grid gap-5 md:grid-cols-3">
-          {aiFeatures.map((feature, index) => (
-            <Reveal key={feature.title} delay={index * 0.06}>
-              <article className="h-full rounded-2xl border bg-card/70 p-6">
-                <span
-                  aria-hidden="true"
-                  className="flex size-11 items-center justify-center rounded-xl border border-electric/30 bg-electric/10 text-electric"
-                >
-                  <feature.icon className="size-5" />
-                </span>
+        <div className="mt-12 grid items-stretch gap-8 lg:grid-cols-2">
+          <Reveal>
+            <div className="h-full overflow-hidden rounded-3xl border border-electric/25 shadow-xl shadow-black/40">
+              <Picture
+                image={images.ai}
+                sizes="(max-width: 1024px) 100vw, 50vw"
+                className="aspect-3/2 size-full object-cover lg:aspect-auto"
+              />
+            </div>
+          </Reveal>
 
-                <h3 className="mt-5 text-lg font-semibold">{feature.title}</h3>
+          <div className="space-y-4">
+            {aiFeatures.map((feature, index) => (
+              <Reveal key={feature.title} delay={index * 0.06}>
+                <article className="flex gap-4 rounded-2xl border bg-card/70 p-5">
+                  <span
+                    aria-hidden="true"
+                    className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-electric/30 bg-electric/10 text-electric"
+                  >
+                    <feature.icon className="size-5" />
+                  </span>
 
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {feature.text}
-                </p>
-              </article>
-            </Reveal>
-          ))}
+                  <div>
+                    <h3 className="text-lg font-semibold">{feature.title}</h3>
+
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      {feature.text}
+                    </p>
+                  </div>
+                </article>
+              </Reveal>
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -538,10 +716,16 @@ function FinalCta() {
   return (
     <section aria-labelledby="cta-title" className="px-4 pb-24 sm:px-6">
       <Reveal>
-        <div className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl border border-primary/30 bg-linear-to-br from-primary/20 via-card to-card p-8 text-center sm:p-14">
+        <div className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl border border-primary/30 bg-card p-8 text-center sm:p-14">
+          <Picture
+            image={images.finish}
+            sizes="(max-width: 1024px) 100vw, 1024px"
+            className="absolute inset-0 size-full object-cover"
+          />
+
           <div
             aria-hidden="true"
-            className="absolute -top-24 left-1/2 size-80 -translate-x-1/2 rounded-full bg-electric/15 blur-3xl"
+            className="absolute inset-0 bg-linear-to-b from-background/85 via-background/80 to-background/90"
           />
 
           <div className="relative">
@@ -583,10 +767,17 @@ function Footer() {
   return (
     <footer className="border-t border-border/60 py-10">
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 text-sm text-muted-foreground sm:flex-row sm:px-6">
-        <p className="flex items-center gap-2">
-          <ShieldCheck className="size-4 text-electric" aria-hidden="true" />
-          TrustFlow AI. Milestone escrow for freelance work.
-        </p>
+        <div className="space-y-1">
+          <p className="flex items-center gap-2">
+            <ShieldCheck className="size-4 text-electric" aria-hidden="true" />
+            TrustFlow AI. Milestone escrow for freelance work.
+          </p>
+
+          <p className="text-xs">
+            Illustrations on this page are AI-generated concept art, not photos
+            of customers.
+          </p>
+        </div>
 
         <nav aria-label="Footer" className="flex items-center gap-1">
           <Link

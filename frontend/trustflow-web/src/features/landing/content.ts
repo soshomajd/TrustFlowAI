@@ -18,6 +18,58 @@ import {
 // today. There are no customer counts, ratings or testimonials, because the
 // product has no users to quote yet.
 
+// Concept illustrations, kept in the database table LandingImageAssets and
+// exported to public/images/landing. They are not photos of customers, and
+// the page says so. Every picture is 1536 by 1024.
+export type LandingImage = { src: string; alt: string };
+
+function landingImage(slug: string, alt: string): LandingImage {
+  return { src: `/images/landing/${slug}.webp`, alt };
+}
+
+export const images = {
+  hero: landingImage(
+    "01-trust-bridge-hero",
+    "A luminous bridge connects two workspaces above a protected glass escrow chamber.",
+  ),
+  budget: landingImage(
+    "02-protected-project-budget",
+    "A sealed glass chamber protects the complete project budget.",
+  ),
+  milestones: landingImage(
+    "03-milestone-path",
+    "Three ordered milestone platforms lead from finished work to the next stage.",
+  ),
+  client: landingImage(
+    "04-client-project-planning",
+    "A client plans the scope and milestones of a project at a calm modern desk.",
+  ),
+  freelancer: landingImage(
+    "05-freelancer-creative-work",
+    "A freelancer creates a delivery in a focused blue-lit workspace.",
+  ),
+  wallet: landingImage(
+    "06-user-owned-wallet",
+    "A person holds their own wallet device beside an independent escrow chamber.",
+  ),
+  specialists: landingImage(
+    "07-specialists-one-project",
+    "Three specialist workspaces connect to one project, each with its own escrow capsule.",
+  ),
+  ai: landingImage(
+    "08-ai-advice-for-delivery",
+    "A small AI light sculpture illuminates a delivery for a person to review.",
+  ),
+  review: landingImage(
+    "09-human-dispute-review",
+    "A human reviewer compares two sets of project evidence at a neutral desk.",
+  ),
+  finish: landingImage(
+    "10-completed-collaboration",
+    "Completed milestone pieces form one luminous structure between two workspaces.",
+  ),
+} as const;
+
 export type NavLink = { label: string; href: string };
 
 export const navLinks: NavLink[] = [
@@ -38,6 +90,7 @@ export const trustPoints: TrustPoint[] = [
 
 export type Problem = {
   icon: LucideIcon;
+  image: LandingImage;
   before: string;
   after: string;
   detail: string;
@@ -46,6 +99,7 @@ export type Problem = {
 export const problems: Problem[] = [
   {
     icon: HandCoins,
+    image: images.budget,
     before: "Pay first and hope",
     after: "Budget locked, not sent",
     detail:
@@ -53,6 +107,7 @@ export const problems: Problem[] = [
   },
   {
     icon: UserRoundCheck,
+    image: images.milestones,
     before: "Work first and hope",
     after: "Paid per milestone",
     detail:
@@ -60,6 +115,7 @@ export const problems: Problem[] = [
   },
   {
     icon: Gavel,
+    image: images.review,
     before: "Disputes with no end",
     after: "Clear rules and a clock",
     detail:
