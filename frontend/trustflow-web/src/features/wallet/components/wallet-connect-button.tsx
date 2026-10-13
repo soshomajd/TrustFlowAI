@@ -23,6 +23,12 @@ export function WalletConnectButton() {
         connection.address.toLowerCase(),
   );
 
+  const connectLabel = walletQuery.data?.isVerified
+    ? "Connect verified wallet"
+    : connection.isConnected
+      ? "Verify wallet"
+      : "Connect wallet";
+
   return (
     <div className="flex items-center gap-2">
       {connection.isConnected && isVerified ? (
@@ -38,6 +44,7 @@ export function WalletConnectButton() {
           type="button"
           variant="outline"
           size="sm"
+          aria-label={connectLabel}
           disabled={connectMutation.isPending || walletQuery.isLoading}
           onClick={() => {
             connectMutation.mutate();
@@ -49,11 +56,7 @@ export function WalletConnectButton() {
             <Wallet className="size-4" />
           )}
 
-          {walletQuery.data?.isVerified
-            ? "Connect verified wallet"
-            : connection.isConnected
-              ? "Verify wallet"
-              : "Connect wallet"}
+          <span className="hidden sm:inline">{connectLabel}</span>
         </Button>
       )}
 

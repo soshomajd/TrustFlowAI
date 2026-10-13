@@ -205,7 +205,7 @@ function SummaryCard({
                 </div>
 
                 {item.requiresAttention && (
-                    <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-red-300">
+                    <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-wider text-red-300">
                         Action required
                     </span>
                 )}

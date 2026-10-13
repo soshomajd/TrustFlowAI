@@ -71,7 +71,7 @@ export function NotificationBell() {
 
           {actionCount > 0 && (
             <span
-              className="absolute -top-0.5 -right-0.5 flex min-w-4.5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-white"
+              className="absolute -top-0.5 -right-0.5 flex min-w-4.5 items-center justify-center rounded-full bg-destructive px-1 text-[11px] font-semibold text-white"
               aria-hidden
             >
               {actionCount > 9 ? "9+" : actionCount}
@@ -168,7 +168,7 @@ function NotificationRow({
             {item.message}
           </p>
 
-          <p className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
             <span className={cn("size-1.5 rounded-full", style.dot)} />
             <span className="truncate">{item.projectTitle}</span>
           </p>

@@ -114,7 +114,7 @@ export function VerifyEmailForm({ email, codeJustSent, }: VerifyEmailFormProps) 
                     </div>
 
                     <div>
-                        <CardTitle className="text-2xl font-semibold tracking-tight">
+                        <CardTitle role="heading" aria-level={1} className="text-2xl font-semibold tracking-tight">
                             Verify your email
                         </CardTitle>
 

@@ -43,6 +43,13 @@ export function DashboardShell({
 
     return (
         <div className="min-h-screen bg-background">
+            <a
+                href="#main-content"
+                className="sr-only z-50 rounded-lg bg-primary px-4 py-3 text-primary-foreground focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+            >
+                Skip to main content
+            </a>
+
             <aside
                 className={cn(
                     "fixed inset-y-0 left-0 z-40 hidden border-r border-sidebar-border transition-[width] duration-300 lg:block",
@@ -84,7 +91,9 @@ export function DashboardShell({
             >
                 <DashboardTopbar />
 
-                {children}
+                <div id="main-content" tabIndex={-1} className="outline-none">
+                    {children}
+                </div>
             </div>
         </div>
     );

@@ -55,7 +55,7 @@ export function LoginForm() {
                     </div>
 
                     <div>
-                        <CardTitle className="text-2xl font-semibold tracking-tight">
+                        <CardTitle role="heading" aria-level={1} className="text-2xl font-semibold tracking-tight">
                             Welcome back
                         </CardTitle>
 
@@ -109,7 +109,7 @@ export function LoginForm() {
 
                                 <Link
                                     href="/forgot-password"
-                                    className="text-sm font-medium text-electric transition hover:text-electric/80"
+                                    className="inline-flex min-h-11 items-center text-sm font-medium text-electric transition hover:text-electric/80"
                                 >
                                     Forgot password?
                                 </Link>
@@ -161,7 +161,7 @@ export function LoginForm() {
                             Do not have an account?{" "}
                             <Link
                                 href="/register"
-                                className="font-medium text-electric transition hover:text-electric/80"
+                                className="inline-flex min-h-11 items-center font-medium text-electric transition hover:text-electric/80"
                             >
                                 Create account
                             </Link>

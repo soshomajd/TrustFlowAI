@@ -13,7 +13,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "
 import { useRegister } from "@/features/auth/hooks/use-register";
 import { registerSchema, type RegisterFormValues, } from "@/features/auth/schemas/register-schema";
 
-export function RegisterForm() {
+export function RegisterForm({
+    defaultRole = "Client",
+}: {
+    defaultRole?: RegisterFormValues["role"];
+}) {
     const registerMutation = useRegister();
 
     const { register, control, handleSubmit, formState: { errors, isSubmitting, }, } = useForm<RegisterFormValues>({
@@ -24,7 +28,7 @@ export function RegisterForm() {
             email: "",
             password: "",
             confirmPassword: "",
-            role: "Client",
+            role: defaultRole,
         },
     });
 
@@ -66,7 +70,7 @@ export function RegisterForm() {
                     </div>
 
                     <div>
-                        <CardTitle className="text-2xl font-semibold tracking-tight">
+                        <CardTitle role="heading" aria-level={1} className="text-2xl font-semibold tracking-tight">
                             Create your account
                         </CardTitle>
 

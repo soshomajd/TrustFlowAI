@@ -1,33 +1,15 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import type { Metadata } from "next";
 
+import { LandingPage } from "@/features/landing/components/landing-page";
+
+export const metadata: Metadata = {
+    title: {
+        absolute: "TrustFlow AI | Hire with confidence, pay when the work is done",
+    },
+    description:
+        "Milestone escrow for freelance work. Your budget is held by a smart contract and released one milestone at a time, with AI help and a human reviewer if you disagree.",
+};
 
 export default function HomePage() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-6">
-      <div className="text-center">
-        <p className="mb-3 text-sm font-medium uppercase tracking-[0.3em] text-electric">
-          Secure freelance workflow
-        </p>
-
-        <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
-          TrustFlow AI
-        </h1>
-
-        <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-          Manage projects, proposals and
-          milestone-based work securely.
-        </p>
-      </div>
-
-      <Button
-        asChild
-        className="shadow-blue-glow"
-      >
-        <Link href="/login">
-          Sign in
-        </Link>
-      </Button>
-    </main>
-  );
+    return <LandingPage />;
 }

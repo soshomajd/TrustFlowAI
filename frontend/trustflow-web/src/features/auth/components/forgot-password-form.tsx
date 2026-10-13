@@ -51,7 +51,7 @@ export function ForgotPasswordForm() {
                     </div>
 
                     <div>
-                        <CardTitle className="text-2xl font-semibold tracking-tight">
+                        <CardTitle role="heading" aria-level={1} className="text-2xl font-semibold tracking-tight">
                             Forgot your password?
                         </CardTitle>
 

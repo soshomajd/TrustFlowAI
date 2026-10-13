@@ -66,7 +66,7 @@ export function ResetPasswordForm({ email }: ResetPasswordFormProps) {
                     </div>
 
                     <div>
-                        <CardTitle className="text-2xl font-semibold tracking-tight">
+                        <CardTitle role="heading" aria-level={1} className="text-2xl font-semibold tracking-tight">
                             Choose a new password
                         </CardTitle>
 

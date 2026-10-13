@@ -54,7 +54,7 @@ export function DashboardTopbar() {
 
     return (
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/70 bg-background/80 px-4 backdrop-blur-xl sm:px-6">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
                 <Button
                     type="button"
                     variant="ghost"
@@ -87,8 +87,8 @@ export function DashboardTopbar() {
                     )}
                 </Button>
 
-                <div>
-                    <p className="text-sm font-semibold">
+                <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">
                         {currentNavigationItem
                             ?.label ?? "Dashboard"}
                     </p>
@@ -100,7 +100,7 @@ export function DashboardTopbar() {
                 </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                 <WalletConnectButton />
 
                 <NotificationBell />

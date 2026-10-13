@@ -83,7 +83,7 @@ export function DashboardSidebar({
                                 TrustFlow AI
                             </p>
 
-                            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                            <p className="mt-1 text-xs uppercase tracking-[0.2em] text-muted-foreground">
                                 Secure workspace
                             </p>
                         </div>
@@ -93,7 +93,7 @@ export function DashboardSidebar({
 
             <nav className="flex-1 space-y-1 overflow-y-auto p-3">
                 {!collapsed && (
-                    <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         Workspace
                     </p>
                 )}
@@ -152,7 +152,7 @@ export function DashboardSidebar({
                             {user?.email}
                         </p>
 
-                        <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-electric">
+                        <p className="mt-2 text-xs uppercase tracking-[0.18em] text-electric">
                             {user?.roles[0] ??
                                 "User"}
                         </p>
