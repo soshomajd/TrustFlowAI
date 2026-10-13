@@ -146,3 +146,30 @@
     background: rgb(47 107 255 / 55%);
   }
 }
+
+/*
+ * Landing page blocks fade in as they scroll into view. It is CSS only: the
+ * HTML is already visible without it, so crawlers, readers without script and
+ * browsers that lack scroll-driven animation all see the full page.
+ */
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: reveal-in linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 10rem;
+    }
+  }
+}

@@ -1,9 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Oxanium } from "next/font/google";
-import { Toaster } from
-  "@/components/ui/sonner";
-import { AppProviders } from
-  "@/providers/app-providers";
+
+import { site } from "@/config/site";
 import "./globals.css";
 
 const oxanium = Oxanium({
@@ -14,14 +12,35 @@ const oxanium = Oxanium({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(site.url),
+  applicationName: site.name,
   title: {
-    default: "TrustFlow AI",
-    template: "%s | TrustFlow AI",
+    default: `${site.name} | ${site.title}`,
+    template: `%s | ${site.name}`,
   },
-  description:
-    "A secure milestone-based freelance marketplace.",
+  description: site.description,
+  openGraph: {
+    type: "website",
+    siteName: site.name,
+    locale: site.locale,
+    title: `${site.name} | ${site.title}`,
+    description: site.description,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${site.name} | ${site.title}`,
+    description: site.description,
+  },
 };
 
+export const viewport: Viewport = {
+  themeColor: "#060a11",
+  colorScheme: "dark",
+};
+
+// The query client, wallet, toasts and session check belong to the screens that
+// use them (see the auth and dashboard layouts), so the public pages ship much
+// less script.
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -35,15 +54,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-screen font-sans antialiased">
-        <AppProviders>
-          {children}
-
-          <Toaster
-            position="top-right"
-            richColors
-            closeButton
-          />
-        </AppProviders>
+        {children}
       </body>
     </html>
   );

@@ -70,11 +70,6 @@ export function LandingPage() {
         Skip to main content
       </a>
 
-      {/* Sections fade in with script. Without it they must still be there. */}
-      <noscript>
-        <style>{`[style*="opacity:0"]{opacity:1!important;transform:none!important}`}</style>
-      </noscript>
-
       <LandingHeader />
 
       <main id="main">
@@ -117,10 +112,10 @@ function Hero() {
           </h1>
 
           <p className="mt-6 max-w-xl text-pretty text-lg leading-8 text-muted-foreground">
-            TrustFlow locks your project budget in a smart contract and
-            releases it milestone by milestone. If you cannot agree, an AI
-            reads the evidence and a human decides. Nobody can touch the money
-            in between.
+            TrustFlow is milestone escrow for freelance work. It locks your
+            project budget in a smart contract and releases it one milestone at
+            a time. If you cannot agree, an AI reads the evidence and a human
+            decides. Nobody can touch the money in between.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -153,7 +148,7 @@ function Hero() {
           </ul>
         </div>
 
-        <Reveal delay={0.1} className="relative pb-6 lg:pb-16">
+        <div className="relative pb-6 lg:pb-16">
           <div className="relative overflow-hidden rounded-3xl border border-primary/25 shadow-2xl shadow-black/50">
             <Picture
               image={images.hero}
@@ -174,7 +169,7 @@ function Hero() {
             compact
             className="absolute -bottom-2 -left-24 z-10 hidden w-72 xl:block"
           />
-        </Reveal>
+        </div>
       </div>
     </section>
   );
@@ -232,8 +227,8 @@ function Problems() {
         </Reveal>
 
         <div className="mt-12 grid gap-5 md:grid-cols-3">
-          {problems.map((problem, index) => (
-            <Reveal key={problem.after} delay={index * 0.06}>
+          {problems.map((problem) => (
+            <Reveal key={problem.after}>
               <article className="h-full overflow-hidden rounded-2xl border bg-card/70">
                 <Picture
                   image={problem.image}
@@ -351,7 +346,7 @@ function HowItWorks() {
             />
           </Reveal>
 
-          <Reveal delay={0.08}>
+          <Reveal>
             <StepList
               title="If you are working"
               image={images.freelancer}
@@ -379,12 +374,16 @@ function SplitFeature({
   title,
   children,
   flip = false,
+  as: Heading = "h3",
+  headingId,
 }: {
   image: LandingImage;
   eyebrow: string;
   title: string;
   children: ReactNode;
   flip?: boolean;
+  as?: "h2" | "h3";
+  headingId?: string;
 }) {
   return (
     <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-14">
@@ -403,9 +402,12 @@ function SplitFeature({
           {eyebrow}
         </p>
 
-        <h3 className="mt-3 text-balance text-2xl font-bold tracking-tight sm:text-3xl">
+        <Heading
+          id={headingId}
+          className="mt-3 text-balance text-2xl font-bold tracking-tight sm:text-3xl"
+        >
           {title}
-        </h3>
+        </Heading>
 
         <div className="mt-4 space-y-3 text-pretty leading-7 text-muted-foreground">
           {children}
@@ -418,13 +420,15 @@ function SplitFeature({
 function Specialists() {
   return (
     <section
-      aria-label="Hiring more than one person"
+      aria-labelledby="specialists-title"
       className="border-y border-border/60 bg-card/30 py-20 sm:py-24"
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <Reveal>
           <SplitFeature
             image={images.specialists}
+            as="h2"
+            headingId="specialists-title"
             eyebrow="One project, several people"
             title="Each freelancer gets their own escrow"
           >
@@ -511,8 +515,8 @@ function Protection() {
         </div>
 
         <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {rules.map((rule, index) => (
-            <Reveal key={rule.title} delay={(index % 3) * 0.05}>
+          {rules.map((rule) => (
+            <Reveal key={rule.title}>
               <article className="h-full rounded-2xl border bg-card/70 p-6">
                 <span
                   aria-hidden="true"
@@ -566,8 +570,8 @@ function AiHelp() {
           </Reveal>
 
           <div className="space-y-4">
-            {aiFeatures.map((feature, index) => (
-              <Reveal key={feature.title} delay={index * 0.06}>
+            {aiFeatures.map((feature) => (
+              <Reveal key={feature.title}>
                 <article className="flex gap-4 rounded-2xl border bg-card/70 p-5">
                   <span
                     aria-hidden="true"

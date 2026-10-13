@@ -5,6 +5,12 @@ import { RegisterForm } from
 
 export const metadata: Metadata = {
     title: "Create account",
+    description:
+        "Create a free TrustFlow AI account as a client or a freelancer and try milestone escrow with test tokens.",
+    alternates: {
+        // ?role= only picks which side is selected, so every link is one page.
+        canonical: "/register",
+    },
 };
 
 type RegisterPageProps = {

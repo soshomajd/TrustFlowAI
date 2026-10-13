@@ -5,17 +5,18 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { MotionConfig } from "motion/react";
 import { type ReactNode, useState, } from "react";
 import { WagmiProvider } from "wagmi";
-import { AuthBootstrap } from "@/features/auth/components/auth-bootstrap";
+import { Toaster } from "@/components/ui/sonner";
 import { wagmiConfig } from "@/lib/wallet/wagmi-config";
 
 
-type AppProvidersProps = {
+type ProvidersProps = {
     children: ReactNode;
 };
 
-export function AppProviders({
+// Data fetching, motion settings and toasts. The sign-in screens need only this.
+export function QueryProviders({
     children,
-}: AppProvidersProps) {
+}: ProvidersProps) {
     const [queryClient] = useState(
         () =>
             new QueryClient({
@@ -36,20 +37,35 @@ export function AppProviders({
 
     return (
         <MotionConfig reducedMotion="user">
-            <WagmiProvider config={wagmiConfig}>
-                <QueryClientProvider client={queryClient}>
-                    <AuthBootstrap />
+            <QueryClientProvider client={queryClient}>
+                {children}
 
-                    {children}
+                <Toaster
+                    position="top-right"
+                    richColors
+                    closeButton
+                />
 
-                    {process.env.NODE_ENV ===
-                        "development" && (
-                            <ReactQueryDevtools
-                                initialIsOpen={false}
-                            />
-                        )}
-                </QueryClientProvider>
-            </WagmiProvider>
+                {process.env.NODE_ENV ===
+                    "development" && (
+                        <ReactQueryDevtools
+                            initialIsOpen={false}
+                        />
+                    )}
+            </QueryClientProvider>
         </MotionConfig>
+    );
+}
+
+// Everything above plus the wallet, for the signed-in dashboard.
+export function AppProviders({
+    children,
+}: ProvidersProps) {
+    return (
+        <WagmiProvider config={wagmiConfig}>
+            <QueryProviders>
+                {children}
+            </QueryProviders>
+        </WagmiProvider>
     );
 }

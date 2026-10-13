@@ -5,6 +5,10 @@ import { VerifyEmailForm } from
 
 export const metadata: Metadata = {
     title: "Verify your email",
+    robots: {
+        index: false,
+        follow: false,
+    },
 };
 
 type VerifyEmailPageProps = {

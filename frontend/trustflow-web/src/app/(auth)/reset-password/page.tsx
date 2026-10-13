@@ -5,6 +5,10 @@ import { ResetPasswordForm } from
 
 export const metadata: Metadata = {
     title: "Reset password",
+    robots: {
+        index: false,
+        follow: false,
+    },
 };
 
 type ResetPasswordPageProps = {

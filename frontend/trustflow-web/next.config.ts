@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  poweredByHeader: false,
+  images: {
+    // AVIF first: the landing illustrations are the heaviest thing on the page.
+    formats: ["image/avif", "image/webp"],
+  },
   async redirects() {
     // Keep local pages and the API on the same site for refresh cookies and CORS.
     if (process.env.NODE_ENV !== "development") return [];
