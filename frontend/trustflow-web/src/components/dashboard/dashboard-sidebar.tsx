@@ -2,7 +2,7 @@
 import { MemberName } from "@/features/profile-photos/components/user-avatar";
 
 
-import { ShieldCheck } from "lucide-react";
+import { HeaderLogo } from "@/components/brand/brand-logo";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -73,9 +73,7 @@ export function DashboardSidebar({
                     onClick={closeMobileSidebar}
                     className="flex items-center gap-3"
                 >
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 shadow-cyan-glow">
-                        <ShieldCheck className="size-5 text-electric" />
-                    </div>
+                    <HeaderLogo />
 
                     {!collapsed && (
                         <div>
