@@ -190,6 +190,16 @@ public sealed class EscrowCaseTests
 
         Assert.Equal(MileStoneStatus.Settled, milestone.Status);
         Assert.Equal(333.33m, milestone.PaidAmount);
+        Assert.Equal(33.333m, milestone.PlatformFeePaid);
+        var feeEscrow = await db.Escrows.SingleAsync(item => item.ProjectId == scenario.ProjectId);
+        Assert.Equal(1000, feeEscrow.PlatformFeeBasisPoints);
+        Assert.Equal(33.333m, feeEscrow.PlatformFeesPaid);
+        await SyncAsync(scenario, scenario.Client);
+        await db.Entry(feeEscrow).ReloadAsync();
+        Assert.Equal(33.333m, feeEscrow.PlatformFeesPaid); // Retry never charges twice.
+        var response = Assert.Single(await ListCasesAsync(scenario, scenario.Client));
+        Assert.Equal(299.997m, response.GetProperty("freelancerNetPaid").GetDecimal());
+        Assert.Equal(33.333m, response.GetProperty("platformFeePaid").GetDecimal());
 
         var row = await db.EscrowCases.SingleAsync(
             item => item.MilestoneId == scenario.MilestoneId);
@@ -296,6 +306,19 @@ public sealed class EscrowCaseTests
             EscrowCaseStatus.Withdrawn,
             (await db.EscrowCases.SingleAsync(
                 item => item.MilestoneId == scenario.MilestoneId)).Status);
+
+        // The former participant can still read their contract, while no
+        // freed stages are exposed as work they can perform.
+        var history = await SendAsync(_client, HttpMethod.Get,
+            $"/api/projects/{scenario.ProjectId}/escrows", scenario.Freelancer.Token);
+        Assert.Equal(HttpStatusCode.OK, history.StatusCode);
+        var historicalRow = Assert.Single((await ReadAsync(history)).EnumerateArray());
+        Assert.Equal("Terminated", historicalRow.GetProperty("escrow").GetProperty("status").GetString());
+        Assert.Equal(0, historicalRow.GetProperty("milestoneCount").GetInt32());
+        var workspace = await SendAsync(_client, HttpMethod.Get,
+            $"/api/projects/{scenario.ProjectId}/workspace", scenario.Freelancer.Token);
+        Assert.Equal(HttpStatusCode.OK, workspace.StatusCode);
+        Assert.Empty((await ReadAsync(workspace)).GetProperty("milestones").EnumerateArray());
 
         // The next freelancer does not inherit the earlier one's work.
         var delivered = await db.MilestoneSubmissions

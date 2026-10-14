@@ -10,6 +10,8 @@ public sealed class ClientProjectResponse
 
     public string? FreelancerFullName { get; set; }
 
+    public IReadOnlyList<AssignedFreelancerResponse> AssignedFreelancers { get; set; } = [];
+
     public string Title { get; set; } =
         string.Empty;
 
@@ -35,4 +37,10 @@ public sealed class ClientProjectResponse
     public DateTimeOffset CreatedAt { get; set; }
     
     public int SubmittedMilestoneCount { get; set; }
+}
+
+public sealed class AssignedFreelancerResponse
+{
+    public Guid Id { get; init; }
+    public string FullName { get; init; } = string.Empty;
 }

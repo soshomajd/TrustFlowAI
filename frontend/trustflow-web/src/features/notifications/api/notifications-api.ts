@@ -9,3 +9,7 @@ export async function getNotifications() {
 
   return response.data;
 }
+
+export async function markNotificationRead(notificationId: string) {
+  await apiClient.post(`/notifications/${encodeURIComponent(notificationId)}/read`);
+}

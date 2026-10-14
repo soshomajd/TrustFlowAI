@@ -16,6 +16,11 @@ export function getWalletErrorMessage(
 
   const shortMessage = (error as ViemLikeError | undefined)?.shortMessage;
 
+  const message = shortMessage ?? (error instanceof Error ? error.message : "");
+  if (/provider not found|connector not found/i.test(message)) {
+    return "No browser wallet was found. Open TrustFlow in a desktop browser with MetaMask or another supported wallet extension installed.";
+  }
+
   if (shortMessage) {
     return shortMessage;
   }

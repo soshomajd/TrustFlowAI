@@ -19,6 +19,10 @@ export type ChatConversation = {
   canSend: boolean;
   cannotSendReason: string | null;
   messages: ChatMessage[];
+  hasOlderMessages: boolean;
+  // Cache-only cursor. Sending our own message must not skip intervening
+  // messages from the other participant that have not been polled yet.
+  pollAfterMessageId?: string;
 };
 
 export type ChatInboxItem = {

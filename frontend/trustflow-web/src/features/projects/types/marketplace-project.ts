@@ -16,6 +16,7 @@ export type MarketplaceProject = {
 
   budget: number;
   allocatedAmount: number;
+  availableAmount: number;
   milestoneCount: number;
 
   deadline: string;

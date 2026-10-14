@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using TrustFlow.Api.Data;
 using TrustFlow.Api.IntegrationTests.Infrastructure;
 using TrustFlow.Api.Models.Enums;
+using TrustFlow.Api.Models;
 using TrustFlow.Api.Services.Chat;
 using static TrustFlow.Api.IntegrationTests.Infrastructure.AiTestScenario;
 
@@ -389,6 +390,76 @@ public sealed class ChatTests : IClassFixture<CustomWebApplicationFactory>
         Assert.Equal(
             HttpStatusCode.Unauthorized,
             (await _client.GetAsync("/api/chat")).StatusCode);
+    }
+
+    [Fact]
+    public async Task OlderPagesAndPolling_PreserveMessagesWithIdenticalTimestamps()
+    {
+        var talk = await NewTalkAsync();
+        var first = await ReadAsync(await SendMessageAsync(talk, talk.Client, "Opening message."));
+        List<Guid> expected;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var thread = await db.ChatThreads.SingleAsync(item => item.ProjectId == talk.ProjectId);
+            var stamp = DateTimeOffset.UtcNow.AddMinutes(-1);
+            var existing = await db.ChatMessages.SingleAsync(item => item.ThreadId == thread.Id);
+            existing.SentAt = stamp;
+            for (var index = 0; index < 419; index++)
+                db.ChatMessages.Add(new ChatMessage
+                {
+                    ThreadId = thread.Id, SenderId = talk.Client.Id,
+                    Body = "Older test message", SentAt = stamp
+                });
+            await db.SaveChangesAsync();
+            expected = await db.ChatMessages.Where(item => item.ThreadId == thread.Id)
+                .OrderBy(item => item.SentAt).ThenBy(item => item.Id).Select(item => item.Id).ToListAsync();
+        }
+        var latest = await GetConversationAsync(talk, talk.Freelancer);
+        Assert.True(latest.GetProperty("hasOlderMessages").GetBoolean());
+        var rows = latest.GetProperty("messages").EnumerateArray().ToList();
+        Assert.Equal(200, rows.Count);
+        Assert.Equal(expected.Skip(220), rows.Select(item => item.GetProperty("id").GetGuid()));
+        var all = rows.Select(item => item.GetProperty("id").GetGuid()).ToList();
+        var firstId = all[0];
+        for (var page = 0; page < 2; page++)
+        {
+            var response = await SendAsync(_client, HttpMethod.Get,
+                ThreadUrl(talk) + $"?beforeMessageId={firstId}", talk.Freelancer.Token);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var older = await ReadAsync(response);
+            var ids = older.GetProperty("messages").EnumerateArray()
+                .Select(item => item.GetProperty("id").GetGuid()).ToList();
+            Assert.Equal(page == 0 ? 200 : 20, ids.Count);
+            Assert.Equal(page == 0, older.GetProperty("hasOlderMessages").GetBoolean());
+            all.InsertRange(0, ids);
+            firstId = ids[0];
+        }
+        Assert.Equal(expected, all);
+        Assert.Equal(420, all.Distinct().Count());
+        var polling = await SendAsync(_client, HttpMethod.Get,
+            ThreadUrl(talk) + $"?afterMessageId={expected[^2]}", talk.Freelancer.Token);
+        Assert.Equal(HttpStatusCode.OK, polling.StatusCode);
+        var newest = Assert.Single((await ReadAsync(polling)).GetProperty("messages").EnumerateArray());
+        Assert.Equal(expected[^1], newest.GetProperty("id").GetGuid());
+    }
+
+    [Fact]
+    public async Task AMessageCursorFromAnotherConversationIsRefused()
+    {
+        var one = await NewTalkAsync();
+        var two = await NewTalkAsync();
+        await SendMessageAsync(one, one.Client, "First conversation.");
+        var other = await ReadAsync(await SendMessageAsync(two, two.Client, "Other conversation."));
+        foreach (var cursor in new[] { "beforeMessageId", "afterMessageId" })
+        {
+            var response = await SendAsync(_client, HttpMethod.Get,
+                ThreadUrl(one) + $"?{cursor}={other.GetProperty("id").GetGuid()}", one.Client.Token);
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+        var invalid = await SendAsync(_client, HttpMethod.Get,
+            ThreadUrl(one) + $"?beforeMessageId={Guid.NewGuid()}&afterMessageId={Guid.NewGuid()}", one.Client.Token);
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
     }
 
     // ---- helpers ---------------------------------------------------------

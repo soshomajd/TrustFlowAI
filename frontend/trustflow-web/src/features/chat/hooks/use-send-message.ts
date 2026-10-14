@@ -6,6 +6,7 @@ import { sendChatMessage } from "@/features/chat/api/chat-api";
 import { chatQueryKeys } from "@/features/chat/queries/chat-query-keys";
 import type { ChatConversation } from "@/features/chat/types/chat";
 import { notificationQueryKeys } from "@/features/notifications/queries/notification-query-keys";
+import { mergeMessages } from "@/features/chat/lib/merge-messages";
 
 export function useSendMessage(projectId: string, freelancerId: string) {
   const queryClient = useQueryClient();
@@ -20,7 +21,7 @@ export function useSendMessage(projectId: string, freelancerId: string) {
         (current) =>
           current &&
           !current.messages.some((item) => item.id === message.id)
-            ? { ...current, messages: [...current.messages, message] }
+            ? { ...current, messages: mergeMessages(current.messages, [message]) }
             : current,
       );
 

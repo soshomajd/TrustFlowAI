@@ -15,7 +15,11 @@ public sealed record EscrowDeploymentRequest(
     string ClientAddress,
     string FreelancerAddress,
     string ArbiterAddress,
-    IReadOnlyList<BigInteger> MilestoneAmounts);
+    IReadOnlyList<BigInteger> MilestoneAmounts,
+    string? FeeRecipientAddress = null,
+    int TokenDecimals = 6);
+
+public sealed record OnChainFeePolicy(string Recipient, int BasisPoints);
 
 public sealed record EscrowDeploymentSubmission(
     string TransactionHash,
@@ -62,7 +66,8 @@ public sealed record OnChainMilestone(
     BigInteger Amount,
     bool Released,
     BigInteger Paid,
-    bool SettledByCase);
+    bool SettledByCase,
+    BigInteger PlatformFee = default);
 
 public interface IEscrowChainDeployer
 {
@@ -88,10 +93,20 @@ public interface IEscrowChainDeployer
     Task<OnChainMilestone> GetMilestoneAsync(
         string contractAddress,
         int milestoneIndex,
+        CancellationToken cancellationToken,
+        bool withPlatformFee = false);
+
+    Task<OnChainFeePolicy> GetFeePolicyAsync(string contractAddress, CancellationToken cancellationToken);
+
+    Task<OnChainLifecycleEvents> GetLifecycleEventsAsync(
+        string contractAddress,
+        string deploymentTransactionHash,
+        bool includeFunding,
+        bool includeCancellation,
         CancellationToken cancellationToken);
 }
 
-public sealed class EscrowChainDeployer(
+public sealed partial class EscrowChainDeployer(
     IOptions<BlockchainOptions> blockchainOptions)
     : IEscrowChainDeployer
 {
@@ -101,7 +116,9 @@ public sealed class EscrowChainDeployer(
         """;
 
     private static readonly Lazy<(string Abi, string Bytecode)> Artifact =
-        new(LoadArtifact);
+        new(() => LoadArtifact("TrustFlowEscrow.json"));
+    private static readonly Lazy<(string Abi, string Bytecode)> FeeArtifact =
+        new(() => LoadArtifact("TrustFlowEscrowV2.json"));
 
     public async Task<long> GetChainIdAsync(
         CancellationToken cancellationToken)
@@ -133,20 +150,37 @@ public sealed class EscrowChainDeployer(
     {
         var (web3, deployerAddress) = CreateWeb3();
 
-        var constructorParams = new TrustFlowEscrowConstructorParams
-        {
-            Token = request.TokenAddress,
-            Client = request.ClientAddress,
-            Freelancer = request.FreelancerAddress,
-            Arbiter = request.ArbiterAddress,
-            MilestoneAmounts = request.MilestoneAmounts.ToList()
-        };
+        TrustFlowEscrowConstructorParams constructorParams = request.FeeRecipientAddress is null
+            ? new TrustFlowEscrowConstructorParams()
+            : new TrustFlowEscrowV2ConstructorParams { FeeRecipient = request.FeeRecipientAddress };
+        constructorParams.Token = request.TokenAddress;
+        constructorParams.Client = request.ClientAddress;
+        constructorParams.Freelancer = request.FreelancerAddress;
+        constructorParams.Arbiter = request.ArbiterAddress;
+        constructorParams.MilestoneAmounts = request.MilestoneAmounts.ToList();
+        var artifact = request.FeeRecipientAddress is null ? Artifact.Value : FeeArtifact.Value;
+
+        // Nethereum encodes typeof(T), not the object's runtime type. Passing
+        // V2 through the V1 base type omits the sixth constructor argument and
+        // makes the array length decode as the fee recipient address.
+        return constructorParams is TrustFlowEscrowV2ConstructorParams feeParams
+            ? await SubmitTypedDeploymentAsync(web3, deployerAddress, artifact.Bytecode, feeParams, cancellationToken)
+            : await SubmitTypedDeploymentAsync(web3, deployerAddress, artifact.Bytecode, constructorParams, cancellationToken);
+    }
+
+    private static async Task<EscrowDeploymentSubmission> SubmitTypedDeploymentAsync<T>(
+        Web3 web3,
+        string deployerAddress,
+        string bytecode,
+        T constructorParams,
+        CancellationToken cancellationToken) where T : new()
+    {
 
         var estimatedGas = await web3.Eth.DeployContract.EstimateGasAsync(
-            Artifact.Value.Bytecode,
+            bytecode,
             deployerAddress,
             constructorParams
-        );
+        ).WaitAsync(cancellationToken);
 
         var gasWithMargin = new HexBigInteger(
             estimatedGas.Value * 120 / 100
@@ -154,7 +188,7 @@ public sealed class EscrowChainDeployer(
 
         var transactionHash = await web3.Eth.DeployContract
             .SendRequestAsync(
-                Artifact.Value.Bytecode,
+                bytecode,
                 deployerAddress,
                 gasWithMargin,
                 constructorParams
@@ -283,7 +317,8 @@ public sealed class EscrowChainDeployer(
     public async Task<OnChainMilestone> GetMilestoneAsync(
         string contractAddress,
         int milestoneIndex,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool withPlatformFee = false)
     {
         var (web3, _) = CreateWeb3();
 
@@ -310,17 +345,28 @@ public sealed class EscrowChainDeployer(
             output.Amount,
             output.Released,
             paid,
-            settledByCase
+            settledByCase,
+            withPlatformFee ? await web3.Eth.GetContract(FeeArtifact.Value.Abi, contractAddress)
+                .GetFunction("getMilestoneFee").CallAsync<BigInteger>(milestoneIndex) : BigInteger.Zero
         );
     }
 
-    private static (string Abi, string Bytecode) LoadArtifact()
+    public async Task<OnChainFeePolicy> GetFeePolicyAsync(string contractAddress, CancellationToken cancellationToken)
+    {
+        var (web3, _) = CreateWeb3();
+        var contract = web3.Eth.GetContract(FeeArtifact.Value.Abi, contractAddress);
+        return new OnChainFeePolicy(
+            await contract.GetFunction("feeRecipient").CallAsync<string>(),
+            (int)await contract.GetFunction("PLATFORM_FEE_BPS").CallAsync<BigInteger>());
+    }
+
+    private static (string Abi, string Bytecode) LoadArtifact(string fileName)
     {
         var path = Path.Combine(
             AppContext.BaseDirectory,
             "Blockchain",
             "Artifacts",
-            "TrustFlowEscrow.json"
+            fileName
         );
 
         using var stream = File.OpenRead(path);
@@ -341,7 +387,7 @@ public sealed class EscrowChainDeployer(
         return (abi, bytecode);
     }
 
-    private sealed class TrustFlowEscrowConstructorParams
+    private class TrustFlowEscrowConstructorParams
     {
         [Parameter("address", "token_", 1)]
         public string Token { get; set; } = string.Empty;
@@ -357,6 +403,12 @@ public sealed class EscrowChainDeployer(
 
         [Parameter("uint256[]", "milestoneAmounts_", 5)]
         public List<BigInteger> MilestoneAmounts { get; set; } = [];
+    }
+
+    private sealed class TrustFlowEscrowV2ConstructorParams : TrustFlowEscrowConstructorParams
+    {
+        [Parameter("address", "feeRecipient_", 6)]
+        public string FeeRecipient { get; set; } = string.Empty;
     }
 
     [FunctionOutput]

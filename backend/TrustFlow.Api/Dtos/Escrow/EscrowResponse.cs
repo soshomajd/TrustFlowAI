@@ -32,6 +32,11 @@ public sealed class EscrowResponse
     public decimal TotalAmount { get; set; }
 
     public decimal ReleasedAmount { get; set; }
+    public int PlatformFeeBasisPoints { get; set; }
+    public int? TokenDecimals { get; set; }
+    public string? FeeRecipientAddress { get; set; }
+    public decimal PlatformFeesPaid { get; set; }
+    public decimal FreelancerNetPaid { get; set; }
 
     public EscrowStatus Status { get; set; }
 

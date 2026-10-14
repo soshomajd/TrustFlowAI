@@ -37,6 +37,7 @@ import { DisputePanel } from
 import { MilestoneSubmissionsPanel } from
     "@/features/milestones/components/milestone-submissions-panel";
 import type { ProjectEscrow } from "@/features/escrow/types/escrow";
+import { useEscrowWorkStarted } from "@/features/escrow/hooks/use-escrow-work-started";
 import { useProjectEscrows } from
     "@/features/escrow/hooks/use-project-escrows";
 import { useProjectWorkspace } from
@@ -323,6 +324,7 @@ function FreelancerMilestoneCard({
     milestones: WorkspaceMilestone[];
     isEscrowFunded: boolean;
 }) {
+    const workStartedQuery = useEscrowWorkStarted(escrow);
     const startMutation =
         useStartMilestone(
             projectId,
@@ -346,6 +348,7 @@ function FreelancerMilestoneCard({
     const canStart =
         projectStatus === "InProgress" &&
         isEscrowFunded &&
+        workStartedQuery.data === true &&
         (
             milestone.status === "Pending" ||
             milestone.status === "Rejected"
@@ -464,6 +467,15 @@ function FreelancerMilestoneCard({
                     </div>
                 )}
 
+            {isEscrowFunded && workStartedQuery.data !== true &&
+                milestone.status === "Pending" && (
+                    <p className="mt-5 text-sm text-muted-foreground">
+                        {workStartedQuery.isError
+                            ? "Work-start status could not be checked. Refresh the escrow before starting this milestone."
+                            : "Use Start work in the escrow first. Start milestone appears after the on-chain start is confirmed."}
+                    </p>
+                )}
+
             {milestone.status ===
                 "Submitted" && (
                     <div className="mt-5 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-sm text-muted-foreground">
@@ -487,7 +499,7 @@ function FreelancerMilestoneCard({
                         A reviewer settled this
                         milestone. You received{" "}
                         {formatSettledAmount(
-                            milestone.paidAmount ?? 0,
+                            milestone.freelancerNetPaid ?? milestone.paidAmount ?? 0,
                         )}{" "}
                         of{" "}
                         {formatSettledAmount(
@@ -732,7 +744,7 @@ function formatAmount(
     return new Intl.NumberFormat(
         "en-US",
         {
-            maximumFractionDigits: 2,
+            maximumFractionDigits: 18,
         },
     ).format(value);
 }

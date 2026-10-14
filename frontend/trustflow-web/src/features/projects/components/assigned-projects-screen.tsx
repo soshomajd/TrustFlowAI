@@ -64,10 +64,9 @@ export function AssignedProjectsScreen() {
                     </h1>
 
                     <p className="mt-3 max-w-2xl text-muted-foreground">
-                        View projects where your
-                        proposal has been accepted
-                        and you have been assigned
-                        as the freelancer.
+                        View your assigned projects and past escrows.
+                        Projects stay here when your escrow ends,
+                        so you can check your payment history.
                     </p>
                 </section>
             </AnimatedSection>
@@ -294,7 +293,7 @@ function AssignedProjectCard({
                 <div className="grid shrink-0 gap-3 sm:grid-cols-2 lg:min-w-64 lg:grid-cols-1">
                     <ProjectMeta
                         icon={CircleDollarSign}
-                        label="You will be paid"
+                        label={project.isHistorical ? "Current assigned amount" : "Gross assigned amount"}
                         value={formatAmount(
                             project.myTotalAmount,
                         )}
@@ -365,6 +364,12 @@ function AssignedProjectCard({
                 </div>
             </div>
 
+            {project.isHistorical && (
+                <p className="mt-5 text-sm text-muted-foreground">
+                    You no longer have assigned milestones here. Open the workspace to view your escrow history.
+                </p>
+            )}
+
             <div className="mt-5 flex justify-end border-t pt-5">
                 <Button
                     asChild
@@ -387,7 +392,7 @@ function AssignedProjectCard({
                                     : "milestones"}
                             </>
                         ) : (
-                            "Open workspace"
+                            project.isHistorical ? "View escrow history" : "Open workspace"
                         )}
                     </Link>
                 </Button>

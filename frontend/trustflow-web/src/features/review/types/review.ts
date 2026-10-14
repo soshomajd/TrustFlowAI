@@ -24,7 +24,9 @@ export type ReviewCaseSummary = {
 
   hasAdvice: boolean;
   escrowEnded: boolean;
-  paidToFreelancer: number | null;
+  paidToFreelancer: number | null; // Gross award.
+  platformFeePaid?: number;
+  freelancerNetPaid?: number | null;
   returnedToClient: number | null;
   closedAt: string | null;
 };
@@ -64,6 +66,7 @@ export type ReviewCaseDetail = {
   arbiterWalletAddress: string | null;
   tokenAddress: string;
   tokenDecimals: number;
+  platformFeeBasisPoints?: number;
 
   // The milestone position on the contract: the first argument of
   // settleCase.

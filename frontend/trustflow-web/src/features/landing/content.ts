@@ -184,7 +184,7 @@ export const rules: Rule[] = [
   {
     icon: Scale,
     title: "A reviewer has narrow powers",
-    text: "The reviewer can split one milestone between the two of you. They cannot send money anywhere else.",
+    text: "The reviewer can split one milestone between the two of you. The contract deducts its fixed platform fee from the freelancer’s share; the reviewer cannot choose any other recipient.",
   },
   {
     icon: Sparkles,
@@ -275,7 +275,7 @@ export const faqs: Faq[] = [
   {
     question: "What does it cost?",
     answer:
-      "This version adds no platform fee. Wallet transactions have a normal network fee that goes to the network, not to us.",
+      "New escrows deduct a 10% platform fee from the freelancer’s earnings. A gross award of 100 pays the freelancer 90 and the platform 10. Client refunds have no platform fee. Existing escrows keep their original terms. Wallet network fees are separate.",
   },
   {
     question: "What if the client disappears after I deliver?",

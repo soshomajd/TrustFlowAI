@@ -328,8 +328,14 @@ function ClientProjectListItem({
                 />
 
                 <ProjectDetail
-                    label="Freelancer"
-                    value={project.freelancerId ? <MemberName userId={project.freelancerId} name={project.freelancerFullName} /> : "Not assigned"}
+                    label="Freelancers"
+                    value={(project.assignedFreelancers ?? []).length > 0 ? (
+                        <span className="flex flex-col gap-1">
+                            {project.assignedFreelancers.map((freelancer) => (
+                                <MemberName key={freelancer.id} userId={freelancer.id} name={freelancer.fullName} />
+                            ))}
+                        </span>
+                    ) : "Not assigned"}
                     icon={UserRound}
                 />
 

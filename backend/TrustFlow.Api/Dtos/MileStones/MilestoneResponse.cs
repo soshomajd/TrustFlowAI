@@ -19,6 +19,8 @@ public class MilestoneResponse
     // Only set when the reviewer settled the milestone: what the freelancer
     // received for it, which may be less than Amount.
     public decimal? PaidAmount { get; set; }
+    public decimal PlatformFeePaid { get; set; }
+    public decimal? FreelancerNetPaid { get; set; }
 
     // Milestones are assigned one freelancer at a time, and each freelancer
     // is paid by their own escrow, so the caller needs to know whose stage

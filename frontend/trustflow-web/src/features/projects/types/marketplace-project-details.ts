@@ -18,6 +18,7 @@ export type MarketplaceProjectDetails = {
   description: string;
   budget: number;
   allocatedAmount: number;
+  availableAmount: number;
   deadline: string;
   createdAt: string;
   status: ProjectStatus;

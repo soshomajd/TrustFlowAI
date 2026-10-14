@@ -71,6 +71,8 @@ public sealed class CustomWebApplicationFactory
                     "0x5FbDB2315678afecb367f032d93F642f64180aa3",
 
                 // Hardhat account #4, a local test address.
+                ["Blockchain:FeeRecipientAddress"] = "0x9999999999999999999999999999999999999999",
+
                 ["Blockchain:ArbiterAddress"] =
                     "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
 

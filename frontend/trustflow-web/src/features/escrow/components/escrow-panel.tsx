@@ -1,5 +1,7 @@
 "use client";
 
+import { formatTokenPayment } from "@/features/escrow/lib/platform-fee";
+
 import {
     Ban,
     CheckCircle2,
@@ -44,13 +46,13 @@ import { useCancelEscrow } from "@/features/escrow/hooks/use-cancel-escrow";
 import { useCaseAction } from "@/features/escrow/hooks/use-case-action";
 import { useCreateEscrow } from "@/features/escrow/hooks/use-create-escrow";
 import { useDeployEscrow } from "@/features/escrow/hooks/use-deploy-escrow";
+import { useEscrowWorkStarted } from "@/features/escrow/hooks/use-escrow-work-started";
 import { useFundEscrow } from "@/features/escrow/hooks/use-fund-escrow";
 import { useMintTestTokens } from "@/features/escrow/hooks/use-mint-test-tokens";
 import { useProjectEscrows } from "@/features/escrow/hooks/use-project-escrows";
 import { useStartWork } from "@/features/escrow/hooks/use-start-work";
 import { useSyncEscrow } from "@/features/escrow/hooks/use-sync-escrow";
 import { erc20Abi } from "@/features/escrow/lib/erc20-abi";
-import { escrowAbi } from "@/features/escrow/lib/escrow-abi";
 import {
     ACTIVE_CHAIN_ID,
     ACTIVE_CHAIN_NAME,
@@ -84,10 +86,6 @@ export function EscrowPanel({
 }: EscrowPanelProps) {
     const escrowsQuery = useProjectEscrows(projectId);
 
-    if (projectStatus === "Open") {
-        return null;
-    }
-
     if (escrowsQuery.isLoading) {
         return <EscrowPanelSkeleton />;
     }
@@ -109,6 +107,7 @@ export function EscrowPanel({
     const participants = escrowsQuery.data ?? [];
 
     if (participants.length === 0) {
+        if (projectStatus === "Open") return null;
         return (
             <EscrowPanelShell title="Escrow" statusLabel="No one assigned yet">
                 <p className="text-sm text-muted-foreground">
@@ -207,6 +206,11 @@ function CreateEscrowCard({
                 client wallet that will fund it and prove ownership with
                 a signature. Signing the verification message does not
                 cost gas.
+            </p>
+            <p className="mt-3 text-sm text-muted-foreground">
+                New escrows deduct a fixed 10% from each gross freelancer award,
+                including case settlements. A 100-unit award pays the freelancer 90.
+                You fund only the agreed total; client refunds have no fee.
             </p>
 
             <div className="mt-5 rounded-xl border bg-background/35 p-4 sm:p-5">
@@ -346,15 +350,7 @@ function EscrowDetailsCard({
         escrow.freelancerId,
     );
 
-    const workStartedQuery = useReadContract({
-        address: escrow.contractAddress as Address | undefined,
-        abi: escrowAbi,
-        functionName: "workStarted",
-        query: {
-            enabled: Boolean(escrow.contractAddress),
-            refetchInterval: 5_000,
-        },
-    });
+    const workStartedQuery = useEscrowWorkStarted(escrow);
 
     return (
         <EscrowPanelShell
@@ -371,7 +367,7 @@ function EscrowDetailsCard({
 
                 <EscrowMeta
                     icon={CheckCircle2}
-                    label="Released"
+                    label="Gross released"
                     value={formatAmount(escrow.releasedAmount)}
                 />
 
@@ -385,6 +381,19 @@ function EscrowDetailsCard({
                     }
                 />
             </div>
+
+            <p className="mt-4 text-sm text-muted-foreground">
+                {(escrow.platformFeeBasisPoints ?? 0) === 1000
+                    ? "A fixed 10% platform fee is deducted from each gross freelancer award, including case settlements. The client funds the agreed total; refunds have no fee."
+                    : "This escrow uses the original terms: no platform fee."}
+            </p>
+            {(escrow.platformFeeBasisPoints ?? 0) === 1000 && (
+                <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                    <p>Platform fees paid: {formatTokenPayment(escrow.platformFeesPaid ?? 0)} token units</p>
+                    <p>Freelancer received: {formatTokenPayment(escrow.freelancerNetPaid ?? 0)} token units</p>
+                    <p className="break-all sm:col-span-2">Fixed fee receiving wallet: {escrow.feeRecipientAddress}</p>
+                </div>
+            )}
 
             {escrow.status === "PendingDeployment" &&
                 viewerRole === "Client" && (
@@ -582,6 +591,17 @@ function EscrowDetailsCard({
                         escrow={escrow}
                     />
                 )}
+
+            {escrow.contractAddress && (
+                <details className="mt-5 border-t pt-5 text-sm">
+                    <summary className="cursor-pointer font-medium">Transaction history</summary>
+                    <dl className="mt-3 space-y-3 text-muted-foreground">
+                        <div><dt>Deployment</dt><dd className="break-all">{escrow.deploymentTransactionHash ?? "Not recorded"}</dd></div>
+                        <div><dt>Funding</dt><dd className="break-all">{escrow.fundingTransactionHash ?? "Not recorded"}</dd></div>
+                        <div><dt>Cancellation</dt><dd className="break-all">{escrow.cancellationTransactionHash ?? "Not recorded"}</dd></div>
+                    </dl>
+                </details>
+            )}
 
             {escrow.status === "Cancelled" && (
                 <div className="mt-5 border-t pt-5 text-sm text-muted-foreground">

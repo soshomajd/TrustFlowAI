@@ -84,3 +84,10 @@ Restart Next.js after changing any `NEXT_PUBLIC_` value.
 ## Recovery behavior
 
 The API stores the deployment transaction hash before waiting for the receipt. If the API restarts, the client can use **Check deployment** to continue the same transaction instead of deploying a second contract. Funding, cancellation, and released milestones are read from the contract and reconciled into backend state.
+
+
+### Platform fee for new escrows
+
+New API-created escrows deploy `TrustFlowEscrowV2` and deduct 10% from each gross freelancer award, including case settlements. Configure `Blockchain__FeeRecipientAddress` (or user secret `Blockchain:FeeRecipientAddress`) with the platform's public receiving wallet before creating one. This is an address, never a private key. Missing or invalid configuration refuses new escrow creation with HTTP 503. The recipient is snapshotted at creation and immutable on-chain; a later setting change cannot redirect an existing escrow. Existing V1 contracts and legacy pending records retain their original fee-free terms. The explicit V2 Ignition module also requires `feeRecipientAddress`.
+
+Apply migration `AddPlatformFeePolicy` explicitly before running the updated API outside Testing. It adds fee metadata/accounting with zero/default values for old records and widens payout precision so token base-unit fees are not rounded to cents. Do not assign a fee recipient to existing contracts or apply fees retroactively. Wallet funding remains the full agreed gross budget with no extra client platform charge.

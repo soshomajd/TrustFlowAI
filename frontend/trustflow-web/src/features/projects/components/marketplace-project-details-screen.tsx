@@ -95,8 +95,7 @@ export function MarketplaceProjectDetailsScreen({
     const remainingBudget =
         Math.max(
             0,
-            project.budget -
-            project.allocatedAmount,
+            project.availableAmount,
         );
 
     const milestones = [

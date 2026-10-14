@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useConversation } from "@/features/chat/hooks/use-conversation";
 import { useSendMessage } from "@/features/chat/hooks/use-send-message";
+import { useOlderMessages } from "@/features/chat/hooks/use-older-messages";
 import {
   CHAT_MESSAGE_LIMIT,
   type ChatMessage,
@@ -45,6 +46,11 @@ export function ChatConversationScreen({
 
   const listRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
+  const olderAnchor = useRef<{ height: number; top: number } | null>(null);
+  const older = useOlderMessages(projectId, freelancerId, () => {
+    const list = listRef.current;
+    if (list) olderAnchor.current = { height: list.scrollHeight, top: list.scrollTop };
+  });
 
   const messageCount = query.data?.messages.length ?? 0;
 
@@ -53,10 +59,13 @@ export function ChatConversationScreen({
   useEffect(() => {
     const list = listRef.current;
 
-    if (list && stickToBottom.current) {
+    if (list && olderAnchor.current) {
+      list.scrollTop = olderAnchor.current.top + list.scrollHeight - olderAnchor.current.height;
+      olderAnchor.current = null;
+    } else if (list && stickToBottom.current) {
       list.scrollTop = list.scrollHeight;
     }
-  }, [messageCount]);
+  }, [messageCount, older.isPending]);
 
   function handleScroll() {
     const list = listRef.current;
@@ -90,6 +99,13 @@ export function ChatConversationScreen({
           getApiErrorMessage(error, "The message could not be sent."),
         ),
     });
+  }
+
+  function loadOlder() {
+    const first = query.data?.messages[0]?.id;
+    if (!first || older.isPending) return;
+    stickToBottom.current = false;
+    older.mutate(first);
   }
 
   if (query.isPending) {
@@ -149,6 +165,18 @@ export function ChatConversationScreen({
           aria-label="Messages"
           className="h-[min(26rem,55dvh)] space-y-1 overflow-y-auto p-4"
         >
+          {conversation.hasOlderMessages && (
+            <div className="mb-4 text-center">
+              <Button type="button" variant="outline" size="sm" disabled={older.isPending} onClick={loadOlder}>
+                {older.isPending ? "Loading older messages…" : "Load older messages"}
+              </Button>
+              {older.isError && (
+                <p role="alert" className="mt-2 text-sm text-destructive">
+                  {getApiErrorMessage(older.error, "Older messages could not be loaded. Try again.")}
+                </p>
+              )}
+            </div>
+          )}
           {messageCount === 0 && (
             <p className="py-10 text-center text-sm text-muted-foreground">
               No messages yet.

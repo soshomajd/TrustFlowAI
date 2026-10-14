@@ -22,9 +22,10 @@ namespace TrustFlow.Api.Models
 
         public MileStoneStatus Status { get; set; } = MileStoneStatus.Pending;
 
-        // Only set when the arbiter settled the milestone: what the
-        // freelancer actually received for it.
+        // Gross award for an approved or settled milestone; the fee is
+        // tracked separately and net earnings are PaidAmount minus the fee.
         public decimal? PaidAmount { get; set; }
+        public decimal PlatformFeePaid { get; set; }
 
         // Set when the client accepts a proposal that covers this milestone.
         // Different milestones of one project can belong to different

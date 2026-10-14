@@ -29,3 +29,6 @@
 
 # Snapshot cheatcodes output
 /snapshots
+
+# Local node deployments belong to a disposable chain.
+/ignition/deployments/local-*/

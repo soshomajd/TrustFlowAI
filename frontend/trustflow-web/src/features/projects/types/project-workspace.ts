@@ -17,6 +17,8 @@ export type ProjectWorkspaceMilestone = {
     | "Settled";
 
   paidAmount: number | null;
+  platformFeePaid?: number;
+  freelancerNetPaid?: number | null;
 
   // Stages are assigned one freelancer at a time, so a split project has
   // several owners across its milestones.

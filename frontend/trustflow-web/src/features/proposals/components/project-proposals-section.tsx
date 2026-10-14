@@ -501,7 +501,7 @@ function AcceptProposalDialog({
                 </div>
 
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm leading-6 text-muted-foreground">
-                    This gives the stages above to this freelancer and sets
+                    New escrows deduct 10% from the freelancer’s gross award. You fund only the agreed price, and refunds have no platform fee. This gives the stages above to this freelancer and sets
                     the project to InProgress. Other proposals that asked for
                     any of the same stages are rejected; proposals for the
                     stages nobody has taken stay pending, and the project

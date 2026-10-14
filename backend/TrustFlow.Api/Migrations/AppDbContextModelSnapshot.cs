@@ -451,6 +451,9 @@ namespace TrustFlow.Api.Migrations
                         .HasMaxLength(42)
                         .HasColumnType("character varying(42)");
 
+                    b.Property<DateTimeOffset?>("CancellationNoticeReadAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("CancellationTransactionHash")
                         .HasMaxLength(66)
                         .HasColumnType("character varying(66)");
@@ -482,6 +485,10 @@ namespace TrustFlow.Api.Migrations
                         .HasMaxLength(66)
                         .HasColumnType("character varying(66)");
 
+                    b.Property<string>("FeeRecipientAddress")
+                        .HasMaxLength(42)
+                        .HasColumnType("character varying(42)");
+
                     b.Property<Guid>("FreelancerId")
                         .HasColumnType("uuid");
 
@@ -496,12 +503,19 @@ namespace TrustFlow.Api.Migrations
                         .HasMaxLength(66)
                         .HasColumnType("character varying(66)");
 
+                    b.Property<int>("PlatformFeeBasisPoints")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("PlatformFeesPaid")
+                        .HasPrecision(38, 18)
+                        .HasColumnType("numeric(38,18)");
+
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("ReleasedAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasPrecision(38, 18)
+                        .HasColumnType("numeric(38,18)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -514,6 +528,9 @@ namespace TrustFlow.Api.Migrations
                         .HasMaxLength(42)
                         .HasColumnType("character varying(42)");
 
+                    b.Property<int?>("TokenDecimals")
+                        .HasColumnType("integer");
+
                     b.Property<decimal>("TotalAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -523,12 +540,12 @@ namespace TrustFlow.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ContractAddress")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Escrows_ContractAddress")
-                        .HasFilter("\"ContractAddress\" IS NOT NULL");
-
                     b.HasIndex("FreelancerId");
+
+                    b.HasIndex("ChainId", "ContractAddress")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Escrows_ChainId_ContractAddress")
+                        .HasFilter("\"ContractAddress\" IS NOT NULL");
 
                     b.HasIndex("ProjectId", "FreelancerId")
                         .IsUnique();
@@ -597,12 +614,16 @@ namespace TrustFlow.Api.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal?>("PaidToFreelancer")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasPrecision(38, 18)
+                        .HasColumnType("numeric(38,18)");
+
+                    b.Property<decimal>("PlatformFeePaid")
+                        .HasPrecision(38, 18)
+                        .HasColumnType("numeric(38,18)");
 
                     b.Property<decimal?>("ReturnedToClient")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasPrecision(38, 18)
+                        .HasColumnType("numeric(38,18)");
 
                     b.Property<string>("ReviewNote")
                         .HasMaxLength(2000)
@@ -986,7 +1007,12 @@ namespace TrustFlow.Api.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal?>("PaidAmount")
-                        .HasColumnType("numeric");
+                        .HasPrecision(38, 18)
+                        .HasColumnType("numeric(38,18)");
+
+                    b.Property<decimal>("PlatformFeePaid")
+                        .HasPrecision(38, 18)
+                        .HasColumnType("numeric(38,18)");
 
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
@@ -1239,7 +1265,8 @@ namespace TrustFlow.Api.Migrations
                         .HasDatabaseName("IX_Proposals_ProjectId_CreatedAt");
 
                     b.HasIndex("ProjectId", "FreelancerId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"Status\" IN ('Pending', 'Accepted')");
 
                     b.ToTable("Proposals", t =>
                         {

@@ -41,7 +41,10 @@ public sealed class EscrowCaseResponse
 
     public DateTimeOffset? ClosedAt { get; init; }
 
+    // Gross award before the fixed platform fee.
     public decimal? PaidToFreelancer { get; init; }
+    public decimal PlatformFeePaid { get; init; }
+    public decimal? FreelancerNetPaid { get; init; }
 
     public decimal? ReturnedToClient { get; init; }
 
@@ -54,6 +57,7 @@ public sealed class EscrowCaseResponse
     public string? ContractAddress { get; init; }
 
     public string? ArbiterWalletAddress { get; init; }
+    public int PlatformFeeBasisPoints { get; init; }
 }
 
 public sealed class ReviewCaseSummaryResponse
@@ -85,7 +89,10 @@ public sealed class ReviewCaseSummaryResponse
 
     public bool EscrowEnded { get; init; }
 
+    // Gross award before the fixed platform fee.
     public decimal? PaidToFreelancer { get; init; }
+    public decimal PlatformFeePaid { get; init; }
+    public decimal? FreelancerNetPaid { get; init; }
 
     public decimal? ReturnedToClient { get; init; }
 
@@ -148,6 +155,7 @@ public sealed class ReviewCaseDetailResponse
     public string? ContractAddress { get; init; }
 
     public string? ArbiterWalletAddress { get; init; }
+    public int PlatformFeeBasisPoints { get; init; }
 
     public string TokenAddress { get; init; } = string.Empty;
 

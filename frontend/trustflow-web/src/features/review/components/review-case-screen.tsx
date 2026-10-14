@@ -1,5 +1,7 @@
 "use client";
 
+import { previewPlatformFee, formatTokenPayment } from "@/features/escrow/lib/platform-fee";
+
 import {
   ArrowLeft,
   CheckCircle2,
@@ -485,6 +487,10 @@ function DecisionSection({
     freelancerAmount <= amount &&
     Math.round(freelancerAmount * 100) / 100 === freelancerAmount;
 
+  const feePreview = validAmount
+    ? previewPlatformFee(freelancerAmount.toFixed(2), detail.tokenDecimals, detail.platformFeeBasisPoints ?? 0)
+    : { fee: "0", net: "0" };
+
   const clientAmount = validAmount
     ? Math.round((amount - freelancerAmount) * 100) / 100
     : 0;
@@ -517,7 +523,7 @@ function DecisionSection({
     <Section title="Your decision">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="freelancer-amount">Freelancer receives</Label>
+          <Label htmlFor="freelancer-amount">Gross freelancer award (before platform fee)</Label>
 
           <Input
             id="freelancer-amount"
@@ -647,7 +653,8 @@ function DecisionSection({
                 </p>
 
                 <ul className="list-disc space-y-1 pl-5">
-                  <li>Freelancer receives {formatAmount(freelancerAmount)}.</li>
+                  <li>Gross freelancer award: {formatAmount(freelancerAmount)}.</li>
+                  <li>Platform fee: {feePreview.fee} token units; freelancer receives {feePreview.net} token units.</li>
 
                   <li>Client gets back {formatAmount(clientAmount)}.</li>
 
@@ -680,7 +687,7 @@ function ClosedSection({ detail }: { detail: ReviewCaseDetail }) {
       {detail.case.status === "Settled" ? (
         <p className="text-sm leading-6">
           The freelancer received{" "}
-          {formatAmount(detail.case.paidToFreelancer ?? 0)} and{" "}
+          {formatTokenPayment(detail.case.freelancerNetPaid ?? detail.case.paidToFreelancer ?? 0)} and{" "}
           {formatAmount(detail.case.returnedToClient ?? 0)} went back to the
           client.
           {detail.case.escrowEnded

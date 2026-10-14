@@ -14,10 +14,9 @@ using TrustFlow.Api.Options;
 
 namespace TrustFlow.Api.Controllers;
 
-// Notifications are derived from current workflow state instead of being
-// stored, so they can never disagree with the project, escrow and milestone
-// records they describe, and no financial write path had to change to raise
-// one. The cost is that there is no read/unread history.
+// Workflow reminders are derived from current state. Cancellation notices
+// use the persisted escrow transition and a participant-bound read timestamp,
+// so they survive cleared assignments, offline users and repeated chain sync.
 [ApiController]
 [Authorize]
 [Route("api/notifications")]
@@ -29,6 +28,7 @@ public sealed class NotificationsController(
     private const string ActionSeverity = "action";
     private const string WarningSeverity = "warning";
     private const string InfoSeverity = "info";
+    private const string CancellationIdPrefix = "escrow-cancelled:";
 
     [HttpGet]
     public async Task<IActionResult> GetNotifications(
@@ -54,6 +54,10 @@ public sealed class NotificationsController(
         {
             items.AddRange(
                 await BuildFreelancerItemsAsync(userId, cancellationToken)
+            );
+
+            items.AddRange(
+                await BuildCancellationItemsAsync(userId, cancellationToken)
             );
         }
 
@@ -85,11 +89,71 @@ public sealed class NotificationsController(
         {
             Items = ordered,
 
-            // Only items the viewer can act on are counted, so the badge
-            // means "waiting on you" rather than "unread".
+            // Durable information also waits on the viewer until acknowledged.
             ActionCount = ordered.Count(item =>
-                item.Severity != InfoSeverity)
+                item.Severity != InfoSeverity || item.CanMarkRead)
         });
+    }
+
+    [HttpPost("{notificationId}/read")]
+    [Authorize(Roles = AppRoles.Freelancer)]
+    public async Task<IActionResult> MarkRead(
+        string notificationId,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+        {
+            return Unauthorized();
+        }
+
+        if (!notificationId.StartsWith(CancellationIdPrefix, StringComparison.Ordinal) ||
+            !Guid.TryParse(notificationId[CancellationIdPrefix.Length..], out var escrowId))
+        {
+            return NotFound();
+        }
+
+        var notice = dbContext.Escrows.Where(item =>
+            item.Id == escrowId && item.FreelancerId == userId &&
+            item.Status == EscrowStatus.Cancelled && item.CancelledAt != null);
+
+        // Retry is safe, but an unrelated user must not learn that it exists.
+        if (!await notice.AnyAsync(cancellationToken))
+        {
+            return NotFound();
+        }
+
+        await notice.Where(item => item.CancellationNoticeReadAt == null)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(
+                item => item.CancellationNoticeReadAt, DateTimeOffset.UtcNow),
+                cancellationToken);
+
+        return NoContent();
+    }
+
+    private Task<List<NotificationItemResponse>> BuildCancellationItemsAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        return dbContext.Escrows.AsNoTracking()
+            .Where(item => item.FreelancerId == userId &&
+                item.Status == EscrowStatus.Cancelled && item.CancelledAt != null &&
+                item.CancellationNoticeReadAt == null)
+            .Select(item => new NotificationItemResponse
+            {
+                Id = CancellationIdPrefix + item.Id,
+                Kind = "EscrowCancelled",
+                Severity = InfoSeverity,
+                Title = "The client cancelled your escrow",
+                Message = item.FundingTransactionHash != null || item.FundedAt != null
+                    ? "Work had not started. The full escrow amount was returned to the client without a fee. Your stages are no longer assigned to you."
+                    : item.CancellationTransactionHash != null
+                        ? "Work had not started and the escrow was not funded. Your stages are no longer assigned to you."
+                        : "Work had not started. Your stages are no longer assigned to you. Open the project to view the escrow history.",
+                Href = "/dashboard/freelancer/projects/" + item.ProjectId,
+                ProjectTitle = item.Project.Title,
+                CanMarkRead = true
+            })
+            .ToListAsync(cancellationToken);
     }
 
     // A conversation with messages the viewer has not opened yet. Unread is
@@ -599,6 +663,7 @@ public sealed class NotificationsController(
                     .FirstOrDefault(),
 
                 Milestones = project.Milestones
+                    .Where(milestone => milestone.FreelancerId == freelancerId)
                     .OrderBy(milestone => milestone.SequenceNumber)
                     .Select(milestone => new
                     {
@@ -687,22 +752,23 @@ public sealed class NotificationsController(
 
             // Milestones run in order, so only the first pending one can be
             // started, and only once nothing is waiting to be fixed.
-            var nextPending = project.Milestones
+            var nextUnfinished = project.Milestones
                 .FirstOrDefault(milestone =>
-                    milestone.Status == MileStoneStatus.Pending);
+                    milestone.Status != MileStoneStatus.Approved &&
+                    milestone.Status != MileStoneStatus.Settled);
 
-            if (nextPending is not null && rejected.Count == 0)
+            if (nextUnfinished?.Status == MileStoneStatus.Pending && rejected.Count == 0)
             {
                 items.Add(new NotificationItemResponse
                 {
-                    Id = $"milestone-start:{nextPending.Id}",
+                    Id = $"milestone-start:{nextUnfinished.Id}",
                     Kind = "MilestoneReadyToStart",
                     Severity = ActionSeverity,
-                    Title = "You can start the next milestone",
+                    Title = "Start your next milestone",
 
                     Message =
-                        "The escrow is funded, so " + nextPending.Title
-                        + " is ready to start.",
+                        "Your escrow is funded. Confirm Start work in your wallet first, then start "
+                        + nextUnfinished.Title + ".",
 
                     Href = href,
                     ProjectTitle = project.Title

@@ -39,6 +39,12 @@ public class Escrow
 
     public decimal ReleasedAmount { get; set; }
 
+    // Zero/null for existing V1 records. Fixed at creation for new V2 escrows.
+    public int PlatformFeeBasisPoints { get; set; }
+    public int? TokenDecimals { get; set; }
+    public string? FeeRecipientAddress { get; set; }
+    public decimal PlatformFeesPaid { get; set; }
+
     public EscrowStatus Status { get; set; } =
         EscrowStatus.PendingDeployment;
 
@@ -69,4 +75,8 @@ public class Escrow
     public DateTimeOffset? CompletedAt { get; set; }
 
     public DateTimeOffset? CancelledAt { get; set; }
+
+    // The cancellation itself is the durable notification event. Only its
+    // freelancer can acknowledge it; polling/sync must never reset this.
+    public DateTimeOffset? CancellationNoticeReadAt { get; set; }
 }

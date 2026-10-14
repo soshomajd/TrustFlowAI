@@ -71,7 +71,7 @@ const workflowSteps = [
         number: "02",
         title: "Submit a proposal",
         description:
-            "Send your bid, estimated delivery time and cover letter.",
+            "Choose available milestones and send your plan and delivery time.",
     },
     {
         number: "03",

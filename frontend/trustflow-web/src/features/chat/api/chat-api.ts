@@ -29,6 +29,19 @@ export async function getConversation(
   return response.data;
 }
 
+export async function getConversationPage(
+  projectId: string,
+  freelancerId: string,
+  cursor: { beforeMessageId?: string; afterMessageId?: string },
+  signal?: AbortSignal,
+) {
+  const response = await apiClient.get<ChatConversation>(
+    `/projects/${projectId}/chat/${freelancerId}`,
+    { params: cursor, signal },
+  );
+  return response.data;
+}
+
 export async function sendChatMessage(
   projectId: string,
   freelancerId: string,

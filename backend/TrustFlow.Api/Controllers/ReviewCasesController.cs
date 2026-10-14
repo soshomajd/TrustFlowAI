@@ -267,6 +267,7 @@ public sealed class ReviewCasesController(
                 item.Escrow.ChainId,
                 item.Escrow.ContractAddress,
                 item.Escrow.ArbiterWalletAddress,
+                item.Escrow.PlatformFeeBasisPoints,
                 item.Escrow.TokenAddress
             })
             .SingleOrDefaultAsync(cancellationToken);
@@ -324,6 +325,7 @@ public sealed class ReviewCasesController(
             ChainId = row.ChainId,
             ContractAddress = row.ContractAddress,
             ArbiterWalletAddress = row.ArbiterWalletAddress,
+            PlatformFeeBasisPoints = row.PlatformFeeBasisPoints,
             TokenAddress = row.TokenAddress,
             TokenDecimals = tokenDecimals,
             OnChainMilestoneIndex = onChainIndex,
@@ -364,6 +366,8 @@ public sealed class ReviewCasesController(
             HasAdvice = item.AdviceJson is not null,
             EscrowEnded = item.EscrowEnded,
             PaidToFreelancer = item.PaidToFreelancer,
+            PlatformFeePaid = item.PlatformFeePaid,
+            FreelancerNetPaid = item.PaidToFreelancer - item.PlatformFeePaid,
             ReturnedToClient = item.ReturnedToClient,
             ClosedAt = item.ClosedAt
         };

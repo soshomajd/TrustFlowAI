@@ -27,7 +27,12 @@ export type ProjectEscrow = {
   arbiterWalletAddress: string | null;
 
   totalAmount: number;
-  releasedAmount: number;
+  releasedAmount: number; // Gross awarded, including the platform fee.
+  platformFeeBasisPoints?: number;
+  feeRecipientAddress?: string | null;
+  platformFeesPaid?: number;
+  freelancerNetPaid?: number;
+  tokenDecimals?: number | null;
 
   status: EscrowStatus;
 
@@ -82,7 +87,10 @@ export type EscrowCase = {
   stallableAt: string;
 
   closedAt: string | null;
-  paidToFreelancer: number | null;
+  paidToFreelancer: number | null; // Gross award, kept for API compatibility.
+  platformFeePaid?: number;
+  freelancerNetPaid?: number | null;
+  platformFeeBasisPoints?: number;
   returnedToClient: number | null;
   escrowEnded: boolean;
   reviewNote: string | null;

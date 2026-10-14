@@ -218,6 +218,10 @@ namespace TrustFlow.Api.Controllers
                         Description = project.Description,
                         Budget = project.Budget,
 
+                        AvailableAmount = project.Milestones
+                            .Where(milestone => milestone.FreelancerId == null)
+                            .Sum(milestone => (decimal?)milestone.Amount) ?? 0m,
+
                         AllocatedAmount =
                             project.Milestones
                                 .Sum(milestone =>
@@ -287,6 +291,10 @@ namespace TrustFlow.Api.Controllers
                         Description = project.Description,
 
                         Budget = project.Budget,
+
+                        AvailableAmount = project.Milestones
+                            .Where(milestone => milestone.FreelancerId == null)
+                            .Sum(milestone => (decimal?)milestone.Amount) ?? 0m,
 
                         AllocatedAmount =
                             project.Milestones
@@ -659,7 +667,8 @@ namespace TrustFlow.Api.Controllers
                 .AsNoTracking()
                 .Where(project =>
                     project.Milestones.Any(milestone =>
-                        milestone.FreelancerId == freelancerId));
+                        milestone.FreelancerId == freelancerId) ||
+                    project.Escrows.Any(escrow => escrow.FreelancerId == freelancerId));
 
             var totalItems = await query.CountAsync(
                 cancellationToken
@@ -696,6 +705,9 @@ namespace TrustFlow.Api.Controllers
                                 .Sum(milestone =>
                                     (decimal?)milestone.Amount)
                             ?? 0m,
+
+                        IsHistorical = !project.Milestones.Any(milestone =>
+                            milestone.FreelancerId == freelancerId),
 
                         MyTotalAmount =
                             project.Milestones
@@ -778,7 +790,8 @@ namespace TrustFlow.Api.Controllers
                     (
                         project.ClientId == userId ||
                         project.Milestones.Any(milestone =>
-                            milestone.FreelancerId == userId)
+                            milestone.FreelancerId == userId) ||
+                        project.Escrows.Any(escrow => escrow.FreelancerId == userId)
                     ))
                 .Select(project =>
                     new ProjectWorkspaceResponse
@@ -820,6 +833,8 @@ namespace TrustFlow.Api.Controllers
                                     ProposalStatus.Accepted),
 
                         Milestones = project.Milestones
+                            .Where(milestone => project.ClientId == userId ||
+                                milestone.FreelancerId == userId)
                             .OrderBy(milestone =>
                                 milestone.SequenceNumber)
                             .Select(milestone =>
@@ -840,6 +855,8 @@ namespace TrustFlow.Api.Controllers
                                         milestone.Status,
                                     PaidAmount =
                                         milestone.PaidAmount,
+                                    PlatformFeePaid = milestone.PlatformFeePaid,
+                                    FreelancerNetPaid = milestone.PaidAmount - milestone.PlatformFeePaid,
                                     FreelancerId =
                                         milestone.FreelancerId,
                                     FreelancerFullName =
@@ -984,8 +1001,8 @@ namespace TrustFlow.Api.Controllers
                             .AsNoTracking()
                             .CountAsync(
                                 project =>
-                                    project.FreelancerId ==
-                                    freelancerId,
+                                    project.Milestones.Any(milestone =>
+                                    milestone.FreelancerId == freelancerId),
                                 cancellationToken
                             ),
 
@@ -994,8 +1011,7 @@ namespace TrustFlow.Api.Controllers
                             .AsNoTracking()
                             .CountAsync(
                                 milestone =>
-                                    milestone.Project
-                                        .FreelancerId ==
+                                    milestone.FreelancerId ==
                                     freelancerId &&
                                     milestone.Status ==
                                     MileStoneStatus.Rejected,
@@ -1059,6 +1075,17 @@ namespace TrustFlow.Api.Controllers
                             project.Freelancer == null
                                 ? null
                                 : project.Freelancer.FullName,
+
+                        AssignedFreelancers = dbContext.Users
+                            .Where(user => project.Milestones.Any(milestone =>
+                                milestone.FreelancerId == user.Id))
+                            .OrderBy(user => user.FullName)
+                            .ThenBy(user => user.Id)
+                            .Select(user => new AssignedFreelancerResponse
+                            {
+                                Id = user.Id,
+                                FullName = user.FullName
+                            }).ToList(),
 
                         Title = project.Title,
 

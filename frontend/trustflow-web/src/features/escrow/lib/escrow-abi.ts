@@ -1,4 +1,7 @@
 export const escrowAbi = [
+  { type: "function", name: "feeRecipient", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "address" }] },
+  { type: "function", name: "PLATFORM_FEE_BPS", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint256" }] },
+  { type: "function", name: "getMilestoneFee", stateMutability: "view", inputs: [{ name: "index", type: "uint256" }], outputs: [{ name: "", type: "uint256" }] },
   {
     type: "function",
     name: "fund",

@@ -29,6 +29,12 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
     private static readonly ConcurrentDictionary<string, bool>
         CancelledEscrows = new();
 
+    private static readonly ConcurrentDictionary<string, OnChainLifecycleEvents>
+        LifecycleOverrides = new();
+
+    public static void SetLifecycleEvents(string contractAddress, OnChainLifecycleEvents events)
+        => LifecycleOverrides[contractAddress] = events;
+
     private sealed record FakeCase(
         OnChainCaseKind Kind,
         DateTimeOffset OpenedAt);
@@ -96,15 +102,36 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
         StartedEscrows[contractAddress] = true;
     }
 
-    public static void MarkCancelled(string contractAddress)
+    public static void MarkCancelled(string contractAddress, bool wasFunded = true)
     {
-        CancelledEscrows[contractAddress] = true;
+        CancelledEscrows[contractAddress] = wasFunded;
     }
 
     public Task<long> GetChainIdAsync(
         CancellationToken cancellationToken)
     {
         return Task.FromResult(31_337L);
+    }
+
+    public Task<OnChainLifecycleEvents> GetLifecycleEventsAsync(
+        string contractAddress,
+        string deploymentTransactionHash,
+        bool includeFunding,
+        bool includeCancellation,
+        CancellationToken cancellationToken)
+    {
+        if (LifecycleOverrides.TryGetValue(contractAddress, out var overridden))
+            return Task.FromResult(overridden);
+        var request = GetDeployedRequest(contractAddress);
+        var amount = request.MilestoneAmounts.Aggregate(BigInteger.Zero, (sum, item) => sum + item);
+        var cancelled = CancelledEscrows.TryGetValue(contractAddress, out var wasFunded);
+        return Task.FromResult(new OnChainLifecycleEvents(
+            includeFunding && (!cancelled || wasFunded)
+                ? new OnChainFundingEvent("0x" + new string('1', 24) + contractAddress[2..], request.ClientAddress, amount)
+                : null,
+            includeCancellation && cancelled
+                ? new OnChainCancellationEvent("0x" + new string('2', 24) + contractAddress[2..], wasFunded ? amount : BigInteger.Zero)
+                : null));
     }
 
     public Task<int> GetTokenDecimalsAsync(
@@ -224,7 +251,9 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
                 StartedEscrows.ContainsKey(contractAddress),
                 request.ArbiterAddress,
                 released,
-                TerminatedEscrows.ContainsKey(contractAddress)
+                CancelledEscrows.TryGetValue(contractAddress, out var wasFunded) && wasFunded
+                    ? totalBaseUnits
+                    : TerminatedEscrows.ContainsKey(contractAddress)
                     ? totalBaseUnits - released
                     : BigInteger.Zero,
                 nextIndex,
@@ -237,7 +266,8 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
     public Task<OnChainMilestone> GetMilestoneAsync(
         string contractAddress,
         int milestoneIndex,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool withPlatformFee = false)
     {
         var request = GetDeployedRequest(contractAddress);
 
@@ -259,9 +289,16 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
                 settled
                     ? settledPaid
                     : released ? amount : BigInteger.Zero,
-                settled
+                settled,
+                withPlatformFee ? (settled ? settledPaid : released ? amount : BigInteger.Zero) / 10 : BigInteger.Zero
             )
         );
+    }
+
+    public Task<OnChainFeePolicy> GetFeePolicyAsync(string contractAddress, CancellationToken cancellationToken)
+    {
+        var request = GetDeployedRequest(contractAddress);
+        return Task.FromResult(new OnChainFeePolicy(request.FeeRecipientAddress ?? string.Empty, request.FeeRecipientAddress is null ? 0 : 1000));
     }
 
     private static EscrowDeploymentRequest GetDeployedRequest(

@@ -18,13 +18,14 @@ public sealed class NotificationItemResponse
     public string Href { get; init; } = string.Empty;
 
     public string ProjectTitle { get; init; } = string.Empty;
+
+    public bool CanMarkRead { get; init; }
 }
 
 public sealed class NotificationsResponse
 {
     public IReadOnlyList<NotificationItemResponse> Items { get; init; } = [];
 
-    // Only "action" and "warning" items count, so the badge means
-    // "things waiting on you" rather than "unread".
+    // Actions/warnings plus unread durable notices waiting to be seen.
     public int ActionCount { get; init; }
 }

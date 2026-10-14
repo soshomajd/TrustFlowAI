@@ -252,6 +252,12 @@ public sealed class EscrowsController(
             });
         }
 
+        var feeRecipient = blockchainOptions.Value.FeeRecipientAddress;
+        if (!IsBlockchainAddress(feeRecipient) || feeRecipient.Equals("0x" + new string('0', 40), StringComparison.OrdinalIgnoreCase))
+        {
+            return StatusCode(503, new { code = "fee_recipient_not_configured", message = "Escrow setup is unavailable until the platform fee receiving wallet is configured." });
+        }
+
         var now =
             DateTimeOffset.UtcNow;
 
@@ -260,6 +266,8 @@ public sealed class EscrowsController(
             ProjectId = project.Id,
 
             FreelancerId = freelancerId,
+            PlatformFeeBasisPoints = 1000,
+            FeeRecipientAddress = feeRecipient.ToLowerInvariant(),
 
             ChainId = request.ChainId,
 
@@ -310,9 +318,8 @@ public sealed class EscrowsController(
         );
     }
 
-    // Every freelancer holding milestones on the project, each with their own
-    // escrow once the client has created it. The client sees all of them; a
-    // freelancer sees only their own row.
+    // Current assignments plus persisted escrows, including departed
+    // participants. The client sees all; a freelancer sees only their own.
     [Authorize]
     [HttpGet("~/api/projects/{projectId:guid}/escrows")]
     public async Task<IActionResult> GetProjectEscrows(
@@ -365,7 +372,14 @@ public sealed class EscrowsController(
                 })
                 .ToListAsync(cancellationToken);
 
-        if (!isClient && assignments.Count == 0)
+        var escrows = await dbContext.Escrows
+            .AsNoTracking()
+            .Where(escrow =>
+                escrow.ProjectId == projectId &&
+                (isClient || escrow.FreelancerId == userId))
+            .ToListAsync(cancellationToken);
+
+        if (!isClient && assignments.Count == 0 && escrows.Count == 0)
         {
             return NotFound(new
             {
@@ -376,6 +390,8 @@ public sealed class EscrowsController(
 
         var freelancerIds = assignments
             .Select(assignment => assignment.FreelancerId)
+            .Concat(escrows.Select(escrow => escrow.FreelancerId))
+            .Distinct()
             .ToList();
 
         var freelancerNames =
@@ -394,39 +410,29 @@ public sealed class EscrowsController(
                     cancellationToken
                 );
 
-        var escrows =
-            await dbContext.Escrows
-                .AsNoTracking()
-                .Where(escrow =>
-                    escrow.ProjectId == projectId &&
-                    freelancerIds.Contains(
-                        escrow.FreelancerId
-                    ))
-                .ToListAsync(cancellationToken);
-
-        var participants = assignments
-            .Select(assignment =>
+        var participants = freelancerIds
+            .Select(freelancerId =>
                 new ProjectEscrowParticipantResponse
                 {
                     FreelancerId =
-                        assignment.FreelancerId,
+                        freelancerId,
 
                     FreelancerFullName =
                         freelancerNames.GetValueOrDefault(
-                            assignment.FreelancerId,
+                            freelancerId,
                             string.Empty
                         ),
 
                     MilestoneCount =
-                        assignment.MilestoneCount,
+                        assignments.FirstOrDefault(item => item.FreelancerId == freelancerId)?.MilestoneCount ?? 0,
 
                     AssignedTotal =
-                        assignment.AssignedTotal,
+                        assignments.FirstOrDefault(item => item.FreelancerId == freelancerId)?.AssignedTotal ?? 0m,
 
                     Escrow = escrows
                         .Where(escrow =>
                             escrow.FreelancerId ==
-                            assignment.FreelancerId)
+                            freelancerId)
                         .Select(ToResponse)
                         .FirstOrDefault()
                 })
@@ -653,6 +659,11 @@ public sealed class EscrowsController(
                 escrow.TotalAmount,
             ReleasedAmount =
                 escrow.ReleasedAmount,
+            PlatformFeeBasisPoints = escrow.PlatformFeeBasisPoints,
+            TokenDecimals = escrow.TokenDecimals,
+            FeeRecipientAddress = escrow.FeeRecipientAddress,
+            PlatformFeesPaid = escrow.PlatformFeesPaid,
+            FreelancerNetPaid = escrow.ReleasedAmount - escrow.PlatformFeesPaid,
             Status = escrow.Status,
             DeploymentTransactionHash =
                 escrow.DeploymentTransactionHash,

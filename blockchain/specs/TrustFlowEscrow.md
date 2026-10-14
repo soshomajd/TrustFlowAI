@@ -92,3 +92,12 @@ Only the milestone that is next in line can have a case, and only one case is op
 ### What the arbiter can and cannot do
 
 It cannot act without an open case, before the window, on any milestone but the next, give the freelancer more than the milestone, or send funds to any address other than the client and the freelancer. A stolen arbiter key can therefore only misdirect one milestone (or, with `endEscrow`, the unreleased remainder) between the two parties of a case that one of them opened; use a multisig for it.
+
+
+## V2 platform fee (new deployments)
+
+`TrustFlowEscrowV2` retains the V1 workflow and participant permissions and adds a fixed receiving wallet and a fixed 1000 basis point fee. Existing V1 instances are non-upgradeable and remain fee-free. New V2 deployments require an explicitly supplied, nonzero fee recipient; no backend signing key is required for it.
+
+Every ordinary milestone release or case settlement first determines the gross freelancer award. The contract computes `fee = gross / 10` with integer floor rounding once per payout, transfers `gross - fee` to the freelancer and `fee` to the immutable receiving wallet. The client's refund is calculated from the gross award, never from the net payment. The 90-day fallback charges only the freelancer's half. Pre-start cancellation, a full client refund and resignation of unpaid work charge no fee. Past payments are never charged again.
+
+`releasedAmount`, `getMilestonePaid`, `MilestoneReleased` and `CaseSettled` retain their gross semantics for V1 compatibility. `getMilestoneFee`, `platformFeesPaid`, `freelancerNetPaid` and the `FreelancerPaid` event expose the fee and net transfer. Conservation is `gross awards + client refunds + remaining = total`, with `gross awards = net freelancer transfers + platform fees`. The arbiter chooses a bounded gross award and whether to end the escrow, but cannot choose a different fee destination or rate.

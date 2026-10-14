@@ -328,11 +328,10 @@ public class AppDbContext(
                 .HasConversion<string>()
                 .HasMaxLength(16);
 
-            item.Property(row => row.PaidToFreelancer)
-                .HasPrecision(18, 2);
+            item.Property(row => row.PaidToFreelancer).HasPrecision(38, 18);
+            item.Property(row => row.PlatformFeePaid).HasPrecision(38, 18);
 
-            item.Property(row => row.ReturnedToClient)
-                .HasPrecision(18, 2);
+            item.Property(row => row.ReturnedToClient).HasPrecision(38, 18);
 
             item.Property(row => row.ReviewNote)
                 .HasMaxLength(2000);
@@ -497,8 +496,9 @@ public class AppDbContext(
             escrow.Property(item => item.TotalAmount)
                 .HasPrecision(18, 2);
 
-            escrow.Property(item => item.ReleasedAmount)
-                .HasPrecision(18, 2);
+            escrow.Property(item => item.ReleasedAmount).HasPrecision(38, 18);
+            escrow.Property(item => item.PlatformFeesPaid).HasPrecision(38, 18);
+            escrow.Property(item => item.FeeRecipientAddress).HasMaxLength(42);
 
             escrow.Property(item => item.Status)
                 .HasConversion<string>()
@@ -557,14 +557,17 @@ public class AppDbContext(
             })
                 .IsUnique();
 
-            escrow.HasIndex(item =>
-                    item.ContractAddress)
+            escrow.HasIndex(item => new
+                {
+                    item.ChainId,
+                    item.ContractAddress
+                })
                 .IsUnique()
                 .HasFilter(
                     "\"ContractAddress\" IS NOT NULL"
                 )
                 .HasDatabaseName(
-                    "IX_Escrows_ContractAddress"
+                    "IX_Escrows_ChainId_ContractAddress"
                 );
 
             escrow.HasIndex(item => new
@@ -703,6 +706,8 @@ public class AppDbContext(
 
             milestone.Property(item => item.Amount)
                 .HasPrecision(18, 2);
+            milestone.Property(item => item.PaidAmount).HasPrecision(38, 18);
+            milestone.Property(item => item.PlatformFeePaid).HasPrecision(38, 18);
 
             milestone.Property(item => item.Status)
                 .HasConversion<string>();
@@ -793,7 +798,8 @@ public class AppDbContext(
                 item.ProjectId,
                 item.FreelancerId
             })
-                .IsUnique();
+                .IsUnique()
+                .HasFilter("\"Status\" IN ('Pending', 'Accepted')");
 
             proposal.HasIndex(item => new
             {

@@ -68,6 +68,8 @@ public class MilestonesController(
             Deadline = milestone.Deadline,
             Status = milestone.Status,
             PaidAmount = milestone.PaidAmount,
+            PlatformFeePaid = milestone.PlatformFeePaid,
+            FreelancerNetPaid = milestone.PaidAmount - milestone.PlatformFeePaid,
             FreelancerId = milestone.FreelancerId,
             FreelancerFullName = milestone.Freelancer?.FullName
         };
@@ -375,6 +377,8 @@ public class MilestonesController(
                 Status = milestone.Status,
 
                 PaidAmount = milestone.PaidAmount,
+            PlatformFeePaid = milestone.PlatformFeePaid,
+            FreelancerNetPaid = milestone.PaidAmount - milestone.PlatformFeePaid,
 
                 FreelancerId = milestone.FreelancerId,
 
@@ -1060,7 +1064,8 @@ public class MilestonesController(
                     .Select(escrow => new
                     {
                         escrow.ContractAddress,
-                        escrow.TokenAddress
+                        escrow.TokenAddress,
+                        escrow.PlatformFeeBasisPoints
                     })
                     .FirstOrDefault()
             })
@@ -1130,8 +1135,11 @@ public class MilestonesController(
             await chainDeployer.GetMilestoneAsync(
                 preCheck.Escrow.ContractAddress,
                 onChainIndex,
-                cancellationToken
+                cancellationToken,
+                preCheck.Escrow.PlatformFeeBasisPoints > 0
             );
+        EscrowFeePolicy.ValidatePayment(onChainMilestone, preCheck.Escrow.PlatformFeeBasisPoints);
+        var platformFeePaid = TokenAmountConverter.FromBaseUnits(onChainMilestone.PlatformFee, tokenDecimals);
 
         if (!onChainMilestone.Released)
         {
@@ -1158,7 +1166,7 @@ public class MilestonesController(
             });
         }
 
-        if (onChainMilestone.Amount != expectedBaseUnits)
+        if (onChainMilestone.Amount != expectedBaseUnits || onChainMilestone.Paid != expectedBaseUnits)
         {
             throw new InvalidOperationException(
                 $"On-chain milestone {onChainIndex} amount " +
@@ -1310,6 +1318,9 @@ public class MilestonesController(
 
                 var now = DateTimeOffset.UtcNow;
 
+                milestone.PaidAmount = milestone.Amount;
+                milestone.PlatformFeePaid = platformFeePaid;
+                escrow.PlatformFeesPaid += platformFeePaid;
                 escrow.ReleasedAmount += milestone.Amount;
                 escrow.UpdatedAt = now;
 

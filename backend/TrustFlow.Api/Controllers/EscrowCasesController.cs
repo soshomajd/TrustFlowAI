@@ -54,6 +54,7 @@ public sealed class EscrowCasesController(
                 item.Escrow.ChainId,
                 item.Escrow.ContractAddress,
                 item.Escrow.ArbiterWalletAddress,
+                item.Escrow.PlatformFeeBasisPoints,
                 MilestoneTitle = item.Milestone.Title,
                 MilestoneAmount = item.Milestone.Amount
             })
@@ -76,6 +77,9 @@ public sealed class EscrowCasesController(
             StallableAt = row.Case.OpenedAt + EscrowCaseRules.StallWindow,
             ClosedAt = row.Case.ClosedAt,
             PaidToFreelancer = row.Case.PaidToFreelancer,
+            PlatformFeePaid = row.Case.PlatformFeePaid,
+            FreelancerNetPaid = row.Case.PaidToFreelancer - row.Case.PlatformFeePaid,
+            PlatformFeeBasisPoints = row.PlatformFeeBasisPoints,
             ReturnedToClient = row.Case.ReturnedToClient,
             EscrowEnded = row.Case.EscrowEnded,
             ReviewNote = row.Case.ReviewNote,

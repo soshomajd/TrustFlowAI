@@ -431,10 +431,7 @@ if (
             EscrowState.Completed;
     }
 
-    token.safeTransfer(
-        freelancer,
-        amount
-    );
+    _payFreelancer(milestoneIndex, amount);
 
     emit MilestoneReleased(
         milestoneIndex,
@@ -720,10 +717,7 @@ function _settle(
     refundedAmount += clientAmount;
 
     if (freelancerAmount > 0) {
-        token.safeTransfer(
-            freelancer,
-            freelancerAmount
-        );
+        _payFreelancer(milestoneIndex, freelancerAmount);
     }
 
     if (clientAmount > 0) {
@@ -749,4 +743,9 @@ function _settle(
 }
 
 
+    // V1 pays the full gross award. V2 overrides only this payment hook;
+    // workflow, refund accounting and participant permissions stay shared.
+    function _payFreelancer(uint256, uint256 grossAmount) internal virtual {
+        token.safeTransfer(freelancer, grossAmount);
+    }
 }

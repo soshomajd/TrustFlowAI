@@ -8,12 +8,12 @@ export type NotificationItem = {
   message: string;
   href: string;
   projectTitle: string;
+  canMarkRead: boolean;
 };
 
 export type NotificationsResponse = {
   items: NotificationItem[];
 
-  // Counts only action and warning items, so the badge means "waiting on
-  // you" rather than "unread".
+  // Actions/warnings plus unread durable notices waiting to be seen.
   actionCount: number;
 };

@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useNotifications } from "@/features/notifications/hooks/use-notifications";
+import { useMarkNotificationRead } from "@/features/notifications/hooks/use-mark-notification-read";
 import type {
   NotificationItem,
   NotificationSeverity,
@@ -85,7 +86,7 @@ export function NotificationBell() {
         className="w-[min(22rem,calc(100vw-2rem))] p-0"
       >
         <div className="flex items-center justify-between border-b px-3 py-2.5">
-          <p className="text-sm font-semibold">What needs you</p>
+          <p className="text-sm font-semibold">Notifications</p>
 
           {notificationsQuery.isFetching && (
             <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
@@ -151,12 +152,16 @@ function NotificationRow({
 }) {
   const style = severityStyles[item.severity] ?? severityStyles.info;
   const Icon = style.icon;
+  const markRead = useMarkNotificationRead();
 
   return (
     <li>
       <Link
         href={item.href}
-        onClick={onNavigate}
+        onNavigate={() => {
+          if (item.canMarkRead) markRead.mutate(item.id);
+          onNavigate();
+        }}
         className="flex gap-2.5 px-3 py-3 transition hover:bg-muted/60"
       >
         <Icon className={cn("mt-0.5 size-4 shrink-0", style.text)} />
@@ -174,6 +179,21 @@ function NotificationRow({
           </p>
         </div>
       </Link>
+
+      {item.canMarkRead && (
+        <div className="px-3 pb-3 pl-9.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={markRead.isPending}
+            onClick={() => markRead.mutate(item.id)}
+            aria-label={`Mark as read: ${item.title}, ${item.projectTitle}`}
+          >
+            {markRead.isPending ? "Saving…" : "Mark as read"}
+          </Button>
+        </div>
+      )}
     </li>
   );
 }

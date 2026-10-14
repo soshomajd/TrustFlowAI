@@ -2,10 +2,11 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getConversation } from "@/features/chat/api/chat-api";
+import { getConversation, getConversationPage } from "@/features/chat/api/chat-api";
 import { chatQueryKeys } from "@/features/chat/queries/chat-query-keys";
 import type { ChatConversation } from "@/features/chat/types/chat";
 import { isValidGuid } from "@/lib/validation/is-valid-guid";
+import { mergeMessages } from "@/features/chat/lib/merge-messages";
 
 // Opens with the latest messages, then asks only for what is newer than the
 // last one it has and adds that to the list. Opening a conversation marks it
@@ -19,27 +20,23 @@ export function useConversation(projectId: string, freelancerId: string) {
 
     queryFn: async ({ signal }) => {
       const previous = queryClient.getQueryData<ChatConversation>(key);
-      const last = previous?.messages.at(-1)?.sentAt;
+      const last = previous?.pollAfterMessageId;
 
-      const fresh = await getConversation(
-        projectId,
-        freelancerId,
-        last,
-        signal,
-      );
+      const fresh = last
+        ? await getConversationPage(projectId, freelancerId, { afterMessageId: last }, signal)
+        : await getConversation(projectId, freelancerId, undefined, signal);
 
       if (!previous || !last) {
-        return fresh;
+        return { ...fresh, pollAfterMessageId: fresh.messages.at(-1)?.id };
       }
 
-      const known = new Set(previous.messages.map((message) => message.id));
-
+      // Older history may finish loading while this poll is in flight.
+      const current = queryClient.getQueryData<ChatConversation>(key) ?? previous;
       return {
         ...fresh,
-        messages: [
-          ...previous.messages,
-          ...fresh.messages.filter((message) => !known.has(message.id)),
-        ],
+        hasOlderMessages: current.hasOlderMessages,
+        pollAfterMessageId: fresh.messages.at(-1)?.id ?? last,
+        messages: mergeMessages(current.messages, fresh.messages),
       };
     },
 

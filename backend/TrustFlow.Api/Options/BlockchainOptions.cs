@@ -17,5 +17,8 @@ namespace TrustFlow.Api.Options
         // freelancer, fixed into each escrow when it is deployed. It should
         // belong to a multisig or a person, never to this server.
         public string ArbiterAddress { get; set; } = string.Empty;
+
+        // Public receiving address only. No signing key belongs on this server.
+        public string FeeRecipientAddress { get; set; } = string.Empty;
     }
 }

@@ -450,6 +450,18 @@ public sealed class MilestoneWorkflowTests
             "Approved"
         );
 
+        using (var feeRequest = CreateAuthorizedRequest(HttpMethod.Get, $"/api/projects/{projectId}/escrows", clientToken))
+        {
+            var feeResponse = await _client.SendAsync(feeRequest);
+            feeResponse.EnsureSuccessStatusCode();
+            var feeRows = await feeResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var feeEscrow = feeRows.EnumerateArray().Single().GetProperty("escrow");
+            var gross = feeEscrow.GetProperty("releasedAmount").GetDecimal();
+            Assert.Equal(1000, feeEscrow.GetProperty("platformFeeBasisPoints").GetInt32());
+            Assert.Equal(gross / 10m, feeEscrow.GetProperty("platformFeesPaid").GetDecimal());
+            Assert.Equal(gross * 0.9m, feeEscrow.GetProperty("freelancerNetPaid").GetDecimal());
+        }
+
         await AssertProjectCompletedAsync(
             projectId,
             clientToken

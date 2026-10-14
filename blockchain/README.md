@@ -1,57 +1,44 @@
-# Sample Hardhat 3 Project (`node:test` and `viem`)
+# TrustFlow escrow contracts
 
-This project showcases a Hardhat 3 project using the native Node.js test runner (`node:test`) and the `viem` library for Ethereum interactions.
+Hardhat 3 with viem. Each freelancer on a project has one non-upgradeable escrow with fixed participants, token and milestone amounts. The contract owns payment truth; user wallets fund, start, release and cancel. The backend deployment account does not sign for either participant.
 
-To learn more about Hardhat 3, please visit the [Getting Started guide](https://hardhat.org/docs/getting-started#getting-started-with-hardhat-3). To share your feedback, join our [Hardhat 3](https://hardhat.org/hardhat3-telegram-group) Telegram group or [open an issue](https://github.com/NomicFoundation/hardhat/issues/new) in our GitHub issue tracker.
+## Build and test
 
-## Project Overview
+From this directory:
 
-This example project includes:
-
-- A simple Hardhat configuration file.
-- Foundry-compatible Solidity unit tests.
-- TypeScript integration tests using [`node:test`](nodejs.org/api/test.html), the new Node.js native test runner, and [`viem`](https://viem.sh/).
-- Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
-
-## Usage
-
-### Running Tests
-
-To run all the tests in the project, execute the following command:
-
-```shell
-npx hardhat test
-```
-
-You can also selectively run the Solidity or `node:test` tests:
-
-```shell
-npx hardhat test solidity
+```bash
+npm ci
+npx hardhat compile
 npx hardhat test nodejs
+npx tsc --noEmit
 ```
 
-### Make a deployment to Sepolia
+`TrustFlowEscrow` preserves V1 behavior. New application escrows use `TrustFlowEscrowV2`, which automatically takes `floor(gross / 10)` in integer token base units from each freelancer award. Client refunds have no fee. The rate and receiving wallet cannot be changed after deployment. See [the contract specification](specs/TrustFlowEscrow.md).
 
-This project includes an example Ignition module to deploy the contract. You can deploy this module to a locally simulated chain or to Sepolia.
+## Local development
 
-To run the deployment to a local chain:
+Start the disposable local network in one terminal:
 
-```shell
-npx hardhat ignition deploy ignition/modules/Counter.ts
+```bash
+npx hardhat node
 ```
 
-To run the deployment to Sepolia, you need an account with funds to send the transaction. The provided Hardhat configuration includes a Configuration Variable called `SEPOLIA_PRIVATE_KEY`, which you can use to set the private key of the account you want to use.
+In another terminal, deploy the test token with a new local deployment ID:
 
-You can set the `SEPOLIA_PRIVATE_KEY` variable using the `hardhat-keystore` plugin or by setting it as an environment variable.
-
-To set the `SEPOLIA_PRIVATE_KEY` config variable using `hardhat-keystore`:
-
-```shell
-npx hardhat keystore set SEPOLIA_PRIVATE_KEY
+```bash
+npx hardhat ignition deploy ignition/modules/MockUSDCModule.ts --network localhost --deployment-id local-demo-unique
 ```
 
-After setting the variable, you can run the deployment with the Sepolia network:
+RPC: `http://127.0.0.1:8545`; chain ID: `31337`. MockUSDC has 6 decimals and is only for local/test use. The API normally deploys an escrow after the client creates its metadata in the app. Its public arbiter and fee recipient settings must be configured first. The explicit V2 Ignition module requires token, client, freelancer, arbiter, milestone base-unit amounts and fee recipient parameters; it supplies no participant defaults.
 
-```shell
-npx hardhat ignition deploy --network sepolia ignition/modules/Counter.ts
+A node restart removes contracts, balances and transaction receipts, while PostgreSQL keeps old escrow records. Restore MockUSDC, then use a fresh project for a new walkthrough. Keep old financial records intact. Local deployment journals are disposable and ignored for new `local-*` deployments.
+
+## Read an escrow
+
+```bash
+node scripts/readLocalEscrow.mjs <escrow-address>
 ```
+
+The address is required; there is no stale sample contract default. Set `TRUSTFLOW_RPC_URL` to change the read-only RPC, or `TRUSTFLOW_ESCROW_ADDRESS` instead of the argument. The script reads token decimals on-chain and reports gross awarded amounts. It refuses an address without bytecode.
+
+Public deployment is deferred until the project is complete. The separate [Sepolia guide](../docs/SEPOLIA_TESTNET.md) is a future checklist, not evidence of a public deployment.

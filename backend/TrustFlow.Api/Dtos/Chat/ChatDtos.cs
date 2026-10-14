@@ -55,6 +55,8 @@ public sealed class ChatConversationResponse
     public string? CannotSendReason { get; init; }
 
     public IReadOnlyList<ChatMessageResponse> Messages { get; init; } = [];
+
+    public bool HasOlderMessages { get; init; }
 }
 
 public sealed class ChatInboxItemResponse

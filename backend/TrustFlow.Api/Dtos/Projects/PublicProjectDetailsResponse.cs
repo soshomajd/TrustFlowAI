@@ -13,6 +13,7 @@ public class PublicProjectDetailsResponse
     public string Description { get; set; } = string.Empty;
     public decimal Budget { get; set; }
     public decimal AllocatedAmount { get; set; }
+    public decimal AvailableAmount { get; set; }
     public DateTimeOffset Deadline { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public ProjectStatus Status { get; set; }

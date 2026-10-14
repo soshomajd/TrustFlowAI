@@ -5,6 +5,7 @@ export type ClientProject = {
 
   freelancerId: string | null;
   freelancerFullName: string | null;
+  assignedFreelancers: { id: string; fullName: string }[];
 
   title: string;
   description: string;
@@ -64,6 +65,7 @@ export type AssignedProject = {
   // Budget describes the whole project; this is the total of the stages
   // this freelancer holds, which is what they are paid.
   myTotalAmount: number;
+  isHistorical: boolean;
 };
 
 export type GetAssignedProjectsParams = {

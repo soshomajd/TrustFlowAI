@@ -10,6 +10,7 @@ import { escrowAbi } from "@/features/escrow/lib/escrow-abi";
 import { escrowQueryKeys } from "@/features/escrow/queries/escrow-query-keys";
 import type { ProjectEscrow } from "@/features/escrow/types/escrow";
 import { milestoneQueryKeys } from "@/features/milestones/queries/milestone-query-keys";
+import { notificationQueryKeys } from "@/features/notifications/queries/notification-query-keys";
 import { projectQueryKeys } from "@/features/projects/queries/project-query-keys";
 import { proposalQueryKeys } from "@/features/proposals/queries/proposal-query-keys";
 import { getWalletErrorMessage } from "@/lib/wallet/get-wallet-error-message";
@@ -34,12 +35,20 @@ export function useCancelEscrow(projectId: string, freelancerId: string) {
         chainId: escrow.chainId,
       });
 
-      await waitForTransactionReceipt(wagmiConfig, {
+      const receipt = await waitForTransactionReceipt(wagmiConfig, {
         hash,
         chainId: escrow.chainId,
       });
 
-      return syncEscrow(normalizedProjectId, freelancerId);
+      if (receipt.status !== "success") {
+        throw new Error("The cancellation transaction failed. The escrow was not cancelled.");
+      }
+
+      const synced = await syncEscrow(normalizedProjectId, freelancerId);
+      if (synced.status !== "Cancelled") {
+        throw new Error("Cancellation is not yet confirmed by the API. Refresh the escrow status before trying again.");
+      }
+      return synced;
     },
 
     onSuccess: async () => {
@@ -70,10 +79,11 @@ export function useCancelEscrow(projectId: string, freelancerId: string) {
         queryClient.invalidateQueries({
           queryKey: projectQueryKeys.clientDashboardSummary(),
         }),
+        queryClient.invalidateQueries({ queryKey: notificationQueryKeys.all }),
       ]);
 
       toast.success(
-        "Escrow cancelled and refunded. Those stages are open for hire again.",
+        "Escrow cancelled. The freelancer has a notification, and those stages are open for hire again.",
       );
     },
 

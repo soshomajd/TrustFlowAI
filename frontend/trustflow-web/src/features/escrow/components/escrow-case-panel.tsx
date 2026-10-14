@@ -1,5 +1,7 @@
 "use client";
 
+import { formatTokenPayment } from "@/features/escrow/lib/platform-fee";
+
 import { Gavel, LoaderCircle } from "lucide-react";
 
 import {
@@ -363,7 +365,7 @@ function SettledCaseCard({ item }: { item: EscrowCase }) {
       </span>
 
       <p className="leading-6 text-muted-foreground">
-        The freelancer received {formatAmount(item.paidToFreelancer ?? 0)} and{" "}
+        The freelancer received {formatTokenPayment(item.freelancerNetPaid ?? item.paidToFreelancer ?? 0)} and{" "}
         {formatAmount(item.returnedToClient ?? 0)} went back to the client.
         {item.escrowEnded
           ? " The escrow was ended and the later milestones went back to the client."

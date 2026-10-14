@@ -1,6 +1,6 @@
 namespace TrustFlow.Api.Dtos.Escrows;
 
-// One row per freelancer who holds milestones on the project. The row exists
+// One row per current assignee or historical escrow owner. The row exists
 // as soon as milestones are assigned, with a null escrow until the client
 // creates one, so the client workspace can show what still needs setting up.
 public sealed class ProjectEscrowParticipantResponse

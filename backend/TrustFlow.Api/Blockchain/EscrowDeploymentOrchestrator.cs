@@ -218,6 +218,12 @@ public sealed class EscrowDeploymentOrchestrator(
         Escrow escrow,
         CancellationToken cancellationToken)
     {
+        if (escrow.PlatformFeeBasisPoints is not (0 or EscrowFeePolicy.BasisPoints) ||
+            (escrow.PlatformFeeBasisPoints == 0) != (escrow.FeeRecipientAddress is null))
+        {
+            throw new InvalidOperationException("Invalid immutable escrow fee policy snapshot.");
+        }
+
         // The contract pays one immutable address, so this escrow carries
         // only the milestones assigned to its own freelancer, in their own
         // sequence order.
@@ -266,7 +272,9 @@ public sealed class EscrowDeploymentOrchestrator(
             // after the setting changed still matches the contract.
             escrow.ArbiterWalletAddress ??
                 blockchainOptions.Value.ArbiterAddress,
-            baseUnitAmounts
+            baseUnitAmounts,
+            escrow.FeeRecipientAddress,
+            tokenDecimals
         );
     }
 
@@ -289,6 +297,14 @@ public sealed class EscrowDeploymentOrchestrator(
             result.ContractAddress,
             cancellationToken
         );
+
+        if (escrow.PlatformFeeBasisPoints > 0)
+        {
+            var feePolicy = await deployer.GetFeePolicyAsync(result.ContractAddress, cancellationToken);
+            if (feePolicy.BasisPoints != escrow.PlatformFeeBasisPoints ||
+                !string.Equals(feePolicy.Recipient, escrow.FeeRecipientAddress, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Deployed escrow fee policy does not match its immutable snapshot.");
+        }
 
         var expectedTotal = request.MilestoneAmounts.Aggregate(
             (left, right) => left + right
@@ -330,6 +346,10 @@ public sealed class EscrowDeploymentOrchestrator(
                     .SetProperty(
                         item => item.ContractAddress,
                         result.ContractAddress
+                    )
+                    .SetProperty(
+                        item => item.TokenDecimals,
+                        request.TokenDecimals
                     )
                     .SetProperty(
                         item => item.DeployedAt,

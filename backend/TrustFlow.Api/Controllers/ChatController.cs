@@ -115,6 +115,8 @@ public sealed class ChatController(
         Guid projectId,
         Guid freelancerId,
         [FromQuery] DateTimeOffset? after,
+        [FromQuery] Guid? afterMessageId,
+        [FromQuery] Guid? beforeMessageId,
         CancellationToken cancellationToken)
     {
         if (!TryGetUserId(out var userId))
@@ -130,7 +132,15 @@ public sealed class ChatController(
             return NotFound(new { message = "This conversation does not exist." });
         }
 
+        if ((beforeMessageId is not null && (after is not null || afterMessageId is not null)) ||
+            (after is not null && afterMessageId is not null))
+            return BadRequest(new { message = "Choose one message cursor." });
+
         var messages = new List<ChatMessageResponse>();
+        var hasOlderMessages = false;
+
+        if (access.ThreadId is null && (beforeMessageId is not null || afterMessageId is not null))
+            return NotFound(new { message = "This message is not in this conversation." });
 
         if (access.ThreadId is Guid threadId)
         {
@@ -138,31 +148,41 @@ public sealed class ChatController(
                 .AsNoTracking()
                 .Where(message => message.ThreadId == threadId);
 
-            // A poll asks only for what arrived since the last message it
-            // already has, so a quiet conversation costs almost nothing.
-            if (after is { } since)
+            var cursorId = beforeMessageId ?? afterMessageId;
+            if (cursorId is Guid id)
             {
+                var cursor = await query.FirstOrDefaultAsync(message => message.Id == id, cancellationToken);
+                if (cursor is null)
+                    return NotFound(new { message = "This message is not in this conversation." });
+                query = beforeMessageId is not null
+                    ? query.Where(message => message.SentAt < cursor.SentAt ||
+                        (message.SentAt == cursor.SentAt && message.Id.CompareTo(cursor.Id) < 0))
+                    : query.Where(message => message.SentAt > cursor.SentAt ||
+                        (message.SentAt == cursor.SentAt && message.Id.CompareTo(cursor.Id) > 0));
+            }
+            else if (after is { } since)
                 query = query.Where(message => message.SentAt > since);
 
-                messages = (await query
-                        .OrderBy(message => message.SentAt)
-                        .Take(ChatLimits.OpeningPage)
-                        .ToListAsync(cancellationToken))
-                    .Select(message => ToResponse(message, userId))
-                    .ToList();
+            var polling = after is not null || afterMessageId is not null;
+            if (polling)
+            {
+                messages = (await query.OrderBy(message => message.SentAt).ThenBy(message => message.Id)
+                        .Take(ChatLimits.OpeningPage).ToListAsync(cancellationToken))
+                    .Select(message => ToResponse(message, userId)).ToList();
             }
             else
             {
-                messages = (await query
-                        .OrderByDescending(message => message.SentAt)
-                        .Take(ChatLimits.OpeningPage)
-                        .ToListAsync(cancellationToken))
-                    .OrderBy(message => message.SentAt)
-                    .Select(message => ToResponse(message, userId))
-                    .ToList();
+                var page = await query.OrderByDescending(message => message.SentAt)
+                    .ThenByDescending(message => message.Id).Take(ChatLimits.OpeningPage + 1)
+                    .ToListAsync(cancellationToken);
+                hasOlderMessages = page.Count > ChatLimits.OpeningPage;
+                messages = page.Take(ChatLimits.OpeningPage).Reverse()
+                    .Select(message => ToResponse(message, userId)).ToList();
             }
 
-            await MarkReadAsync(threadId, access.ViewerIsClient, cancellationToken);
+            // Reading older history must not mark newly arriving messages read.
+            if (beforeMessageId is null)
+                await MarkReadAsync(threadId, access.ViewerIsClient, cancellationToken);
         }
 
         return Ok(new ChatConversationResponse
@@ -173,7 +193,8 @@ public sealed class ChatController(
             Counterpart = access.Counterpart,
             CanSend = access.CannotSendReason is null,
             CannotSendReason = access.CannotSendReason,
-            Messages = messages
+            Messages = messages,
+            HasOlderMessages = hasOlderMessages
         });
     }
 

@@ -37,6 +37,9 @@ public sealed class EscrowChainSyncOrchestrator(
             return false;
         }
 
+        if (await deployer.GetChainIdAsync(cancellationToken) != escrow.ChainId)
+            throw new InvalidOperationException("Escrow belongs to a different chain than the connected RPC.");
+
         var snapshot = await deployer.GetEscrowSnapshotAsync(
             escrow.ContractAddress,
             cancellationToken
@@ -84,6 +87,16 @@ public sealed class EscrowChainSyncOrchestrator(
             );
         }
 
+        if (escrow.PlatformFeeBasisPoints > 0)
+        {
+            var policy = await deployer.GetFeePolicyAsync(escrow.ContractAddress, cancellationToken);
+            if (policy.BasisPoints != escrow.PlatformFeeBasisPoints ||
+                !string.Equals(policy.Recipient, escrow.FeeRecipientAddress, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("On-chain escrow fee policy differs from the stored snapshot.");
+        }
+
+        var traced = await SyncLifecycleEventsAsync(escrow, snapshot, cancellationToken);
+
         switch (snapshot.State)
         {
             case OnChainEscrowState.AwaitingFunding:
@@ -103,25 +116,27 @@ public sealed class EscrowChainSyncOrchestrator(
                     cancellationToken
                 );
 
-                return funded || progressed;
+                return funded || progressed || traced;
             }
 
             case OnChainEscrowState.Cancelled:
-                return await SyncCancelledAsync(
+                var cancelled = await SyncCancelledAsync(
                     escrowId,
                     escrow.ProjectId,
                     escrow.FreelancerId,
                     cancellationToken
                 );
+                return cancelled || traced;
 
             case OnChainEscrowState.Completed:
             case OnChainEscrowState.Terminated:
-                return await SyncProgressAsync(
+                var terminalProgress = await SyncProgressAsync(
                     escrow,
                     snapshot,
                     tokenDecimals,
                     cancellationToken
                 );
+                return terminalProgress || traced;
 
             default:
                 throw new InvalidOperationException(
@@ -129,6 +144,51 @@ public sealed class EscrowChainSyncOrchestrator(
                     $"{snapshot.State}."
                 );
         }
+    }
+
+    private async Task<bool> SyncLifecycleEventsAsync(
+        Escrow escrow,
+        OnChainEscrowSnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        if (snapshot.State == OnChainEscrowState.AwaitingFunding)
+            return false;
+
+        var needsFunding = escrow.FundingTransactionHash is null &&
+            !(snapshot.State == OnChainEscrowState.Cancelled && snapshot.RefundedAmount == 0 &&
+              escrow.CancellationTransactionHash is not null);
+        var needsCancellation = snapshot.State == OnChainEscrowState.Cancelled &&
+            escrow.CancellationTransactionHash is null;
+        if (!needsFunding && !needsCancellation) return false;
+        if (string.IsNullOrWhiteSpace(escrow.DeploymentTransactionHash))
+            throw new InvalidOperationException("Escrow has no deployment transaction to trace.");
+
+        var events = await deployer.GetLifecycleEventsAsync(
+            escrow.ContractAddress!, escrow.DeploymentTransactionHash,
+            needsFunding, needsCancellation, cancellationToken);
+        if (events.Funding is { } funding &&
+            (funding.Amount != snapshot.TotalAmount ||
+             !string.Equals(funding.Client, escrow.ClientWalletAddress, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("Funding event does not match the escrow amount and client.");
+        if (needsFunding && events.Funding is null &&
+            (snapshot.State != OnChainEscrowState.Cancelled || snapshot.RefundedAmount > 0))
+            throw new InvalidOperationException("Funded escrow has no matching funding event.");
+        if (needsCancellation && (events.Cancellation is null ||
+            events.Cancellation.RefundedAmount != snapshot.RefundedAmount))
+            throw new InvalidOperationException("Cancelled escrow has no matching refund event.");
+
+        var changed = 0;
+        if (needsFunding && events.Funding is not null)
+            changed += await dbContext.Escrows
+                .Where(item => item.Id == escrow.Id && item.FundingTransactionHash == null)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(item => item.FundingTransactionHash, events.Funding.TransactionHash), cancellationToken);
+        if (needsCancellation && events.Cancellation is not null)
+            changed += await dbContext.Escrows
+                .Where(item => item.Id == escrow.Id && item.CancellationTransactionHash == null)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(item => item.CancellationTransactionHash, events.Cancellation.TransactionHash), cancellationToken);
+        return changed > 0;
     }
 
     private async Task<bool> SyncFundedAsync(
@@ -306,8 +366,10 @@ public sealed class EscrowChainSyncOrchestrator(
             var onChain = await deployer.GetMilestoneAsync(
                 escrow.ContractAddress!,
                 index,
-                cancellationToken
+                cancellationToken,
+                escrow.PlatformFeeBasisPoints > 0
             );
+            EscrowFeePolicy.ValidatePayment(onChain, escrow.PlatformFeeBasisPoints);
 
             // A release by the client is finished by the client's own
             // approval. Only a settlement is the arbiter's to report.
@@ -368,6 +430,7 @@ public sealed class EscrowChainSyncOrchestrator(
             tokenDecimals
         );
 
+        var fee = TokenAmountConverter.FromBaseUnits(onChain.PlatformFee, tokenDecimals);
         var paid = TokenAmountConverter.FromBaseUnits(
             onChain.Paid,
             tokenDecimals
@@ -399,7 +462,8 @@ public sealed class EscrowChainSyncOrchestrator(
                         MileStoneStatus.Settled)
                     .SetProperty(
                         item => item.PaidAmount,
-                        (decimal?)paid),
+                        (decimal?)paid)
+                    .SetProperty(item => item.PlatformFeePaid, fee),
                 cancellationToken
             );
 
@@ -416,6 +480,7 @@ public sealed class EscrowChainSyncOrchestrator(
                     .SetProperty(
                         item => item.ReleasedAmount,
                         item => item.ReleasedAmount + paid)
+                    .SetProperty(item => item.PlatformFeesPaid, item => item.PlatformFeesPaid + fee)
                     .SetProperty(
                         item => item.UpdatedAt,
                         now),
@@ -438,6 +503,7 @@ public sealed class EscrowChainSyncOrchestrator(
                     .SetProperty(
                         item => item.PaidToFreelancer,
                         (decimal?)paid)
+                    .SetProperty(item => item.PlatformFeePaid, fee)
                     .SetProperty(
                         item => item.ReturnedToClient,
                         (decimal?)(amount - paid))

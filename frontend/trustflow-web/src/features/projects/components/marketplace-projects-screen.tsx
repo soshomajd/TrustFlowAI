@@ -687,8 +687,7 @@ function MarketplaceProjectCard({
     const remainingBudget =
         Math.max(
             0,
-            project.budget -
-            project.allocatedAmount,
+            project.availableAmount,
         );
 
     return (

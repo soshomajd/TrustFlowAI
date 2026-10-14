@@ -1,36 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TrustFlow web client
 
-## Getting Started
+Next.js 16 App Router frontend for the TrustFlow REST API. The backend enforces identity and marketplace permissions; contracts determine escrow funds. Wallet transactions stay user-signed.
 
-First, run the development server:
+## Local setup
+
+Start PostgreSQL, ClamAV, the API and the local Hardhat network first. Deploy MockUSDC on a fresh node. From this directory:
 
 ```bash
+npm ci
+cp .env.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Use `http://localhost:3000` consistently with the API at `http://localhost:5114/api`; the refresh-cookie and CORS settings depend on the origin. Access tokens stay in memory; the backend uses a credentialed refresh cookie. Do not add tokens or private keys to browser storage or public environment variables.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`.env.example` documents the local chain, token and site values. Every `NEXT_PUBLIC_*` value is public. Backend wallet secrets never belong here. Use a desktop browser with MetaMask or another supported injected wallet extension. Keep Client and Freelancer sessions in separate browser profiles for a two-role walkthrough.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Verification
 
-## Learn More
+```bash
+npm run lint
+npx tsc --noEmit --incremental false
+npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
+The Client and Freelancer **How to get started** pages describe the current product flow. New escrows take a fixed 10% fee from gross freelancer awards; refunds remain fee-free, and V1 escrows retain their original terms. Past escrows remain visible after cancellation or resignation. Chat is plain text, project-scoped, and has a Load older messages action. Contact information is rejected by the API; files use the delivery flow.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+A Hardhat restart removes on-chain deployments but leaves database history. Use a fresh project after restoring the test token; do not assume an old database address still contains a contract. Public deployment is currently deferred. See [project state](../../docs/PROJECT_STATE.md) for completed checks and remaining acceptance work.

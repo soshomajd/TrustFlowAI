@@ -53,6 +53,7 @@ public sealed class EscrowCase
     public DateTimeOffset? ClosedAt { get; set; }
 
     public decimal? PaidToFreelancer { get; set; }
+    public decimal PlatformFeePaid { get; set; }
 
     public decimal? ReturnedToClient { get; set; }
 

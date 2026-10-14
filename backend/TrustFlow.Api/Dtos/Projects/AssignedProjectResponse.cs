@@ -17,6 +17,7 @@ public class AssignedProjectResponse
     // only the stages this freelancer holds, which is what they are paid and
     // what they have to deliver.
     public decimal MyTotalAmount { get; set; }
+    public bool IsHistorical { get; set; }
     public int MilestoneCount { get; set; }
     public int RejectedMilestoneCount { get; set; }
     public DateTimeOffset Deadline { get; set; }

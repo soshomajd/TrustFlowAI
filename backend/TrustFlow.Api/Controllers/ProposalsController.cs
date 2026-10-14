@@ -167,7 +167,9 @@ public class ProposalsController(AppDbContext dbContext)
                         proposal =>
                             proposal.ProjectId == projectId &&
                             proposal.FreelancerId ==
-                                freelancerId,
+                                freelancerId &&
+                            (proposal.Status == ProposalStatus.Pending ||
+                             proposal.Status == ProposalStatus.Accepted),
                         cancellationToken
                     );
 
@@ -176,9 +178,20 @@ public class ProposalsController(AppDbContext dbContext)
                     return Conflict(new
                     {
                         message =
-                            "You have already submitted a proposal for this project."
+                            "You already have a pending or accepted proposal for this project."
                     });
                 }
+
+                // An immutable escrow already reserves this participant pair.
+                // Reapplying after a refusal/withdrawal is safe only before
+                // any contract record exists, including a cancelled one.
+                if (await dbContext.Escrows.AsNoTracking().AnyAsync(
+                    escrow => escrow.ProjectId == projectId &&
+                        escrow.FreelancerId == freelancerId, cancellationToken))
+                    return Conflict(new
+                    {
+                        message = "You already have an escrow for this project. Your existing contract history cannot be replaced by a new proposal."
+                    });
 
                 var requestedMilestoneIds = request.MilestoneIds
                     .Distinct()
