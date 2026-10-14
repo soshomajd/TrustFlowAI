@@ -19,6 +19,16 @@ export const metadata: Metadata = {
     template: `%s | ${site.name}`,
   },
   description: site.description,
+  icons: {
+    icon: [
+      {
+        url: "/trustflow-ai-favicon-32.png",
+        sizes: "32x32",
+        type: "image/png",
+      },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+  },
   openGraph: {
     type: "website",
     siteName: site.name,

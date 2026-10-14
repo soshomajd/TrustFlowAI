@@ -9,6 +9,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { FooterLogo } from "@/components/brand/brand-logo";
 import { EscrowPreview } from "@/features/landing/components/escrow-preview";
 import { LandingHeader } from "@/features/landing/components/landing-header";
 import { Reveal } from "@/features/landing/components/reveal";
@@ -773,7 +774,7 @@ function Footer() {
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 text-sm text-muted-foreground sm:flex-row sm:px-6">
         <div className="space-y-1">
           <p className="flex items-center gap-2">
-            <ShieldCheck className="size-4 text-electric" aria-hidden="true" />
+            <FooterLogo />
             TrustFlow AI. Milestone escrow for freelance work.
           </p>
 

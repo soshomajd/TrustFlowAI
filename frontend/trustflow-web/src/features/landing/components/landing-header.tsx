@@ -1,9 +1,10 @@
 "use client";
 
-import { Menu, ShieldCheck, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { HeaderLogo } from "@/components/brand/brand-logo";
 import { navLinks } from "@/features/landing/content";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -35,12 +36,7 @@ export function LandingHeader() {
           href="/"
           className="flex min-h-11 items-center gap-2.5 rounded-lg font-semibold tracking-tight outline-none focus-visible:ring-3 focus-visible:ring-ring/60"
         >
-          <span
-            aria-hidden="true"
-            className="flex size-9 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-electric"
-          >
-            <ShieldCheck className="size-5" />
-          </span>
+          <HeaderLogo />
           TrustFlow AI
         </Link>
 
