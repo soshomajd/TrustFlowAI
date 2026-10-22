@@ -58,6 +58,52 @@ public class ProposalsController(AppDbContext dbContext)
         return false;
     }
     [Authorize(Roles = AppRoles.Freelancer)]
+    [HttpGet("eligibility")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> GetProposalEligibility(
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var freelancerId))
+            return Unauthorized();
+
+        // Scope participant history to the authenticated freelancer, never a caller-supplied ID.
+        var project = await dbContext.Projects.AsNoTracking()
+            .Where(project => project.Id == projectId)
+            .Select(project => new
+            {
+                project.Status,
+                project.Budget,
+                HasMilestones = project.Milestones.Any(),
+                HasAvailableMilestones = project.Milestones.Any(stage => stage.FreelancerId == null),
+                AllocatedAmount = project.Milestones.Sum(stage => (decimal?)stage.Amount) ?? 0m,
+                HasEscrow = project.Escrows.Any(escrow => escrow.FreelancerId == freelancerId),
+                HasActiveProposal = project.Proposals.Any(proposal =>
+                    proposal.FreelancerId == freelancerId &&
+                    (proposal.Status == ProposalStatus.Pending || proposal.Status == ProposalStatus.Accepted))
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (project is null)
+            return NotFound(new { message = "Project not found." });
+
+        if (project.HasEscrow)
+            return Ok(new ProposalEligibilityResponse(false, "ExistingEscrow",
+                "You already have an escrow for this project, even if it was cancelled or ended. You cannot send another proposal. View your contract history in Assigned projects."));
+
+        if (project.HasActiveProposal)
+            return Ok(new ProposalEligibilityResponse(false, "ActiveProposal",
+                "You already have a pending or accepted proposal for this project. Check My proposals."));
+
+        if ((project.Status != ProjectStatus.Open && project.Status != ProjectStatus.InProgress) ||
+            !project.HasMilestones || project.AllocatedAmount != project.Budget || !project.HasAvailableMilestones)
+            return Ok(new ProposalEligibilityResponse(false, "NotHiring",
+                "This project is not accepting proposals for available milestones."));
+
+        return Ok(new ProposalEligibilityResponse(true, null, null));
+    }
+
+    [Authorize(Roles = AppRoles.Freelancer)]
     [HttpPost]
     public async Task<IActionResult> CreateProposal(
      Guid projectId,

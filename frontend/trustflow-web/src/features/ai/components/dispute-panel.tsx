@@ -1,4 +1,5 @@
 "use client";
+import { formatMoney, moneyText } from "@/lib/money/exact-money";
 
 import {
   CheckCircle2,
@@ -581,12 +582,12 @@ function RulingView({
         <div className="mt-2 flex justify-between gap-3 text-xs">
           <span>
             Freelancer {ruling.freelancerSharePercent}% ·{" "}
-            {ruling.freelancerAmount.toFixed(2)}
+            {formatMoney(moneyText(ruling, "freelancerAmount"))}
           </span>
 
           <span>
             Client {ruling.clientSharePercent}% ·{" "}
-            {ruling.clientAmount.toFixed(2)}
+            {formatMoney(moneyText(ruling, "clientAmount"))}
           </span>
         </div>
       </div>

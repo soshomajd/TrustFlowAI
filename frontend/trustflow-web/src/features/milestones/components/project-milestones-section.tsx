@@ -1,4 +1,6 @@
 "use client";
+import { sumMoney, subtractMoney, moneyUnits } from "@/lib/money/exact-money";
+import { formatMoney as formatAmount, moneyText } from "@/lib/money/exact-money";
 
 import {
     CalendarDays,
@@ -35,7 +37,7 @@ import { MilestoneSubmissionsPanel } from
 
 type ProjectMilestonesSectionProps = {
     projectId: string;
-    projectBudget: number;
+    projectBudget: number | string;
     projectDeadline: string;
     projectStatus: ProjectStatus;
     hasProposals: boolean;
@@ -87,20 +89,11 @@ export function ProjectMilestonesSection({
     const milestones =
         milestonesQuery.data ?? [];
     const allocatedAmount =
-        milestones.reduce(
-            (total, milestone) =>
-                total + milestone.amount,
-            0,
-        );
+        sumMoney(milestones.map((milestone) => moneyText(milestone, "amount")));
 
     const remainingBudget =
-        roundCurrency(
-            Math.max(
-                0,
-                projectBudget -
-                allocatedAmount,
-            ),
-        );
+        moneyUnits(projectBudget) > moneyUnits(allocatedAmount)
+            ? subtractMoney(projectBudget, allocatedAmount) : "0";
     const existingSequenceNumbers =
         milestones.map(
             (milestone) =>
@@ -279,7 +272,7 @@ function MilestoneCard({
     projectStatus: ProjectStatus;
     hasProposals: boolean;
     projectDeadline: string;
-    remainingBudget: number;
+    remainingBudget: number | string;
     existingSequenceNumbers: number[];
     escrow: ProjectEscrow | null;
     onChainIndex: number;
@@ -358,9 +351,7 @@ function MilestoneCard({
                     <MilestoneMeta
                         icon={CircleDollarSign}
                         label="Amount"
-                        value={formatAmount(
-                            milestone.amount,
-                        )}
+                        value={formatAmount(moneyText(milestone, "amount"))}
                     />
 
                     <MilestoneMeta
@@ -565,17 +556,7 @@ function ProjectMilestonesSkeleton() {
     );
 }
 
-function formatAmount(
-    value: number,
-) {
-    return new Intl.NumberFormat(
-        "en-US",
-        {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-        },
-    ).format(value);
-}
+
 
 function formatDate(
     value: string,
@@ -594,15 +575,5 @@ function formatLabel(
     return value.replace(
         /([a-z])([A-Z])/g,
         "$1 $2",
-    );
-}
-
-function roundCurrency(
-    value: number,
-) {
-    return (
-        Math.round(
-            value * 100,
-        ) / 100
     );
 }

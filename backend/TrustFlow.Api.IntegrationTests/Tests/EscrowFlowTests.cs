@@ -904,6 +904,73 @@ public sealed class EscrowFlowTests
             )
         );
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeleteProject_PreservesCancelledEscrowHistory(bool wasFunded)
+    {
+        var client = await RegisterAndLoginAsync("Client", "History owner");
+        var freelancer = await RegisterAndLoginAsync("Freelancer", "History freelancer");
+        await ConnectWalletAsync(client);
+        await ConnectWalletAsync(freelancer);
+        var projectId = await CreateInProgressProjectAsync(client, freelancer);
+        var escrowId = await CreateEscrowAsync(client, projectId);
+        await DeployEscrowAsync(client, projectId);
+        using var read = CreateAuthorizedRequest(HttpMethod.Get, $"/api/projects/{projectId}/escrow", client);
+        using var before = await _client.SendAsync(read);
+        var address = await ReadStringPropertyAsync(before, "contractAddress");
+        if (wasFunded)
+        {
+            using var fund = CreateAuthorizedRequest(HttpMethod.Post, $"/api/projects/{projectId}/escrow/sync", client);
+            using var funded = await _client.SendAsync(fund);
+            Assert.Equal(HttpStatusCode.OK, funded.StatusCode);
+        }
+        FakeEscrowChainDeployer.MarkCancelled(address, wasFunded);
+        using var sync = CreateAuthorizedRequest(HttpMethod.Post, $"/api/projects/{projectId}/escrow/sync", client);
+        using var cancelled = await _client.SendAsync(sync);
+        Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
+
+        using var delete = CreateAuthorizedRequest(HttpMethod.Delete, $"/api/projects/{projectId}", client);
+        using var deleted = await _client.SendAsync(delete);
+        Assert.Equal(HttpStatusCode.Conflict, deleted.StatusCode);
+        Assert.Contains("escrow history", await deleted.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+
+        using var history = CreateAuthorizedRequest(HttpMethod.Get, $"/api/projects/{projectId}/escrow", freelancer);
+        using var historyResponse = await _client.SendAsync(history);
+        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+        Assert.Equal("Cancelled", await ReadStringPropertyAsync(historyResponse, "status"));
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var escrow = await db.Escrows.AsNoTracking().SingleAsync(item => item.Id == escrowId);
+        Assert.NotNull(escrow.CancellationTransactionHash);
+        Assert.Equal(wasFunded, escrow.FundingTransactionHash is not null);
+        Assert.Null(escrow.CancellationNoticeReadAt);
+        Assert.Equal(ProjectStatus.Open, await db.Projects.Where(item => item.Id == projectId).Select(item => item.Status).SingleAsync());
+
+        using var list = CreateAuthorizedRequest(HttpMethod.Get, "/api/projects/mine", client);
+        using var listed = await _client.SendAsync(list);
+        Assert.Equal(HttpStatusCode.OK, listed.StatusCode);
+        using var listDocument = JsonDocument.Parse(await listed.Content.ReadAsStringAsync());
+        var row = Assert.Single(listDocument.RootElement.GetProperty("items").EnumerateArray());
+        Assert.Equal(projectId, row.GetProperty("id").GetGuid());
+        Assert.True(row.GetProperty("hasEscrowHistory").GetBoolean());
+    }
+
+    [Fact]
+    public async Task DeleteProject_StillAllowsAnOpenProjectWithNoEscrowRecord()
+    {
+        var client = await RegisterAndLoginAsync("Client", "Draft project owner");
+        var projectId = await CreateProjectAsync(client, DateTimeOffset.UtcNow.AddDays(30));
+        using var list = CreateAuthorizedRequest(HttpMethod.Get, "/api/projects/mine", client);
+        using var listed = await _client.SendAsync(list);
+        using var document = JsonDocument.Parse(await listed.Content.ReadAsStringAsync());
+        var row = Assert.Single(document.RootElement.GetProperty("items").EnumerateArray());
+        Assert.False(row.GetProperty("hasEscrowHistory").GetBoolean());
+        using var delete = CreateAuthorizedRequest(HttpMethod.Delete, $"/api/projects/{projectId}", client);
+        using var response = await _client.SendAsync(delete);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
     [Fact]
     public async Task CreateEscrow_ReturnsConflict_WhenClientWalletIsNotVerified()
     {

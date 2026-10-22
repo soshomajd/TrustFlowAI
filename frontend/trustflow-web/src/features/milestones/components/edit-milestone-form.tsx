@@ -1,4 +1,6 @@
 "use client";
+import { moneyText } from "@/lib/money/exact-money";
+import { sumMoney } from "@/lib/money/exact-money";
 
 import { MilestoneForm } from
     "@/features/milestones/components/milestone-form";
@@ -14,7 +16,7 @@ import type {
 type EditMilestoneFormProps = {
     projectId: string;
     projectDeadline: string;
-    remainingBudget: number;
+    remainingBudget: number | string;
 
     existingSequenceNumbers: number[];
     milestone: ProjectMilestone;
@@ -36,10 +38,7 @@ export function EditMilestoneForm({
         useUpdateMilestone(projectId);
 
     const availableBudget =
-        roundCurrency(
-            remainingBudget +
-            milestone.amount,
-        );
+        sumMoney([remainingBudget, moneyText(milestone, "amount")]);
 
     const otherSequenceNumbers =
         existingSequenceNumbers.filter(
@@ -84,9 +83,7 @@ export function EditMilestoneForm({
                     milestone.description,
 
                 amount:
-                    String(
-                        milestone.amount,
-                    ),
+                    moneyText(milestone, "amount"),
 
                 sequenceNumber:
                     String(
@@ -109,15 +106,7 @@ export function EditMilestoneForm({
     );
 }
 
-function roundCurrency(
-    value: number,
-) {
-    return (
-        Math.round(
-            value * 100,
-        ) / 100
-    );
-}
+
 
 function toDateInputValue(
     value: string,

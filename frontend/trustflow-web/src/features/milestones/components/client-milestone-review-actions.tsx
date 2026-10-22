@@ -185,6 +185,14 @@ function ApproveMilestoneDialog({
                     </DialogDescription>
                 </DialogHeader>
 
+                {releaseMutation.isSuccess && approveMutation.isError && (
+                    <p role="status" className="text-sm text-muted-foreground">
+                        Payment is already confirmed on-chain. Use Finish approval
+                        to update the site. It checks the same milestone and does
+                        not release payment again.
+                    </p>
+                )}
+
                 {errorMessage && (
                     <div
                         role="alert"
@@ -227,7 +235,7 @@ function ApproveMilestoneDialog({
                         ) : (
                             <>
                                 <CheckCircle2 className="size-4" />
-                                Approve
+                                {releaseMutation.isSuccess ? "Finish approval" : "Approve"}
                             </>
                         )}
                     </Button>

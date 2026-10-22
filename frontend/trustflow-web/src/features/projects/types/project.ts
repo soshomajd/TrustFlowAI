@@ -11,7 +11,10 @@ export type ClientProject = {
   description: string;
 
   budget: number;
+
+  budgetExact?: string;
   allocatedAmount: number;
+  allocatedAmountExact?: string;
 
   milestoneCount: number;
   approvedMilestoneCount: number;
@@ -19,6 +22,7 @@ export type ClientProject = {
 
   proposalCount: number;
   pendingProposalCount: number;
+  hasEscrowHistory: boolean;
 
   deadline: string;
   status: ProjectStatus;
@@ -43,6 +47,7 @@ export type CreatedProjectResponse = {
   title: string;
   description: string;
   budget: number;
+  budgetExact?: string;
   deadline: string;
   status: ProjectStatus;
   createdAt: string;
@@ -55,7 +60,9 @@ export type AssignedProject = {
   title: string;
   description: string;
   budget: number;
+  budgetExact?: string;
   allocatedAmount: number;
+  allocatedAmountExact?: string;
   milestoneCount: number;
   rejectedMilestoneCount: number;
   deadline: string;
@@ -65,6 +72,7 @@ export type AssignedProject = {
   // Budget describes the whole project; this is the total of the stages
   // this freelancer holds, which is what they are paid.
   myTotalAmount: number;
+  myTotalAmountExact?: string;
   isHistorical: boolean;
 };
 

@@ -31,12 +31,18 @@ public sealed class EscrowResponse
 
     public decimal TotalAmount { get; set; }
 
+    public string TotalAmountExact => TotalAmount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     public decimal ReleasedAmount { get; set; }
+
+    public string ReleasedAmountExact => ReleasedAmount.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public int PlatformFeeBasisPoints { get; set; }
     public int? TokenDecimals { get; set; }
     public string? FeeRecipientAddress { get; set; }
     public decimal PlatformFeesPaid { get; set; }
+    public string PlatformFeesPaidExact => PlatformFeesPaid.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public decimal FreelancerNetPaid { get; set; }
+    public string FreelancerNetPaidExact => FreelancerNetPaid.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public EscrowStatus Status { get; set; }
 

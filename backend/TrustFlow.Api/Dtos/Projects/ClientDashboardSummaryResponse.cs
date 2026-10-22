@@ -8,4 +8,5 @@ public sealed class ClientDashboardSummaryResponse
     public int CompletedProjects { get; set; }
     public int PendingProposals { get; set; }
     public decimal TotalBudget { get; set; }
+    public string TotalBudgetExact => TotalBudget.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }

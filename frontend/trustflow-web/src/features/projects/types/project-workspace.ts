@@ -6,6 +6,7 @@ export type ProjectWorkspaceMilestone = {
   title: string;
   description: string;
   amount: number;
+  amountExact?: string;
   sequenceNumber: number;
   deadline: string;
   status:
@@ -17,8 +18,12 @@ export type ProjectWorkspaceMilestone = {
     | "Settled";
 
   paidAmount: number | null;
+
+  paidAmountExact?: string | null;
   platformFeePaid?: number;
+  platformFeePaidExact?: string;
   freelancerNetPaid?: number | null;
+  freelancerNetPaidExact?: string | null;
 
   // Stages are assigned one freelancer at a time, so a split project has
   // several owners across its milestones.
@@ -35,6 +40,7 @@ export type ProjectWorkspace = {
   title: string;
   description: string;
   budget: number;
+  budgetExact?: string;
   deadline: string;
   status: ProjectStatus;
   createdAt: string;

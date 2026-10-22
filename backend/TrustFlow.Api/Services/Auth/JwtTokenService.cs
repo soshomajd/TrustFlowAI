@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using TrustFlow.Api.Models.Identity;
 using TrustFlow.Api.Options;
+using TrustFlow.Api.Services.Security;
 
 namespace TrustFlow.Api.Services.Auth;
 
@@ -17,10 +18,17 @@ public sealed class JwtTokenService(
 
     public JwtTokenResult CreateToken(
         ApplicationUser user,
-        IEnumerable<string> roles)
+        IEnumerable<string> roles, DateTimeOffset? adminMfaVerifiedAt = null)
+        => BuildToken(user, roles, adminMfaVerifiedAt, false);
+
+    public JwtTokenResult CreateLocalAdminPreviewToken(ApplicationUser user)
+        => BuildToken(user, [Constants.AppRoles.Admin], null, true);
+
+    private JwtTokenResult BuildToken(ApplicationUser user, IEnumerable<string> roles,
+        DateTimeOffset? adminMfaVerifiedAt, bool localPreview)
     {
         var expiresAtUtc = DateTime.UtcNow.AddMinutes(
-            _settings.ExpirationMinutes
+            localPreview ? Math.Min(30, _settings.ExpirationMinutes) : _settings.ExpirationMinutes
         );
 
         var claims = new List<Claim>
@@ -66,6 +74,19 @@ public sealed class JwtTokenService(
                     role
                 )
             );
+        }
+
+        if (adminMfaVerifiedAt.HasValue)
+        {
+            claims.Add(new Claim(AdminSessionSecurity.MfaClaim, adminMfaVerifiedAt.Value.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            claims.Add(new Claim(AdminSessionSecurity.StampClaim, user.SecurityStamp ?? string.Empty));
+            claims.Add(new Claim("amr", "mfa"));
+        }
+
+        if (localPreview)
+        {
+            claims.Add(new Claim(LocalAdminPreview.Claim, "true"));
+            claims.Add(new Claim(AdminSessionSecurity.StampClaim, user.SecurityStamp ?? string.Empty));
         }
 
         var securityKey =

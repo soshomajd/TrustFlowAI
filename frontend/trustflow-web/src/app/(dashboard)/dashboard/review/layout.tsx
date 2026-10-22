@@ -6,6 +6,8 @@ type ReviewLayoutProps = {
     children: ReactNode;
 };
 
+export const dynamic = "force-dynamic";
+
 export default function ReviewLayout({ children }: ReviewLayoutProps) {
     return (
         <ProtectedRoute allowedRoles={["Admin"]}>{children}</ProtectedRoute>

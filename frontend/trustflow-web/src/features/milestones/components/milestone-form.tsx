@@ -1,4 +1,5 @@
 "use client";
+import { formatMoney as formatAmount } from "@/lib/money/exact-money";
 
 import { zodResolver } from
     "@hookform/resolvers/zod";
@@ -28,7 +29,7 @@ import {
 
 type MilestoneFormProps = {
     projectDeadline: string;
-    availableBudget: number;
+    availableBudget: number | string;
     existingSequenceNumbers: number[];
 
     defaultValues:
@@ -320,17 +321,7 @@ export function MilestoneForm({
     );
 }
 
-function formatAmount(
-    value: number,
-) {
-    return new Intl.NumberFormat(
-        "en-US",
-        {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-        },
-    ).format(value);
-}
+
 
 function formatDate(
     value: string,

@@ -28,6 +28,10 @@ export function useLogin() {
     },
 
     onError: (error, request) => {
+      if (axios.isAxiosError<ApiProblemDetails>(error) && error.response?.status === 403 && error.response.data?.code === "admin_signin_required") {
+        router.replace("/admin/login");
+        return;
+      }
       if (
         axios.isAxiosError<ApiProblemDetails>(error) &&
         error.response?.status === 403 &&

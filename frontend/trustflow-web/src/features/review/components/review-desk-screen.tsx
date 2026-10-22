@@ -1,4 +1,5 @@
 "use client";
+import { formatMoney as formatAmount, moneyText } from "@/lib/money/exact-money";
 
 import { Gavel, LoaderCircle } from "lucide-react";
 import Link from "next/link";
@@ -128,23 +129,16 @@ function CaseRow({ item }: { item: ReviewCaseSummary }) {
       <p className="mt-3 font-medium">{item.milestoneTitle}</p>
 
       <p className="text-sm text-muted-foreground">
-        {item.projectTitle} · {formatAmount(item.milestoneAmount)}
+        {item.projectTitle} · {formatAmount(moneyText(item, "milestoneAmount"))}
       </p>
 
       {item.status === "Settled" && (
         <p className="mt-2 text-xs text-muted-foreground">
-          Freelancer received {formatAmount(item.paidToFreelancer ?? 0)}, client
-          got {formatAmount(item.returnedToClient ?? 0)} back
+          Freelancer received {formatAmount(moneyText(item, item.freelancerNetPaid != null ? "freelancerNetPaid" : "paidToFreelancer"))}, platform fee {formatAmount(moneyText(item, "platformFeePaid"))}, client
+          got {formatAmount(moneyText(item, "returnedToClient"))} back
           {item.escrowEnded ? ", escrow ended" : ""}.
         </p>
       )}
     </Link>
   );
-}
-
-function formatAmount(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(value);
 }

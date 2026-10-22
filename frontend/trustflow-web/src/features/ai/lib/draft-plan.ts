@@ -1,3 +1,4 @@
+import { moneyText, sumMoney } from "@/lib/money/exact-money";
 import type { ProjectDraft } from "@/features/ai/types/ai";
 import type { CreateMilestoneRequest } from "@/features/milestones/types/milestone";
 
@@ -46,7 +47,8 @@ export type ProjectPlan = {
   // Created one by one after the project exists.
   milestones: CreateMilestoneRequest[];
 
-  total: number;
+  total: string;
+  displayAmounts: string[];
 };
 
 export function buildProjectPlan(draft: ProjectDraft): ProjectPlan {
@@ -66,7 +68,7 @@ export function buildProjectPlan(draft: ProjectDraft): ProjectPlan {
     formValues: {
       title: draft.title,
       description: draft.description,
-      budget: draft.budget.toFixed(2),
+      budget: moneyText(draft, "budget"),
       deadline: toDateInputValue(
         daysFromToday(lastDue + PROJECT_BUFFER_DAYS),
       ),
@@ -74,11 +76,7 @@ export function buildProjectPlan(draft: ProjectDraft): ProjectPlan {
 
     milestones,
 
-    // Cents, so floating point cannot make a matching total look different.
-    total:
-      milestones.reduce(
-        (sum, milestone) => sum + Math.round(milestone.amount * 100),
-        0,
-      ) / 100,
+    total: sumMoney(draft.milestones.map((milestone) => moneyText(milestone, "amount"))),
+    displayAmounts: draft.milestones.map((milestone) => moneyText(milestone, "amount")),
   };
 }

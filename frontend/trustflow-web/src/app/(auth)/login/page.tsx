@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { getSignInPath, isAdminDashboardPath } from "@/features/auth/lib/sign-in-path";
 
 import { LoginForm } from
     "@/features/auth/components/login-form";
@@ -12,6 +14,8 @@ export const metadata: Metadata = {
     },
 };
 
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
+    const { next } = await searchParams;
+    if (typeof next === "string" && isAdminDashboardPath(next)) redirect(getSignInPath(next));
     return <LoginForm />;
 }

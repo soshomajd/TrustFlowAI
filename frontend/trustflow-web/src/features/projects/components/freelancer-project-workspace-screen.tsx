@@ -1,4 +1,6 @@
 "use client";
+import { formatMoneyCurrency as formatSettledAmount } from "@/lib/money/exact-money";
+import { formatMoney as formatAmount, moneyText } from "@/lib/money/exact-money";
 import { MessageButton } from "@/features/chat/components/message-button";
 import { MemberName } from "@/features/profile-photos/components/user-avatar";
 
@@ -105,6 +107,7 @@ export function FreelancerProjectWorkspaceScreen({
         )?.escrow ?? null;
 
     const isEscrowFunded = myEscrow?.status === "Funded";
+    const isEscrowHistory = milestones.length === 0 && myEscrow !== null;
 
     const approvedCount =
         milestones.filter(
@@ -160,7 +163,11 @@ export function FreelancerProjectWorkspaceScreen({
                                     {workspace.clientId ? <Link className="font-medium text-foreground hover:text-electric hover:underline" href={`/dashboard/clients/${workspace.clientId}`}><MemberName userId={workspace.clientId} name={workspace.clientFullName} /></Link> : workspace.clientFullName}
                                 </span>
 
-                                {viewerId && (
+                                {isEscrowHistory ? (
+                                    <Button asChild variant="outline" size="sm">
+                                        <Link href="/dashboard/messages">Open Messages</Link>
+                                    </Button>
+                                ) : viewerId && (
                                     <MessageButton
                                         projectId={workspace.id}
                                         freelancerId={viewerId}
@@ -182,9 +189,7 @@ export function FreelancerProjectWorkspaceScreen({
                             <WorkspaceMeta
                                 icon={CircleDollarSign}
                                 label="Project budget"
-                                value={formatAmount(
-                                    workspace.budget,
-                                )}
+                                value={formatAmount(moneyText(workspace, "budget"))}
                             />
 
                             <WorkspaceMeta
@@ -234,16 +239,17 @@ export function FreelancerProjectWorkspaceScreen({
                         </h2>
 
                         <p className="mt-2 text-sm text-muted-foreground">
-                            Complete milestones in
-                            sequence and submit finished
-                            work for client review.
+                            {isEscrowHistory
+                                ? "This is your past escrow. You no longer have assigned milestones here."
+                                : "Complete milestones in sequence and submit finished work for client review."}
                         </p>
                     </div>
 
                     {milestones.length === 0 ? (
                         <div className="mt-6 rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                            No milestones have been
-                            created for this project.
+                            {isEscrowHistory
+                                ? "Your escrow history is shown above. No milestones are currently assigned to you."
+                                : "No milestones are assigned to you yet."}
                         </div>
                     ) : (
                         <StaggerContainer className="mt-6 space-y-4">
@@ -403,9 +409,7 @@ function FreelancerMilestoneCard({
                     <WorkspaceMeta
                         icon={CircleDollarSign}
                         label="Amount"
-                        value={formatAmount(
-                            milestone.amount,
-                        )}
+                        value={formatAmount(moneyText(milestone, "amount"))}
                     />
 
                     <WorkspaceMeta
@@ -499,12 +503,10 @@ function FreelancerMilestoneCard({
                         A reviewer settled this
                         milestone. You received{" "}
                         {formatSettledAmount(
-                            milestone.freelancerNetPaid ?? milestone.paidAmount ?? 0,
+                            moneyText(milestone, milestone.freelancerNetPaid != null ? "freelancerNetPaid" : "paidAmount"),
                         )}{" "}
                         of{" "}
-                        {formatSettledAmount(
-                            milestone.amount,
-                        )}
+                        {formatSettledAmount(moneyText(milestone, "amount"))}
                         .
                     </div>
                 )}
@@ -679,12 +681,7 @@ function MilestoneStatusBadge({
     );
 }
 
-function formatSettledAmount(value: number) {
-    return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-    }).format(value);
-}
+
 
 function WorkspaceError({
     message,
@@ -738,16 +735,7 @@ export function FreelancerWorkspaceSkeleton() {
     );
 }
 
-function formatAmount(
-    value: number,
-) {
-    return new Intl.NumberFormat(
-        "en-US",
-        {
-            maximumFractionDigits: 18,
-        },
-    ).format(value);
-}
+
 
 function formatDate(
     value: string,

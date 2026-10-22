@@ -19,6 +19,7 @@ export function useWithdrawProposal(proposalId: string) {
 
     onSuccess: async () => {
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: proposalQueryKeys.eligibilities() }),
         queryClient.invalidateQueries({
           queryKey: proposalQueryKeys.myLists(),
         }),

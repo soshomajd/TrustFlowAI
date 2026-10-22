@@ -8,8 +8,11 @@ public class ProjectSummaryResponse
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public decimal Budget { get; set; }
+    public string BudgetExact => Budget.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public decimal AllocatedAmount { get; set; }
+    public string AllocatedAmountExact => AllocatedAmount.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public decimal AvailableAmount { get; set; }
+    public string AvailableAmountExact => AvailableAmount.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public int MilestoneCount { get; set; }
     public DateTimeOffset Deadline { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

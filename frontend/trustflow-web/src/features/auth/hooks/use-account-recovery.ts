@@ -18,7 +18,7 @@ import type {
 import { getApiErrorMessage } from "@/lib/api/get-api-error-message";
 import type { ApiProblemDetails } from "@/types/api";
 
-export function useVerifyEmail() {
+export function useVerifyEmail(admin = false) {
   const router = useRouter();
 
   return useMutation({
@@ -27,7 +27,7 @@ export function useVerifyEmail() {
     onSuccess: () => {
       toast.success("Email verified. Sign in to continue.");
 
-      router.replace("/login");
+      router.replace(admin ? "/admin/login" : "/login");
     },
 
     onError: (error) => {
@@ -66,7 +66,7 @@ export function useResendVerification() {
   });
 }
 
-export function useForgotPassword() {
+export function useForgotPassword(admin = false) {
   const router = useRouter();
 
   return useMutation({
@@ -75,7 +75,7 @@ export function useForgotPassword() {
     onSuccess: (_response, email) => {
       toast.success("If that address has an account, a code is on its way.");
 
-      router.push(`/reset-password?email=${encodeURIComponent(email)}`);
+      router.push(`${admin ? "/admin/reset-password" : "/reset-password"}?email=${encodeURIComponent(email)}`);
     },
 
     onError: (error) => {
@@ -100,7 +100,7 @@ export function useResendResetCode() {
   });
 }
 
-export function useResetPassword() {
+export function useResetPassword(admin = false) {
   const router = useRouter();
 
   return useMutation({
@@ -109,7 +109,7 @@ export function useResetPassword() {
     onSuccess: () => {
       toast.success("Password changed. Sign in with the new one.");
 
-      router.replace("/login");
+      router.replace(admin ? "/admin/login" : "/login");
     },
 
     onError: (error) => {

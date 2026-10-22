@@ -600,6 +600,20 @@ namespace TrustFlow.Api.Controllers
                         });
                     }
 
+                    // Cancellation reopens a project, but its financial record
+                    // must outlive active proposals. Deleting the project would
+                    // cascade into escrow receipts and notification history.
+                    if (await dbContext.Escrows.AnyAsync(
+                            escrow => escrow.ProjectId == id,
+                            cancellationToken))
+                    {
+                        return Conflict(new
+                        {
+                            message = "Projects with escrow history cannot be deleted. Keep this project to preserve financial records.",
+                            hasEscrowHistory = true
+                        });
+                    }
+
                     dbContext.Projects.Remove(project);
 
                     await dbContext.SaveChangesAsync(
@@ -1118,6 +1132,8 @@ namespace TrustFlow.Api.Controllers
 
                         ProposalCount =
                             project.Proposals.Count,
+
+                        HasEscrowHistory = project.Escrows.Any(),
 
                         PendingProposalCount =
                             project.Proposals.Count(

@@ -5,6 +5,7 @@ import { usePathname, useRouter, } from "next/navigation";
 import { FullScreenLoader } from "@/components/shared/full-screen-loader";
 import type { AuthRole } from "@/features/auth/types/auth";
 import { useAuthStore } from "@/stores/auth-store";
+import { getSignInPath, isAdminDashboardPath } from "@/features/auth/lib/sign-in-path";
 import { AuthUnavailableState } from
     "@/features/auth/components/auth-unavailable-state";
 
@@ -36,11 +37,8 @@ export function ProtectedRoute({
 
     useEffect(() => {
         if (status === "unauthenticated") {
-            const nextPath =
-                encodeURIComponent(pathname);
-
             router.replace(
-                `/login?next=${nextPath}`,
+                getSignInPath(pathname),
             );
 
             return;
@@ -50,7 +48,7 @@ export function ProtectedRoute({
             status === "authenticated" &&
             !hasAllowedRole
         ) {
-            router.replace("/dashboard");
+            router.replace(isAdminDashboardPath(pathname) ? getSignInPath(pathname) : "/dashboard");
         }
     }, [
         status,

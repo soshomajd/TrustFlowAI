@@ -7,6 +7,7 @@ public class PublicMilestoneResponse
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public decimal Amount { get; set; }
+    public string AmountExact => Amount.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public int SequenceNumber { get; set; }
     public DateTimeOffset Deadline { get; set; }
 

@@ -10,6 +10,7 @@ public class ProposalForClientResponse
     public string FreelancerFullName { get; set; } = string.Empty;
     public string CoverLetter { get; set; } = string.Empty;
     public decimal BidAmount { get; set; }
+    public string BidAmountExact => BidAmount.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public int EstimatedDays { get; set; }
     public ProposalStatus Status { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

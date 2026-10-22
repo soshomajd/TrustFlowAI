@@ -1,4 +1,5 @@
 "use client";
+import { moneyText } from "@/lib/money/exact-money";
 
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -11,7 +12,7 @@ import {
 } from "wagmi/actions";
 
 import { escrowAbi } from "@/features/escrow/lib/escrow-abi";
-import { toBaseUnits } from "@/features/escrow/lib/token-amount";
+import { getSettlementBaseUnits } from "@/features/review/lib/settlement-amount";
 import type { ReviewCaseDetail } from "@/features/review/types/review";
 import { getWalletErrorMessage } from "@/lib/wallet/get-wallet-error-message";
 import { wagmiConfig } from "@/lib/wallet/wagmi-config";
@@ -21,7 +22,7 @@ export type SettleCaseVariables = {
 
   // What the freelancer receives from this milestone, in the token units a
   // person reads (for example dollars). The rest goes back to the client.
-  freelancerAmount: number;
+  freelancerAmount: string;
 
   // Also hand every later, unreleased milestone back to the client.
   endEscrow: boolean;
@@ -63,14 +64,20 @@ export function useSettleCase() {
         );
       }
 
-      if (
-        freelancerAmount < 0 ||
-        freelancerAmount > detail.case.milestoneAmount
-      ) {
-        throw new Error(
-          "The freelancer amount must be between 0 and the milestone amount.",
-        );
+      if (!Number.isSafeInteger(detail.onChainMilestoneIndex) || detail.onChainMilestoneIndex < 0) {
+        throw new Error("The milestone position is invalid. Refresh this case.");
       }
+      const milestone = await readContract(wagmiConfig, {
+        address,
+        abi: escrowAbi,
+        functionName: "getMilestone",
+        args: [BigInt(detail.onChainMilestoneIndex)],
+        chainId,
+      });
+      const amountBaseUnits = getSettlementBaseUnits(
+        freelancerAmount, moneyText(detail.case, "milestoneAmount"),
+        detail.tokenDecimals, milestone[0],
+      );
 
       const hash = await writeContract(wagmiConfig, {
         address,
@@ -78,7 +85,7 @@ export function useSettleCase() {
         functionName: "settleCase",
         args: [
           BigInt(detail.onChainMilestoneIndex),
-          toBaseUnits(freelancerAmount, detail.tokenDecimals),
+          amountBaseUnits,
           endEscrow,
         ],
         chainId,

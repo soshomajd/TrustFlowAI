@@ -6,6 +6,9 @@ public interface IJwtTokenService
 {
     JwtTokenResult CreateToken(
         ApplicationUser user,
-        IEnumerable<string> roles
+        IEnumerable<string> roles,
+        DateTimeOffset? adminMfaVerifiedAt = null
     );
+
+    JwtTokenResult CreateLocalAdminPreviewToken(ApplicationUser user);
 }

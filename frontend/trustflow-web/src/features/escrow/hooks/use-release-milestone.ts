@@ -9,6 +9,8 @@ import {
 } from "wagmi/actions";
 
 import { escrowAbi } from "@/features/escrow/lib/escrow-abi";
+import { releaseMilestoneWithRecovery } from "@/features/escrow/lib/recoverable-escrow-actions";
+import { confirmEscrowTransaction } from "@/features/escrow/lib/transaction-confirmation";
 import { escrowQueryKeys } from "@/features/escrow/queries/escrow-query-keys";
 import { wagmiConfig } from "@/lib/wallet/wagmi-config";
 
@@ -34,28 +36,37 @@ export function useReleaseMilestone(projectId: string) {
       chainId,
     }: ReleaseMilestoneVariables) => {
       const address = contractAddress as Address;
-      const milestone = await readContract(wagmiConfig, {
-        address,
-        abi: escrowAbi,
-        functionName: "getMilestone",
-        args: [BigInt(onChainIndex)],
-        chainId,
-      });
-
-      if (milestone[1]) {
-        return { alreadyReleased: true };
+      if (!Number.isSafeInteger(onChainIndex) || onChainIndex < 0) {
+        throw new Error("The milestone position is invalid. Refresh this project before approving.");
       }
-
-      const hash = await writeContract(wagmiConfig, {
-        address,
-        abi: escrowAbi,
-        functionName: "releaseMilestone",
-        args: [BigInt(onChainIndex)],
-        chainId,
+      return releaseMilestoneWithRecovery({
+        readReleased: async () => {
+          const milestone = await readContract(wagmiConfig, {
+            address,
+            abi: escrowAbi,
+            functionName: "getMilestone",
+            args: [BigInt(onChainIndex)],
+            chainId,
+          });
+          if (milestone[1] && await readContract(wagmiConfig, {
+            address,
+            abi: escrowAbi,
+            functionName: "isSettledByCase",
+            args: [BigInt(onChainIndex)],
+            chainId,
+          })) {
+            throw new Error("This milestone was settled through a case. Refresh the project to see the result.");
+          }
+          return milestone[1];
+        },
+        release: () => confirmEscrowTransaction(`${chainId}:${address.toLowerCase()}:release:${onChainIndex}`, () => writeContract(wagmiConfig, {
+          address,
+          abi: escrowAbi,
+          functionName: "releaseMilestone",
+          args: [BigInt(onChainIndex)],
+          chainId,
+        }), (hash) => waitForTransactionReceipt(wagmiConfig, { hash, chainId })),
       });
-
-      await waitForTransactionReceipt(wagmiConfig, { hash, chainId });
-      return { alreadyReleased: false };
     },
   });
 }

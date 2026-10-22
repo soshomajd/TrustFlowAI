@@ -1,4 +1,5 @@
 "use client";
+import { formatMoney as formatAmount, moneyText } from "@/lib/money/exact-money";
 
 import {
     BriefcaseBusiness,
@@ -685,10 +686,7 @@ function MarketplaceProjectCard({
     project: MarketplaceProject;
 }) {
     const remainingBudget =
-        Math.max(
-            0,
-            project.availableAmount,
-        );
+        moneyText(project, "availableAmount");
 
     return (
         <article className="flex h-full flex-col rounded-xl border bg-background/40 p-5 transition hover:border-primary/40 hover:bg-background/70">
@@ -717,9 +715,7 @@ function MarketplaceProjectCard({
                 <ProjectMeta
                     icon={CircleDollarSign}
                     label="Budget"
-                    value={formatAmount(
-                        project.budget,
-                    )}
+                    value={formatAmount(moneyText(project, "budget"))}
                 />
 
                 <ProjectMeta
@@ -1011,17 +1007,7 @@ function truncateText(
     )}...`;
 }
 
-function formatAmount(
-    value: number,
-) {
-    return new Intl.NumberFormat(
-        "en-US",
-        {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-        },
-    ).format(value);
-}
+
 
 function formatDate(
     value: string,

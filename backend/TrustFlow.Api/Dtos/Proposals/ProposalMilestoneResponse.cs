@@ -12,5 +12,7 @@ public sealed class ProposalMilestoneResponse
 
     public decimal Amount { get; set; }
 
+    public string AmountExact => Amount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     public int SequenceNumber { get; set; }
 }

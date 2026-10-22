@@ -21,6 +21,7 @@ export function useCreateProposal(projectId: string) {
 
     onSuccess: async (createdProposal) => {
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: proposalQueryKeys.eligibilities() }),
         queryClient.invalidateQueries({
           queryKey: proposalQueryKeys.myLists(),
         }),
@@ -36,6 +37,7 @@ export function useCreateProposal(projectId: string) {
     },
 
     onError: (error) => {
+      void queryClient.invalidateQueries({ queryKey: proposalQueryKeys.eligibilities() });
       toast.error(
         getApiErrorMessage(error, "Proposal could not be submitted."),
       );

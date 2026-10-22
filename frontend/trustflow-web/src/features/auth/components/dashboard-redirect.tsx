@@ -7,6 +7,7 @@ import { FullScreenLoader } from
     "@/components/shared/full-screen-loader";
 import { useAuthStore } from
     "@/stores/auth-store";
+import { getDashboardHome } from "@/features/auth/lib/get-dashboard-home";
 
 export function DashboardRedirect() {
     const router = useRouter();
@@ -20,33 +21,7 @@ export function DashboardRedirect() {
             return;
         }
 
-        if (user.roles.includes("Client")) {
-            router.replace(
-                "/dashboard/client",
-            );
-
-            return;
-        }
-
-        if (
-            user.roles.includes("Freelancer")
-        ) {
-            router.replace(
-                "/dashboard/freelancer",
-            );
-
-            return;
-        }
-
-        if (user.roles.includes("Admin")) {
-            router.replace(
-                "/dashboard/review",
-            );
-
-            return;
-        }
-
-        router.replace("/");
+        router.replace(getDashboardHome(user.roles));
     }, [user, router]);
 
     return (

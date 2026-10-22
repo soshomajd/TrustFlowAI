@@ -43,13 +43,13 @@ public sealed class SmtpEmailDelivery(
             Timeout = TimeoutMilliseconds
         };
 
-        // Auto picks implicit TLS on 465 and STARTTLS elsewhere. None is
-        // only for a local mail catcher that has no TLS at all.
+        // Require TLS rather than silently allowing a STARTTLS downgrade.
+        // None is only for an explicitly configured local mail catcher.
         await client.ConnectAsync(
             settings.Host,
             settings.Port,
             settings.UseStartTls
-                ? SecureSocketOptions.Auto
+                ? (settings.Port == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls)
                 : SecureSocketOptions.None,
             cancellationToken);
 

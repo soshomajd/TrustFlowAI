@@ -1,4 +1,5 @@
 "use client";
+import { formatMoney as formatAmount, moneyText } from "@/lib/money/exact-money";
 import { MemberName } from "@/features/profile-photos/components/user-avatar";
 
 
@@ -93,10 +94,7 @@ export function MarketplaceProjectDetailsScreen({
         projectQuery.data;
 
     const remainingBudget =
-        Math.max(
-            0,
-            project.availableAmount,
-        );
+        moneyText(project, "availableAmount");
 
     const milestones = [
         ...project.milestones,
@@ -152,17 +150,10 @@ export function MarketplaceProjectDetailsScreen({
                                 projectTitle={
                                     project.title
                                 }
-                                projectBudget={
-                                    project.budget
-                                }
+                                projectBudget={moneyText(project, "budget")}
                                 milestones={
                                     project.milestones
                                 }
-                                disabled={
-                                    project.status !==
-                                    "Open"
-                                }
-                                disabledReason="Proposals can only be submitted for open projects."
                             />
                         </div>
                     </div>
@@ -176,9 +167,7 @@ export function MarketplaceProjectDetailsScreen({
                     <ProjectSummaryCard
                         icon={CircleDollarSign}
                         label="Project budget"
-                        value={formatAmount(
-                            project.budget,
-                        )}
+                        value={formatAmount(moneyText(project, "budget"))}
                     />
 
                     <ProjectSummaryCard
@@ -336,9 +325,7 @@ function PublicMilestoneCard({
                     <MilestoneMeta
                         icon={CircleDollarSign}
                         label="Amount"
-                        value={formatAmount(
-                            milestone.amount,
-                        )}
+                        value={formatAmount(moneyText(milestone, "amount"))}
                     />
 
                     <MilestoneMeta
@@ -477,17 +464,7 @@ export function MarketplaceProjectDetailsSkeleton() {
     );
 }
 
-function formatAmount(
-    value: number,
-) {
-    return new Intl.NumberFormat(
-        "en-US",
-        {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-        },
-    ).format(value);
-}
+
 
 function formatDate(
     value: string,

@@ -1,4 +1,5 @@
 "use client";
+import { moneyUnits } from "@/lib/money/exact-money";
 
 import { Plus } from "lucide-react";
 import { useState } from "react";
@@ -19,7 +20,7 @@ type CreateMilestoneDialogProps = {
     projectDeadline: string;
     projectStatus: ProjectStatus;
 
-    remainingBudget: number;
+    remainingBudget: number | string;
     existingSequenceNumbers: number[];
 };
 
@@ -37,7 +38,7 @@ export function CreateMilestoneDialog({
         projectStatus === "Open";
 
     const hasRemainingBudget =
-        remainingBudget >= 0.01;
+        moneyUnits(remainingBudget) >= moneyUnits("0.01");
 
     const canCreate =
         isProjectOpen &&

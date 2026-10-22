@@ -25,6 +25,7 @@ export function useRejectProposal(projectId: string, proposalId: string) {
 
     onSuccess: async () => {
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: proposalQueryKeys.eligibilities() }),
         queryClient.invalidateQueries({
           queryKey: proposalQueryKeys.projectLists(),
         }),

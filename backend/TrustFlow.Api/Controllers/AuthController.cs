@@ -13,6 +13,7 @@ using TrustFlow.Api.Options;
 using TrustFlow.Api.Services.Auth;
 using TrustFlow.Api.Services.Identity;
 using Microsoft.AspNetCore.RateLimiting;
+using TrustFlow.Api.Services.Security;
 
 namespace TrustFlow.Api.Controllers;
 
@@ -26,7 +27,9 @@ public class AuthController(
     AppDbContext dbContext,
     IWebHostEnvironment environment,
     IAccountEmailService accountEmails,
-    IConfiguration configuration)
+    IConfiguration configuration,
+    AdminMfaService adminMfa,
+    AdminNetworkAccess adminNetwork)
     : ControllerBase
 {
     private const string RefreshTokenCookieName =
@@ -52,6 +55,13 @@ public class AuthController(
         }
 
         var email = request.Email.Trim();
+
+        if (ReviewerAccess.IsReviewer(configuration, email))
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                code = "admin_setup_required",
+                message = "Use the approved administrator activation page for this address."
+            });
 
         var existingUser =
             await userManager.FindByEmailAsync(email);
@@ -106,13 +116,6 @@ public class AuthController(
             });
         }
 
-        // A configured reviewer also gets the reviewer role. They still
-        // cannot sign in until the address is confirmed.
-        if (ReviewerAccess.IsReviewer(configuration, user.Email!))
-        {
-            await userManager.AddToRoleAsync(user, AppRoles.Admin);
-        }
-
         // The account exists but cannot sign in until the address is
         // confirmed. A failed send is not an error here: the user can ask
         // for another code from the verification screen.
@@ -141,9 +144,52 @@ public class AuthController(
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.Login)]
     [HttpPost("login")]
-    public async Task<IActionResult> Login(
+    public Task<IActionResult> Login(
         LoginRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken) => LoginCoreAsync(request, false, cancellationToken);
+
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Login)]
+    [HttpPost("admin/login")]
+    public Task<IActionResult> AdminLogin(
+        LoginRequest request,
+        CancellationToken cancellationToken) => LoginCoreAsync(request, true, cancellationToken);
+
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Register)]
+    [HttpPost("admin/setup")]
+    public async Task<IActionResult> AdminSetup(AdminSetupRequest request, CancellationToken cancellationToken)
+    {
+        var email = request.Email.Trim();
+        // There is no caller-selected role or invitation bypass. Only the
+        // trusted server allowlist can authorize a new administrator.
+        if (!ReviewerAccess.IsReviewer(configuration, email))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Administrator setup is unavailable for this address." });
+        if (await userManager.FindByEmailAsync(email) is not null)
+            return Conflict(new { message = "An account already exists. Sign in or use password recovery." });
+        if (!adminMfa.CanDeliverEmail)
+            return StatusCode(503, new { code = "admin_email_unavailable", message = "Configure a working SMTP service before activating administrator access." });
+
+        var user = new ApplicationUser { FullName = request.FullName.Trim(), Email = email, UserName = email };
+        var created = await userManager.CreateAsync(user, request.Password);
+        if (!created.Succeeded)
+            return BadRequest(new { errors = created.Errors.Select(error => error.Description) });
+        var assigned = await userManager.AddToRoleAsync(user, AppRoles.Admin);
+        if (!assigned.Succeeded)
+        {
+            await userManager.DeleteAsync(user);
+            return BadRequest(new { errors = assigned.Errors.Select(error => error.Description) });
+        }
+        var emailResult = await accountEmails.SendEmailVerificationAsync(user, cancellationToken);
+        return Created($"/api/users/{user.Id}", new
+        {
+            user.Id, user.FullName, user.Email, Role = AppRoles.Admin, user.CreatedAt,
+            VerificationRequired = true, VerificationEmailSent = emailResult == AccountEmailResult.Sent
+        });
+    }
+
+    private async Task<IActionResult> LoginCoreAsync(
+        LoginRequest request, bool administratorOnly, CancellationToken cancellationToken)
     {
         var email = request.Email.Trim();
 
@@ -175,6 +221,11 @@ public class AuthController(
             });
         }
 
+        // A correct participant password must never create an admin session.
+        var isAdmin = await userManager.IsInRoleAsync(user, AppRoles.Admin);
+        if (administratorOnly && !isAdmin)
+            return Unauthorized(new { message = "Invalid email or password." });
+
         // Checked after the password so that only someone who knows it
         // learns the account is waiting on verification.
         if (!user.EmailConfirmed)
@@ -192,10 +243,40 @@ public class AuthController(
             );
         }
 
+        if (isAdmin)
+        {
+            if (!administratorOnly)
+                return StatusCode(403, new { code = "admin_signin_required", message = "Use the administrator sign-in page." });
+            Response.Headers.CacheControl = "private, no-store";
+            try { return Ok(await adminMfa.StartAsync(user, cancellationToken)); }
+            catch (AdminMfaDeliveryException exception)
+            {
+                if (exception.Throttled) Response.Headers.RetryAfter = "60";
+                return StatusCode(exception.Throttled ? 429 : 503, new
+                {
+                    code = exception.Throttled ? "admin_code_throttled" : "admin_email_unavailable",
+                    message = exception.Throttled ? "Wait 60 seconds before asking for another sign-in code."
+                        : "Administrator email delivery is unavailable. Configure a working SMTP service before signing in."
+                });
+            }
+        }
+
         return await IssueSessionAsync(
             user,
             cancellationToken
         );
+    }
+
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Login)]
+    [HttpPost("admin/mfa")]
+    public async Task<IActionResult> VerifyAdminMfa(AdminMfaRequest request, CancellationToken cancellationToken)
+    {
+        Response.Headers.CacheControl = "private, no-store";
+        var result = await adminMfa.VerifyAsync(request.ChallengeToken, request.Code, cancellationToken);
+        if (result is null) return Unauthorized(new { message = "The verification code is invalid, expired or already used. Start sign-in again if needed." });
+        dbContext.AdminAccessLogs.Add(new Models.AdminAccessLog { AdminId = result.Id, Action = "AdminSignedIn" });
+        return await IssueSessionAsync(result, cancellationToken, DateTimeOffset.UtcNow);
     }
 
     [AllowAnonymous]
@@ -233,7 +314,9 @@ public class AuthController(
                 refreshToken.FamilyId,
                 refreshToken.ExpiresAt,
                 refreshToken.RevokedAt,
-                refreshToken.ReplacedByTokenHash
+                refreshToken.ReplacedByTokenHash,
+                refreshToken.AdminMfaVerifiedAt,
+                refreshToken.AdminSecurityStamp
             })
             .SingleOrDefaultAsync(cancellationToken);
 
@@ -359,11 +442,23 @@ public class AuthController(
         var roles =
             await userManager.GetRolesAsync(user);
 
+        if (roles.Contains(AppRoles.Admin) && (!user.TwoFactorEnabled
+            || !AdminSessionSecurity.IsFresh(storedToken.AdminMfaVerifiedAt)
+            || storedToken.AdminSecurityStamp != user.SecurityStamp || !adminNetwork.IsAllowed(HttpContext)))
+        {
+            await RevokeTokenFamilyAsync(user.Id, storedToken.FamilyId, now, cancellationToken);
+            DeleteRefreshTokenCookie();
+            return Unauthorized(new { message = "Sign in again with administrator multi-factor verification." });
+        }
+
         var newRefreshTokenResult =
             refreshTokenService.Create(
                 user.Id,
                 storedToken.FamilyId
             );
+
+        newRefreshTokenResult.RefreshToken.AdminMfaVerifiedAt = storedToken.AdminMfaVerifiedAt;
+        newRefreshTokenResult.RefreshToken.AdminSecurityStamp = storedToken.AdminSecurityStamp;
 
         await using var transaction =
             await dbContext.Database
@@ -431,7 +526,8 @@ public class AuthController(
         var accessTokenResult =
             jwtTokenService.CreateToken(
                 user,
-                roles
+                roles,
+                storedToken.AdminMfaVerifiedAt
             );
 
         AppendRefreshTokenCookie(
@@ -598,7 +694,8 @@ public class AuthController(
 
     private async Task<IActionResult> IssueSessionAsync(
         ApplicationUser user,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        DateTimeOffset? adminMfaVerifiedAt = null)
     {
         var roles =
             await userManager.GetRolesAsync(user);
@@ -606,11 +703,15 @@ public class AuthController(
         var accessTokenResult =
             jwtTokenService.CreateToken(
                 user,
-                roles
+                roles,
+                adminMfaVerifiedAt
             );
 
         var refreshTokenResult =
             refreshTokenService.Create(user.Id);
+
+        refreshTokenResult.RefreshToken.AdminMfaVerifiedAt = adminMfaVerifiedAt;
+        refreshTokenResult.RefreshToken.AdminSecurityStamp = adminMfaVerifiedAt.HasValue ? user.SecurityStamp : null;
 
         dbContext.RefreshTokens.Add(
             refreshTokenResult.RefreshToken

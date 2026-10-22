@@ -106,6 +106,7 @@ public sealed class CustomWebApplicationFactory
 
         builder.ConfigureTestServices(services =>
         {
+            services.AddTransient<IStartupFilter, TestPeerAddress>();
             services.RemoveAll<IEscrowChainDeployer>();
 
             services.AddScoped<

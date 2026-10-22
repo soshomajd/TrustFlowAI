@@ -52,10 +52,10 @@ public static class TestMailbox
 
         var match = Regex.Match(
             latest.Body,
-            @"(?<!\d)\d{6}(?!\d)");
+            @"^\s*(\d{6})\s*$", RegexOptions.Multiline);
 
         return match.Success
-            ? match.Value
+            ? match.Groups[1].Value
             : throw new InvalidOperationException(
                 "The latest email holds no 6 digit code.");
     }

@@ -715,9 +715,7 @@ public sealed class EscrowCaseTests
                 user!, AppRoles.Admin)).Succeeded);
         }
 
-        var login = await _client.PostAsJsonAsync(
-            "/api/auth/login",
-            new { Email = person.Email, Password });
+        var login = await TestAdminSignIn.CompleteAsync(_client, _factory.Services, person.Email, Password);
 
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
 

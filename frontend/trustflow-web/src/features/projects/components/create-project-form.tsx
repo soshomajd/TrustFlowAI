@@ -1,4 +1,5 @@
 "use client";
+import { formatMoney, moneyUnits } from "@/lib/money/exact-money";
 
 import { ListChecks, X } from "lucide-react";
 import { useState } from "react";
@@ -74,12 +75,12 @@ export function CreateProjectForm() {
                     <p className="mt-2 text-xs leading-5 text-muted-foreground">
                         These milestones are created right after the project.
                         The budget must stay equal to their total, which is{" "}
-                        {plan.total.toFixed(2)}. You can still edit or delete
+                        {formatMoney(plan.total)}. You can still edit or delete
                         any milestone later.
                     </p>
 
                     <ol className="mt-4 space-y-2">
-                        {plan.milestones.map((milestone) => (
+                        {plan.milestones.map((milestone, index) => (
                             <li
                                 key={milestone.sequenceNumber}
                                 className="flex items-start justify-between gap-3 rounded-lg border bg-background/35 px-3 py-2 text-sm"
@@ -90,7 +91,7 @@ export function CreateProjectForm() {
                                 </span>
 
                                 <span className="shrink-0 text-electric">
-                                    {milestone.amount.toFixed(2)}
+                                    {formatMoney(plan.displayAmounts[index])}
                                 </span>
                             </li>
                         ))}
@@ -108,11 +109,10 @@ export function CreateProjectForm() {
                 onSubmit={(values) => {
                     if (plan) {
                         if (
-                            Math.round(values.budget * 100) !==
-                            Math.round(plan.total * 100)
+                            moneyUnits(values.budget) !== moneyUnits(plan.total)
                         ) {
                             toast.error(
-                                `The budget must equal the plan total (${plan.total.toFixed(2)}). ` +
+                                `The budget must equal the plan total (${formatMoney(plan.total)}). ` +
                                     "Change the budget or remove the plan.",
                             );
 

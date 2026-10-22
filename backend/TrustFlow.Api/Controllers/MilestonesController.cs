@@ -1079,6 +1079,20 @@ public class MilestonesController(
             });
         }
 
+        // The response may have been lost after commit. Only the owning client
+        // reaches this lookup; return the recorded outcome without another RPC
+        // read or another financial increment, even after project completion.
+        if (preCheck.Status == MileStoneStatus.Approved)
+        {
+            return Ok(new ApproveMilestoneResponse
+            {
+                Id = milestoneId,
+                ProjectId = projectId,
+                Status = preCheck.Status,
+                ProjectStatus = preCheck.ProjectStatus
+            });
+        }
+
         if (preCheck.ProjectStatus != ProjectStatus.InProgress)
         {
             return Conflict(new
@@ -1220,16 +1234,6 @@ public class MilestonesController(
                     });
                 }
 
-                if (project.Status != ProjectStatus.InProgress)
-                {
-                    return Conflict(new
-                    {
-                        message =
-                            "Milestones can only be approved when the project is in progress.",
-                        currentProjectStatus = project.Status
-                    });
-                }
-
                 var milestone = await dbContext.Milestones
                     .FirstOrDefaultAsync(
                         milestone =>
@@ -1243,6 +1247,28 @@ public class MilestonesController(
                     return NotFound(new
                     {
                         message = "Milestone not found."
+                    });
+                }
+
+                // A concurrent request may have committed since preCheck.
+                if (milestone.Status == MileStoneStatus.Approved)
+                {
+                    return Ok(new ApproveMilestoneResponse
+                    {
+                        Id = milestone.Id,
+                        ProjectId = project.Id,
+                        Status = milestone.Status,
+                        ProjectStatus = project.Status
+                    });
+                }
+
+                if (project.Status != ProjectStatus.InProgress)
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "Milestones can only be approved when the project is in progress.",
+                        currentProjectStatus = project.Status
                     });
                 }
 

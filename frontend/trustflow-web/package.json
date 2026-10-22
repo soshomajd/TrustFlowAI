@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:escrow": "node --test tests/*recovery.test.mjs",
+    "test:amounts": "node --test tests/*amount*.test.mjs",
+    "test:fees": "node --test tests/platform-fee.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.5.7",

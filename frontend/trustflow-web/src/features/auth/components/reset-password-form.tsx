@@ -13,11 +13,12 @@ import { useResendResetCode, useResetPassword, } from "@/features/auth/hooks/use
 import { resendEmailSchema, resetPasswordSchema, type ResetPasswordFormValues, } from "@/features/auth/schemas/recovery-schemas";
 
 type ResetPasswordFormProps = {
+    admin?: boolean;
     email: string;
 };
 
-export function ResetPasswordForm({ email }: ResetPasswordFormProps) {
-    const resetMutation = useResetPassword();
+export function ResetPasswordForm({ email, admin = false }: ResetPasswordFormProps) {
+    const resetMutation = useResetPassword(admin);
     const resendMutation = useResendResetCode();
 
     const { register, control, handleSubmit, formState: { errors, isSubmitting }, } = useForm<ResetPasswordFormValues>({
@@ -223,7 +224,7 @@ export function ResetPasswordForm({ email }: ResetPasswordFormProps) {
                             </Button>
 
                             <Link
-                                href="/login"
+                                href={admin ? "/admin/login" : "/login"}
                                 className="inline-flex items-center gap-1 font-medium text-electric transition hover:text-electric/80"
                             >
                                 <ArrowLeft className="size-3.5" />

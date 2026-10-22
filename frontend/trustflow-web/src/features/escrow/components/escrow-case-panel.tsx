@@ -1,4 +1,6 @@
 "use client";
+import { moneyText } from "@/lib/money/exact-money";
+import { formatMoney as formatAmount } from "@/lib/money/exact-money";
 
 import { formatTokenPayment } from "@/features/escrow/lib/platform-fee";
 
@@ -365,8 +367,9 @@ function SettledCaseCard({ item }: { item: EscrowCase }) {
       </span>
 
       <p className="leading-6 text-muted-foreground">
-        The freelancer received {formatTokenPayment(item.freelancerNetPaid ?? item.paidToFreelancer ?? 0)} and{" "}
-        {formatAmount(item.returnedToClient ?? 0)} went back to the client.
+        The freelancer received {formatTokenPayment(moneyText(item, item.freelancerNetPaid != null ? "freelancerNetPaid" : "paidToFreelancer"))} and{" "}
+        {formatAmount(moneyText(item, "returnedToClient"))} went back to the client.
+        {" "}Platform fee: {formatTokenPayment(moneyText(item, "platformFeePaid"))}.
         {item.escrowEnded
           ? " The escrow was ended and the later milestones went back to the client."
           : ""}
@@ -389,11 +392,4 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(
     new Date(value),
   );
-}
-
-function formatAmount(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(value);
 }

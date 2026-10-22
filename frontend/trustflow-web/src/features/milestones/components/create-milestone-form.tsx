@@ -12,7 +12,7 @@ import type {
 type CreateMilestoneFormProps = {
     projectId: string;
     projectDeadline: string;
-    remainingBudget: number;
+    remainingBudget: number | string;
     existingSequenceNumbers: number[];
 
     onCreated: () => void;

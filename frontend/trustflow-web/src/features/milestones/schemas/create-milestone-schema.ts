@@ -1,4 +1,6 @@
+import { canonicalMoney, moneyUnits, formatMoney as formatAmount } from "@/lib/money/exact-money";
 import { z } from "zod";
+import { isExactJsonMoneyInput } from "@/lib/money/decimal-amount";
 
 const MAX_SAFE_AMOUNT = Number.MAX_SAFE_INTEGER / 100;
 
@@ -6,7 +8,7 @@ const MAX_SEQUENCE_NUMBER = 2_147_483_647;
 
 type CreateMilestoneSchemaOptions = {
   projectDeadline: string;
-  remainingBudget: number;
+  remainingBudget: number | string;
   existingSequenceNumbers: number[];
 };
 
@@ -15,10 +17,10 @@ export function createMilestoneSchema({
   remainingBudget,
   existingSequenceNumbers,
 }: CreateMilestoneSchemaOptions) {
-  const normalizedRemainingBudget =
-    Number.isFinite(remainingBudget) && remainingBudget > 0
-      ? remainingBudget
-      : 0;
+  let normalizedRemainingBudget = "0";
+  try {
+    if (moneyUnits(remainingBudget) > 0n) normalizedRemainingBudget = canonicalMoney(remainingBudget);
+  } catch { /* Invalid budgets must not allow a new amount. */ }
 
   const projectDeadlineDate = new Date(projectDeadline);
 
@@ -33,11 +35,14 @@ export function createMilestoneSchema({
     )
     .refine((value) => Number(value) >= 0.01, "Amount must be at least 0.01.")
     .refine(
-      (value) => Number(value) <= MAX_SAFE_AMOUNT,
-      "Amount is too large to process safely.",
+      (value) => Number(value) <= MAX_SAFE_AMOUNT && isExactJsonMoneyInput(value),
+      "Amount is too large or cannot be sent exactly. Enter a smaller amount.",
     )
     .refine(
-      (value) => Number(value) <= normalizedRemainingBudget,
+      (value) => {
+        try { return moneyUnits(value) <= moneyUnits(normalizedRemainingBudget); }
+        catch { return false; }
+      },
       `Amount cannot exceed the remaining budget of ${formatAmount(
         normalizedRemainingBudget,
       )}.`,
@@ -144,11 +149,4 @@ function createLocalEndOfDay(value: string) {
   const { year, month, day } = getDateParts(value);
 
   return new Date(year, month - 1, day, 23, 59, 59, 999);
-}
-
-function formatAmount(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(value);
 }

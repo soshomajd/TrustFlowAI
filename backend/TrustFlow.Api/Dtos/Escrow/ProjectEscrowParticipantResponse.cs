@@ -15,6 +15,7 @@ public sealed class ProjectEscrowParticipantResponse
     // The sum of this freelancer's milestones, which is what their escrow
     // must hold rather than the whole project budget.
     public decimal AssignedTotal { get; set; }
+    public string AssignedTotalExact => AssignedTotal.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public EscrowResponse? Escrow { get; set; }
 }

@@ -5,6 +5,7 @@ export type PublicMarketplaceMilestone = {
   title: string;
   description: string;
   amount: number;
+  amountExact?: string;
   sequenceNumber: number;
   deadline: string;
   isTaken: boolean;
@@ -17,8 +18,11 @@ export type MarketplaceProjectDetails = {
   title: string;
   description: string;
   budget: number;
+  budgetExact?: string;
   allocatedAmount: number;
+  allocatedAmountExact?: string;
   availableAmount: number;
+  availableAmountExact?: string;
   deadline: string;
   createdAt: string;
   status: ProjectStatus;

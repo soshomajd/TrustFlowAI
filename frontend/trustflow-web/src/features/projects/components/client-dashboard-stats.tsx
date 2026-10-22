@@ -1,4 +1,5 @@
 "use client";
+import { formatMoney as formatAmount, moneyText } from "@/lib/money/exact-money";
 
 import type { LucideIcon } from "lucide-react";
 import {
@@ -109,9 +110,7 @@ export function ClientDashboardStats() {
         },
         {
             label: "Total budget",
-            value: formatAmount(
-                summary.totalBudget,
-            ),
+            value: formatAmount(moneyText(summary, "totalBudget")),
             description:
                 "Combined project budgets",
             icon: WalletCards,
@@ -253,17 +252,5 @@ function formatNumber(
 ) {
     return new Intl.NumberFormat(
         "en-US",
-    ).format(value);
-}
-
-function formatAmount(
-    value: number,
-) {
-    return new Intl.NumberFormat(
-        "en-US",
-        {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-        },
     ).format(value);
 }

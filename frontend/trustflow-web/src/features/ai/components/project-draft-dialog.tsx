@@ -1,4 +1,5 @@
 "use client";
+import { formatMoney, moneyText } from "@/lib/money/exact-money";
 
 import { LoaderCircle, Sparkles } from "lucide-react";
 import { useState } from "react";
@@ -184,7 +185,7 @@ export function ProjectDraftDialog({
 
             <section className="rounded-xl border bg-background/35 p-4">
               <p className="text-sm font-semibold">
-                Suggested budget: {draft.budget.toFixed(2)}
+                Suggested budget: {formatMoney(moneyText(draft, "budget"))}
               </p>
 
               {draft.priceRationale && (
@@ -209,7 +210,7 @@ export function ProjectDraftDialog({
                       </p>
 
                       <span className="shrink-0 text-sm text-electric">
-                        {milestone.amount.toFixed(2)}
+                        {formatMoney(moneyText(milestone, "amount"))}
                       </span>
                     </div>
 

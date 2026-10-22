@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isExactJsonMoneyInput } from "@/lib/money/decimal-amount";
 
 const MAX_SAFE_BUDGET = Number.MAX_SAFE_INTEGER / 100;
 
@@ -13,8 +14,8 @@ const budgetSchema = z
   )
   .refine((value) => Number(value) >= 0.01, "Budget must be at least 0.01.")
   .refine(
-    (value) => Number(value) <= MAX_SAFE_BUDGET,
-    "Budget is too large to process safely.",
+    (value) => Number(value) <= MAX_SAFE_BUDGET && isExactJsonMoneyInput(value),
+    "Budget is too large or cannot be sent exactly. Enter a smaller amount.",
   )
   .transform((value) => Number(value));
 

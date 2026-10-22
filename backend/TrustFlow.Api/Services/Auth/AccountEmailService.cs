@@ -13,6 +13,7 @@ public enum AccountEmailResult
 
 public interface IAccountEmailService
 {
+    Task<AccountEmailResult> SendAdminSignInAsync(ApplicationUser user, CancellationToken cancellationToken);
     Task<AccountEmailResult> SendEmailVerificationAsync(
         ApplicationUser user,
         CancellationToken cancellationToken);
@@ -28,6 +29,12 @@ public sealed class AccountEmailService(
     ILogger<AccountEmailService> logger)
     : IAccountEmailService
 {
+    public Task<AccountEmailResult> SendAdminSignInAsync(ApplicationUser user, CancellationToken cancellationToken) => SendAsync(
+        user, AuthCodePurpose.AdminSignIn, "Your TrustFlow administrator sign-in code",
+        code => $"Your administrator sign-in code is:{Environment.NewLine}{Environment.NewLine}{code}{Environment.NewLine}{Environment.NewLine}" +
+            "Enter it only on your TrustFlow administrator sign-in page. The sign-in request expires in 5 minutes. " +
+            "If you did not request this, do not share the code.", cancellationToken);
+
     private static readonly int LifetimeMinutes =
         (int)AuthCodeService.Lifetime.TotalMinutes;
 

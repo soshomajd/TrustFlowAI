@@ -5,4 +5,5 @@ export type ClientDashboardSummary = {
   completedProjects: number;
   pendingProposals: number;
   totalBudget: number;
+  totalBudgetExact?: string;
 };

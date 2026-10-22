@@ -1,4 +1,5 @@
 "use client";
+import { formatMoney as formatAmount, moneyText } from "@/lib/money/exact-money";
 import { MemberName } from "@/features/profile-photos/components/user-avatar";
 
 
@@ -144,14 +145,14 @@ function AssignedProjectsResults({
                 <header className="flex flex-col gap-3 border-b p-5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h2 className="text-lg font-semibold">
-                            Active assignments
+                            Projects and escrow history
                         </h2>
 
                         <p className="mt-1 text-sm text-muted-foreground">
                             {response.totalItems}{" "}
                             {response.totalItems === 1
-                                ? "assigned project"
-                                : "assigned projects"}
+                                ? "project"
+                                : "projects"}
                         </p>
                     </div>
 
@@ -282,7 +283,7 @@ function AssignedProjectCard({
 
                         <span className="flex items-center gap-2">
                             <Clock3 className="size-3.5" />
-                            Assigned project created{" "}
+                            Project created{" "}
                             {formatDate(
                                 project.createdAt,
                             )}
@@ -294,9 +295,7 @@ function AssignedProjectCard({
                     <ProjectMeta
                         icon={CircleDollarSign}
                         label={project.isHistorical ? "Current assigned amount" : "Gross assigned amount"}
-                        value={formatAmount(
-                            project.myTotalAmount,
-                        )}
+                        value={formatAmount(moneyText(project, "myTotalAmount"))}
                     />
 
                     <ProjectMeta
@@ -338,13 +337,9 @@ function AssignedProjectCard({
                             </p>
 
                             <p className="mt-1 text-sm font-medium">
-                                {formatAmount(
-                                    project.allocatedAmount,
-                                )}{" "}
+                                {formatAmount(moneyText(project, "allocatedAmount"))}{" "}
                                 of{" "}
-                                {formatAmount(
-                                    project.budget,
-                                )}
+                                {formatAmount(moneyText(project, "budget"))}
                             </p>
                         </div>
 
@@ -568,16 +563,7 @@ function formatProjectStatus(
         : status;
 }
 
-function formatAmount(
-    value: number,
-) {
-    return new Intl.NumberFormat(
-        "en-US",
-        {
-            maximumFractionDigits: 2,
-        },
-    ).format(value);
-}
+
 
 function formatDate(
     value: string,

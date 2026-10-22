@@ -17,13 +17,14 @@ import { resendEmailSchema, verifyEmailSchema, type VerifyEmailFormValues, } fro
 const RESEND_COOLDOWN_SECONDS = 60;
 
 type VerifyEmailFormProps = {
+    admin?: boolean;
     email: string;
     // True when registration already mailed a code a moment ago.
     codeJustSent: boolean;
 };
 
-export function VerifyEmailForm({ email, codeJustSent, }: VerifyEmailFormProps) {
-    const verifyMutation = useVerifyEmail();
+export function VerifyEmailForm({ email, codeJustSent, admin = false, }: VerifyEmailFormProps) {
+    const verifyMutation = useVerifyEmail(admin);
     const resendMutation = useResendVerification();
 
     const { register, control, handleSubmit, formState: { errors, isSubmitting }, } = useForm<VerifyEmailFormValues>({
@@ -115,7 +116,7 @@ export function VerifyEmailForm({ email, codeJustSent, }: VerifyEmailFormProps) 
 
                     <div>
                         <CardTitle role="heading" aria-level={1} className="text-2xl font-semibold tracking-tight">
-                            Verify your email
+                            {admin ? "Verify administrator email" : "Verify your email"}
                         </CardTitle>
 
                         <CardDescription className="mt-2">
@@ -222,7 +223,7 @@ export function VerifyEmailForm({ email, codeJustSent, }: VerifyEmailFormProps) 
                             </Button>
 
                             <Link
-                                href="/login"
+                                href={admin ? "/admin/login" : "/login"}
                                 className="font-medium text-electric transition hover:text-electric/80"
                             >
                                 Back to sign in

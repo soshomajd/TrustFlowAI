@@ -18,6 +18,7 @@ export type ProjectDraftMilestone = {
   title: string;
   description: string;
   amount: number;
+  amountExact?: string;
   dueInDays: number;
 };
 
@@ -25,6 +26,7 @@ export type ProjectDraft = {
   title: string;
   description: string;
   budget: number;
+  budgetExact?: string;
   priceRationale: string;
   milestones: ProjectDraftMilestone[];
   assumptions: string[];

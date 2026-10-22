@@ -48,7 +48,7 @@ const steps: GuideStep[] = [
     {
         title: "Send a clear proposal",
         description:
-            "Pick the milestones you want to deliver. You can take one, a few, or all of them; the ones another freelancer already has are marked as taken. Your price is the total of the milestones you pick, because the client sets the price. Add your delivery time and a short message. If it is still pending, you can withdraw it from My proposals. After rejection or withdrawal, you can apply again with the current milestones and price, unless you already have an escrow on this project.",
+            "Pick the milestones you want to deliver. You can take one, a few, or all of them; the ones another freelancer already has are marked as taken. Your price is the total of the milestones you pick, because the client sets the price. Add your delivery time and a short message. If it is still pending, you can withdraw it from My proposals. After rejection or withdrawal, you can apply again with the current milestones and price, unless you already have an escrow on this project. The site checks before you open the form. If you have an escrow, even a cancelled one, Submit proposal is disabled and explains why. Find that contract in Assigned projects.",
         icon: Send,
         action: {
             label: "Open my proposals",
@@ -91,6 +91,9 @@ const reminders = [
     "Use the same wallet that you verified on your account.",
     "Disconnect in the top bar only signs the wallet out of this site. Your account keeps the address you verified.",
     "Do not start work until the escrow status says Funded.",
+    "The client funds the exact total recorded in your escrow contract. Token balances can show more decimal places than the project price because tokens have smaller units.",
+    "If your wallet confirms Start work but the page does not update, use Refresh on-chain status. If you retry Start work, the site first checks whether it has already started. Wait for any pending wallet transaction to finish before trying again.",
+    "If the client says funding or a refund is confirmed but the page has not updated, use Refresh on-chain status. It does not move money or ask you to sign. Keep waiting until the status is Funded before starting work.",
     "The client can cancel the escrow until you start work on-chain. If they do, you leave the project, your proposal is marked rejected, and your stages go back on the marketplace for others. A notification on the bell tells you what happened, even if you were offline. Open it to view the escrow history, or choose Mark as read to clear it.",
     "Finish your own milestones in order, one at a time. Another freelancer being slow does not block you.",
     "You cannot offer a lower price. The milestones you pick set the price you are paid.",
@@ -98,8 +101,11 @@ const reminders = [
     "Keep your proposal and submitted work clear and short.",
     "A dispute asks an AI to give an opinion on who is right, using the request, your delivered work and what you both write. The opinion does not move any money by itself.",
     "Use a desktop browser with a wallet extension such as MetaMask installed. If no browser wallet is found, open TrustFlow in that browser and try again.",
-    "Past escrows stay in Assigned projects after cancellation or resignation. Use View escrow history to check them. Open Transaction history for recorded funding and cancellation transactions.",
+    "Past escrows stay in Assigned projects after cancellation or resignation. Use View escrow history to check them. Open Transaction history for recorded funding and cancellation transactions. Use Open Messages to read any existing conversations. After you leave a project, its conversation is closed to new messages.",
+    "The client cannot delete a project that has an escrow record, so its payment history stays available.",
+    "Budgets, payments and refunds show their exact amounts, including small token fractions. A fee or net payment can have more than two decimal places.",
     "New escrows take a 10% fee from the freelancer’s gross award. A 100-unit award pays the freelancer 90. The client pays no extra platform fee, and refunds have no fee. Old escrows keep their original terms.",
+    "The fee is rounded down to the smallest token unit for each payment. You receive the rest. Fractions from different payments are not added together later.",
     "Ask for payment starts a 14 day clock on the escrow. During it the client can still release payment, and you can take the request back. After 14 days a human reviewer can pay you, pay the client back, or split the milestone. The reviewer chooses the split between you and the client; the contract deducts the fixed fee from your share.",
     "Leave this project gives up your unpaid milestones. The money not yet paid goes back to the client. Milestones already paid stay yours.",
     "If the reviewer never answers for 90 days, either of you can split the milestone 50/50 and end the escrow.",

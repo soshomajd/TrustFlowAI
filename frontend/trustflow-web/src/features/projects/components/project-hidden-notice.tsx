@@ -1,19 +1,16 @@
+import { moneyUnits, subtractMoney, formatMoneyCurrency } from "@/lib/money/exact-money";
 import { EyeOff } from "lucide-react";
 
 import type { ProjectStatus } from "@/features/projects/types/project";
 
 type ProjectHiddenNoticeProps = {
     status: ProjectStatus;
-    budget: number;
-    allocatedAmount: number;
+    budget: number | string;
+    allocatedAmount: number | string;
     milestoneCount: number;
 };
 
-const amountFormatter = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
-});
+
 
 // Explains the marketplace rule at the moment it bites: an open project is
 // only listed once its milestone amounts add up to the budget exactly.
@@ -23,11 +20,11 @@ export function ProjectHiddenNotice({
     allocatedAmount,
     milestoneCount,
 }: ProjectHiddenNoticeProps) {
-    if (status !== "Open" || allocatedAmount === budget) {
+    if (status !== "Open" || moneyUnits(allocatedAmount) === moneyUnits(budget)) {
         return null;
     }
 
-    const difference = budget - allocatedAmount;
+    const difference = subtractMoney(budget, allocatedAmount);
 
     return (
         <div
@@ -44,9 +41,9 @@ export function ProjectHiddenNotice({
                 <p className="mt-1 text-sm text-muted-foreground">
                     {milestoneCount === 0
                         ? "Add milestones that add up to the full budget. Until then this project stays out of the marketplace and nobody can send a proposal."
-                        : difference > 0
-                          ? `${amountFormatter.format(difference)} of the ${amountFormatter.format(budget)} budget is not assigned to a milestone yet. Assign all of it to make this project visible.`
-                          : `Your milestones add up to ${amountFormatter.format(Math.abs(difference))} more than the ${amountFormatter.format(budget)} budget. Lower a milestone or raise the budget to make this project visible.`}
+                        : moneyUnits(difference) > 0n
+                          ? `${formatMoneyCurrency(difference)} of the ${formatMoneyCurrency(budget)} budget is not assigned to a milestone yet. Assign all of it to make this project visible.`
+                          : `Your milestones add up to ${formatMoneyCurrency(difference.replace(/^-/, ""))} more than the ${formatMoneyCurrency(budget)} budget. Lower a milestone or raise the budget to make this project visible.`}
                 </p>
             </div>
         </div>

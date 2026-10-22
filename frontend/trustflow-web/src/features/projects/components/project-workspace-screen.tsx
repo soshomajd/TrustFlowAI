@@ -1,4 +1,6 @@
 "use client";
+import { sumMoney } from "@/lib/money/exact-money";
+import { formatMoney as formatAmount, moneyText } from "@/lib/money/exact-money";
 import { MessageButton } from "@/features/chat/components/message-button";
 import { MemberName } from "@/features/profile-photos/components/user-avatar";
 
@@ -104,10 +106,7 @@ export function ProjectWorkspaceScreen({
     const project =
         workspaceQuery.data;
 
-    const allocatedAmount = project.milestones.reduce(
-        (total, milestone) => total + milestone.amount,
-        0,
-    );
+    const allocatedAmount = sumMoney(project.milestones.map((milestone) => moneyText(milestone, "amount")));
 
     // Work is assigned per milestone, so a project can have several
     // freelancers. Group the stages by owner to list them.
@@ -127,7 +126,7 @@ export function ProjectWorkspaceScreen({
                         existing?.fullName ??
                         null,
                     milestoneCount: (existing?.milestoneCount ?? 0) + 1,
-                    total: (existing?.total ?? 0) + milestone.amount,
+                    total: sumMoney([existing?.total ?? "0", moneyText(milestone, "amount")]),
                 });
 
                 return owners;
@@ -185,7 +184,7 @@ export function ProjectWorkspaceScreen({
 
             <ProjectHiddenNotice
                 status={project.status}
-                budget={project.budget}
+                budget={moneyText(project, "budget")}
                 allocatedAmount={allocatedAmount}
                 milestoneCount={project.milestones.length}
             />
@@ -194,9 +193,7 @@ export function ProjectWorkspaceScreen({
                 <WorkspaceDetailCard
                     icon={CircleDollarSign}
                     label="Budget"
-                    value={formatAmount(
-                        project.budget,
-                    )}
+                    value={formatAmount(moneyText(project, "budget"))}
                 />
 
                 <WorkspaceDetailCard
@@ -287,7 +284,7 @@ export function ProjectWorkspaceScreen({
                     hasProposals={
                         project.activeProposalCount > 0
                     }
-                    projectBudget={project.budget}
+                    projectBudget={moneyText(project, "budget")}
                     projectDeadline={
                         project.deadline
                     }
@@ -299,7 +296,7 @@ export function ProjectWorkspaceScreen({
             <div className="mt-6">
                 <ProjectProposalsSection
                     projectId={project.id}
-                    projectBudget={project.budget}
+                    projectBudget={moneyText(project, "budget")}
                 />
             </div>
         </AnimatedSection>
@@ -477,17 +474,7 @@ function ProjectWorkspaceState({
     );
 }
 
-function formatAmount(
-    value: number,
-) {
-    return new Intl.NumberFormat(
-        "en-US",
-        {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-        },
-    ).format(value);
-}
+
 
 function formatDate(
     value: string,

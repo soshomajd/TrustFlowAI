@@ -25,6 +25,10 @@ export const apiClient = axios.create(axiosDefaults);
 const refreshClient = axios.create(axiosDefaults);
 
 const AUTHENTICATION_PATHS = [
+  "/auth/admin/login",
+  "/auth/admin/setup",
+  "/auth/admin/mfa",
+  "/auth/admin/local-preview",
   "/auth/login",
   "/auth/register",
   "/auth/refresh",

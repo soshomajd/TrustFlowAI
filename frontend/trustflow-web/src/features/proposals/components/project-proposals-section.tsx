@@ -1,4 +1,6 @@
 "use client";
+import { sumMoney, moneyUnits } from "@/lib/money/exact-money";
+import { formatMoney as formatAmount, moneyText } from "@/lib/money/exact-money";
 import { MessageButton } from "@/features/chat/components/message-button";
 import { MemberName } from "@/features/profile-photos/components/user-avatar";
 
@@ -57,7 +59,7 @@ import { cn } from "@/lib/utils";
 
 type ProjectProposalsSectionProps = {
     projectId: string;
-    projectBudget: number;
+    projectBudget: number | string;
 };
 
 const PAGE_SIZE = 5;
@@ -222,20 +224,17 @@ function ProposalCard({
     proposal,
 }: {
     projectId: string;
-    projectBudget: number;
+    projectBudget: number | string;
     proposal: ClientProjectProposal;
 }) {
     // The freelancer applied at what their chosen stages paid then, so a
     // mismatch means those amounts changed afterwards. A proposal covering
     // only some stages is below the project budget by design, so comparing
     // against the budget would reject every partial proposal.
-    const claimedTotal = proposal.milestones.reduce(
-        (total, milestone) => total + milestone.amount,
-        0,
-    );
+    const claimedTotal = sumMoney(proposal.milestones.map((milestone) => moneyText(milestone, "amount")));
 
     const agreedPriceMatchesClaimed =
-        proposal.bidAmount === claimedTotal;
+        moneyUnits(moneyText(proposal, "bidAmount")) === moneyUnits(claimedTotal);
 
     return (
         <article className="rounded-xl border bg-background/40 p-4 transition hover:border-primary/40 hover:bg-background/70 sm:p-5">
@@ -297,7 +296,7 @@ function ProposalCard({
                                     >
                                         {milestone.sequenceNumber}. {milestone.title}
                                         <span className="ml-2 text-muted-foreground">
-                                            {formatAmount(milestone.amount)}
+                                            {formatAmount(moneyText(milestone, "amount"))}
                                         </span>
                                     </li>
                                 ))}
@@ -319,9 +318,7 @@ function ProposalCard({
                             CircleDollarSign
                         }
                         label="Agreed price"
-                        value={formatAmount(
-                            proposal.bidAmount,
-                        )}
+                        value={formatAmount(moneyText(proposal, "bidAmount"))}
                     />
 
                     <ProposalMeta
@@ -341,7 +338,7 @@ function ProposalCard({
                         <div className="flex gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 text-sm leading-6">
                             <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-400" />
                             <p className="text-muted-foreground">
-                                This freelancer applied when these stages paid {formatAmount(proposal.bidAmount)}, but they now pay {formatAmount(claimedTotal)}. They have not agreed to the new amount. Set those milestone amounts back to {formatAmount(proposal.bidAmount)} in total, or ask them to apply again.
+                                This freelancer applied when these stages paid {formatAmount(moneyText(proposal, "bidAmount"))}, but they now pay {formatAmount(claimedTotal)}. They have not agreed to the new amount. Set those milestone amounts back to {formatAmount(moneyText(proposal, "bidAmount"))} in total, or ask them to apply again.
                             </p>
                         </div>
                     )}
@@ -369,7 +366,7 @@ function AcceptProposalDialog({
     proposal,
 }: {
     projectId: string;
-    projectBudget: number;
+    projectBudget: number | string;
     proposal: ClientProjectProposal;
 }) {
     const [open, setOpen] =
@@ -384,13 +381,10 @@ function AcceptProposalDialog({
     const isAccepting =
         acceptMutation.isPending;
 
-    const claimedTotal = proposal.milestones.reduce(
-        (total, milestone) => total + milestone.amount,
-        0,
-    );
+    const claimedTotal = sumMoney(proposal.milestones.map((milestone) => moneyText(milestone, "amount")));
 
     const agreedPriceMatchesClaimed =
-        proposal.bidAmount === claimedTotal;
+        moneyUnits(moneyText(proposal, "bidAmount")) === moneyUnits(claimedTotal);
 
     const errorMessage =
         acceptMutation.isError
@@ -470,9 +464,7 @@ function AcceptProposalDialog({
                         </span>
 
                         <span className="font-medium">
-                            {formatAmount(
-                                proposal.bidAmount,
-                            )}
+                            {formatAmount(moneyText(proposal, "bidAmount"))}
                         </span>
                     </div>
 
@@ -914,17 +906,7 @@ function ProjectProposalsSkeleton() {
     );
 }
 
-function formatAmount(
-    value: number,
-) {
-    return new Intl.NumberFormat(
-        "en-US",
-        {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-        },
-    ).format(value);
-}
+
 
 function formatDateTime(
     value: string,

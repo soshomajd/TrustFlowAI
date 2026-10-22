@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Globalization;
 
 namespace TrustFlow.Api.Blockchain;
 
@@ -17,12 +18,12 @@ public static class TokenAmountConverter
             );
         }
 
-        if (tokenDecimals < 0)
+        if (tokenDecimals < 0 || tokenDecimals > 18)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(tokenDecimals),
                 tokenDecimals,
-                "Token decimals must not be negative."
+                "Token decimals must be between 0 and 18."
             );
         }
 
@@ -88,23 +89,18 @@ public static class TokenAmountConverter
             );
         }
 
-        if (baseUnits > new BigInteger(decimal.MaxValue))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(baseUnits),
-                baseUnits,
-                "Amount is too large."
-            );
-        }
-
-        var divisor = 1m;
-
-        for (var i = 0; i < tokenDecimals; i++)
-        {
-            divisor *= 10m;
-        }
-
-        var amount = (decimal)baseUnits / divisor;
+        // Divide as integers before converting. Base units may exceed
+        // decimal.MaxValue even when the human-readable amount fits exactly.
+        var divisor = BigInteger.Pow(10, tokenDecimals);
+        var whole = BigInteger.DivRem(baseUnits, divisor, out var fraction);
+        var text = whole.ToString(CultureInfo.InvariantCulture);
+        if (tokenDecimals > 0)
+            text += "." + fraction.ToString(CultureInfo.InvariantCulture)
+                .PadLeft(tokenDecimals, '0');
+        if (!decimal.TryParse(text, NumberStyles.AllowDecimalPoint,
+                CultureInfo.InvariantCulture, out var amount))
+            throw new ArgumentOutOfRangeException(nameof(baseUnits), baseUnits,
+                "Amount is too large.");
 
         if (ToBaseUnits(amount, tokenDecimals) != baseUnits)
         {

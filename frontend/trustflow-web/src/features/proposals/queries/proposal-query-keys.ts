@@ -6,6 +6,11 @@ import type {
 export const proposalQueryKeys = {
   all: ["proposals"] as const,
 
+  eligibilities: () => [...proposalQueryKeys.all, "eligibility"] as const,
+
+  eligibility: (projectId: string, userId: string) =>
+    [...proposalQueryKeys.eligibilities(), projectId, userId] as const,
+
   projectLists: () => [...proposalQueryKeys.all, "project-list"] as const,
 
   projectList: (

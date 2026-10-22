@@ -15,6 +15,8 @@ public class RefreshToken
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
     public string? ReplacedByTokenHash { get; set; }
+    public DateTimeOffset? AdminMfaVerifiedAt { get; set; }
+    public string? AdminSecurityStamp { get; set; }
     [NotMapped]
     public bool IsExpired => DateTimeOffset.UtcNow >= ExpiresAt;
     [NotMapped]

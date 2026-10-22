@@ -21,6 +21,8 @@ public sealed class EscrowCaseResponse
 
     public decimal MilestoneAmount { get; init; }
 
+    public string MilestoneAmountExact => MilestoneAmount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     // "PaymentRequest" or "RefundRequest".
     public string Kind { get; init; } = string.Empty;
 
@@ -43,10 +45,15 @@ public sealed class EscrowCaseResponse
 
     // Gross award before the fixed platform fee.
     public decimal? PaidToFreelancer { get; init; }
+    public string? PaidToFreelancerExact => PaidToFreelancer?.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public decimal PlatformFeePaid { get; init; }
+    public string PlatformFeePaidExact => PlatformFeePaid.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public decimal? FreelancerNetPaid { get; init; }
+    public string? FreelancerNetPaidExact => FreelancerNetPaid?.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public decimal? ReturnedToClient { get; init; }
+
+    public string? ReturnedToClientExact => ReturnedToClient?.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public bool EscrowEnded { get; init; }
 
@@ -72,6 +79,8 @@ public sealed class ReviewCaseSummaryResponse
 
     public decimal MilestoneAmount { get; init; }
 
+    public string MilestoneAmountExact => MilestoneAmount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     public string Kind { get; init; } = string.Empty;
 
     public string OpenedByRole { get; init; } = string.Empty;
@@ -91,10 +100,15 @@ public sealed class ReviewCaseSummaryResponse
 
     // Gross award before the fixed platform fee.
     public decimal? PaidToFreelancer { get; init; }
+    public string? PaidToFreelancerExact => PaidToFreelancer?.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public decimal PlatformFeePaid { get; init; }
+    public string PlatformFeePaidExact => PlatformFeePaid.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public decimal? FreelancerNetPaid { get; init; }
+    public string? FreelancerNetPaidExact => FreelancerNetPaid?.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public decimal? ReturnedToClient { get; init; }
+
+    public string? ReturnedToClientExact => ReturnedToClient?.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public DateTimeOffset? ClosedAt { get; init; }
 }

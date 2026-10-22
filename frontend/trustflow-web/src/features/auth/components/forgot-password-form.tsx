@@ -12,8 +12,8 @@ import { Label } from "@/components/ui/label";
 import { useForgotPassword } from "@/features/auth/hooks/use-account-recovery";
 import { forgotPasswordSchema, type ForgotPasswordFormValues, } from "@/features/auth/schemas/recovery-schemas";
 
-export function ForgotPasswordForm() {
-    const forgotMutation = useForgotPassword();
+export function ForgotPasswordForm({ admin = false }: { admin?: boolean }) {
+    const forgotMutation = useForgotPassword(admin);
 
     const { register, handleSubmit, formState: { errors, isSubmitting }, } = useForm<ForgotPasswordFormValues>({
         resolver: zodResolver(forgotPasswordSchema),
@@ -52,7 +52,7 @@ export function ForgotPasswordForm() {
 
                     <div>
                         <CardTitle role="heading" aria-level={1} className="text-2xl font-semibold tracking-tight">
-                            Forgot your password?
+                            {admin ? "Recover administrator password" : "Forgot your password?"}
                         </CardTitle>
 
                         <CardDescription className="mt-2">
@@ -114,7 +114,7 @@ export function ForgotPasswordForm() {
 
                         <p className="text-center text-sm text-muted-foreground">
                             <Link
-                                href="/login"
+                                href={admin ? "/admin/login" : "/login"}
                                 className="inline-flex items-center gap-1 font-medium text-electric transition hover:text-electric/80"
                             >
                                 <ArrowLeft className="size-3.5" />

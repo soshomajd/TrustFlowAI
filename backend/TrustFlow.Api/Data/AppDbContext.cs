@@ -20,6 +20,9 @@ public class AppDbContext(
     public DbSet<Project> Projects =>
         Set<Project>();
 
+    public DbSet<AdminAccessLog> AdminAccessLogs => Set<AdminAccessLog>();
+    public DbSet<AdminMfaChallenge> AdminMfaChallenges => Set<AdminMfaChallenge>();
+
     public DbSet<MileStone> Milestones =>
         Set<MileStone>();
 
@@ -66,6 +69,23 @@ public class AppDbContext(
 
 
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<AdminMfaChallenge>(entity =>
+        {
+            entity.Property(item => item.TokenHash).HasMaxLength(64);
+            entity.Property(item => item.SecurityStamp).HasMaxLength(256);
+            entity.HasIndex(item => item.TokenHash).IsUnique();
+            entity.HasIndex(item => new { item.UserId, item.CreatedAt });
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(item => item.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<RefreshToken>().Property(item => item.AdminSecurityStamp).HasMaxLength(256);
+
+        modelBuilder.Entity<AdminAccessLog>(log =>
+        {
+            log.Property(item => item.Action).HasMaxLength(64);
+            log.HasIndex(item => new { item.ProjectId, item.CreatedAt });
+            log.HasIndex(item => new { item.AdminId, item.CreatedAt });
+        });
         modelBuilder.Entity<LandingImageAsset>(asset =>
         {
             asset.HasKey(item => item.Slug);

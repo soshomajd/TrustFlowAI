@@ -1,4 +1,5 @@
 "use client";
+import { formatMoney as formatAmount, moneyText } from "@/lib/money/exact-money";
 
 import { formatTokenPayment } from "@/features/escrow/lib/platform-fee";
 
@@ -19,7 +20,6 @@ import {
 } from "lucide-react";
 import {
     formatEther,
-    formatUnits,
     type Address,
     zeroAddress,
 } from "viem";
@@ -53,6 +53,7 @@ import { useProjectEscrows } from "@/features/escrow/hooks/use-project-escrows";
 import { useStartWork } from "@/features/escrow/hooks/use-start-work";
 import { useSyncEscrow } from "@/features/escrow/hooks/use-sync-escrow";
 import { erc20Abi } from "@/features/escrow/lib/erc20-abi";
+import { escrowAbi } from "@/features/escrow/lib/escrow-abi";
 import {
     ACTIVE_CHAIN_ID,
     ACTIVE_CHAIN_NAME,
@@ -61,7 +62,7 @@ import {
     MIN_GAS_BALANCE,
     TEST_TOKEN_MINT_ENABLED,
 } from "@/features/escrow/lib/network-config";
-import { toBaseUnits } from "@/features/escrow/lib/token-amount";
+import { formatBaseUnits } from "@/lib/money/decimal-amount";
 import type { ProjectEscrow } from "@/features/escrow/types/escrow";
 import type { ProjectStatus } from "@/features/projects/types/project";
 import { WalletConnectButton } from "@/features/wallet/components/wallet-connect-button";
@@ -145,7 +146,7 @@ export function EscrowPanel({
                         freelancerFullName={
                             participant.freelancerFullName
                         }
-                        assignedTotal={participant.assignedTotal}
+                        assignedTotal={moneyText(participant, "assignedTotal")}
                         milestoneCount={participant.milestoneCount}
                     />
                 ) : (
@@ -175,7 +176,7 @@ function CreateEscrowCard({
     projectId: string;
     freelancerId: string;
     freelancerFullName: string;
-    assignedTotal: number;
+    assignedTotal: number | string;
     milestoneCount: number;
 }) {
     const connection = useConnection();
@@ -362,13 +363,13 @@ function EscrowDetailsCard({
                 <EscrowMeta
                     icon={CircleDollarSign}
                     label="Total"
-                    value={formatAmount(escrow.totalAmount)}
+                    value={formatAmount(moneyText(escrow, "totalAmount"))}
                 />
 
                 <EscrowMeta
                     icon={CheckCircle2}
                     label="Gross released"
-                    value={formatAmount(escrow.releasedAmount)}
+                    value={formatAmount(moneyText(escrow, "releasedAmount"))}
                 />
 
                 <EscrowMeta
@@ -389,8 +390,8 @@ function EscrowDetailsCard({
             </p>
             {(escrow.platformFeeBasisPoints ?? 0) === 1000 && (
                 <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-                    <p>Platform fees paid: {formatTokenPayment(escrow.platformFeesPaid ?? 0)} token units</p>
-                    <p>Freelancer received: {formatTokenPayment(escrow.freelancerNetPaid ?? 0)} token units</p>
+                    <p>Platform fees paid: {formatTokenPayment(moneyText(escrow, "platformFeesPaid"))} token units</p>
+                    <p>Freelancer received: {formatTokenPayment(moneyText(escrow, "freelancerNetPaid"))} token units</p>
                     <p className="break-all sm:col-span-2">Fixed fee receiving wallet: {escrow.feeRecipientAddress}</p>
                 </div>
             )}
@@ -471,9 +472,8 @@ function EscrowDetailsCard({
                             <p className="mb-3 text-sm text-muted-foreground">
                                 Fund this escrow with the total
                                 for its milestones. Your wallet
-                                will be asked to approve the
-                                token transfer and then fund the
-                                contract.
+                                approves the token transfer if
+                                needed, then funds the contract.
                             </p>
 
                             {!isWalletVerified ? (
@@ -492,12 +492,6 @@ function EscrowDetailsCard({
                         </p>
                     )}
 
-                    <SyncButton
-                        isPending={syncMutation.isPending}
-                        onClick={() => {
-                            syncMutation.mutate();
-                        }}
-                    />
                 </div>
             )}
 
@@ -577,6 +571,24 @@ function EscrowDetailsCard({
                                 cancel and get a refund.
                             </p>
                         )}
+                </div>
+            )}
+
+            {(escrow.status === "AwaitingFunding" || escrow.status === "Funded") && (
+                <div className="mt-5 border-t pt-5">
+                    <p className="text-sm text-muted-foreground">
+                        If your wallet confirmed a transaction but this page has
+                        not updated, refresh its on-chain status. This does not
+                        ask for a signature or move tokens. If a transaction is
+                        still pending in your wallet, wait for it to finish.
+                    </p>
+                    <SyncButton
+                        isPending={syncMutation.isPending}
+                        onClick={() => syncMutation.mutate()}
+                    />
+                    {syncMutation.isError && (
+                        <ErrorNotice message={getApiErrorMessage(syncMutation.error, "Escrow status could not be refreshed.")} />
+                    )}
                 </div>
             )}
 
@@ -791,6 +803,14 @@ function ClientFundingControls({
         },
     });
 
+    const contractAmountQuery = useReadContract({
+        address: escrow.contractAddress as Address,
+        abi: escrowAbi,
+        functionName: "totalAmount",
+        chainId: escrow.chainId,
+        query: { enabled: checksEnabled && Boolean(escrow.contractAddress) },
+    });
+
     const tokenBalanceQuery = useReadContract({
         address: escrow.tokenAddress as Address,
         abi: erc20Abi,
@@ -813,10 +833,10 @@ function ClientFundingControls({
     });
 
     const tokenDecimals = tokenDecimalsQuery.data;
-    const requiredTokenAmount =
-        tokenDecimals === undefined
-            ? null
-            : toBaseUnits(escrow.totalAmount, tokenDecimals);
+    const unsupportedDecimals = tokenDecimals !== undefined && tokenDecimals > 18;
+    const requiredTokenAmount = unsupportedDecimals
+        ? null
+        : contractAmountQuery.data ?? null;
 
     const tokenBalance = tokenBalanceQuery.data ?? 0n;
     const gasBalance = gasBalanceQuery.data?.value ?? 0n;
@@ -842,6 +862,7 @@ function ClientFundingControls({
 
     const checksLoading =
         tokenDecimalsQuery.isLoading ||
+        contractAmountQuery.isLoading ||
         tokenBalanceQuery.isLoading ||
         gasBalanceQuery.isLoading;
 
@@ -849,6 +870,9 @@ function ClientFundingControls({
         networkReady &&
         tokenReady &&
         gasReady &&
+        tokenDecimalsQuery.isSuccess &&
+        contractAmountQuery.isSuccess &&
+        !unsupportedDecimals &&
         !checksLoading;
 
     const testTokenMintAvailable =
@@ -859,6 +883,7 @@ function ClientFundingControls({
 
     const balanceReadFailed =
         tokenDecimalsQuery.isError ||
+        contractAmountQuery.isError ||
         tokenBalanceQuery.isError ||
         gasBalanceQuery.isError;
 
@@ -884,9 +909,9 @@ function ClientFundingControls({
                     value={formatTokenFundingBalance(
                         tokenBalance,
                         tokenDecimals,
-                        escrow.totalAmount,
+                        requiredTokenAmount,
                         tokenBalanceQuery.isLoading ||
-                            tokenDecimalsQuery.isLoading,
+                            tokenDecimalsQuery.isLoading || contractAmountQuery.isLoading,
                     )}
                     ready={tokenReady}
                     loading={
@@ -909,8 +934,9 @@ function ClientFundingControls({
             </div>
 
             {balanceReadFailed && (
-                <ErrorNotice message="Wallet balances could not be read from the configured network." />
+                <ErrorNotice message="Wallet balances or the exact escrow total could not be read from the configured network. Funding is unavailable until they can be checked." />
             )}
+            {unsupportedDecimals && <ErrorNotice message="This token uses unsupported precision. Tokens with 0 to 18 decimals are supported." />}
 
             <div className="flex flex-wrap gap-3">
                 {!networkReady &&
@@ -942,7 +968,7 @@ function ClientFundingControls({
                             variant="outline"
                             disabled={
                                 checksLoading ||
-                                balanceReadFailed ||
+                                balanceReadFailed || unsupportedDecimals ||
                                 testFundsMutation.isPending
                             }
                             onClick={() => {
@@ -1231,25 +1257,21 @@ function statusTone(
     return "neutral";
 }
 
-function formatAmount(value: number) {
-    return new Intl.NumberFormat("en-US", {
-        maximumFractionDigits: 2,
-    }).format(value);
-}
+
 
 function formatTokenFundingBalance(
     balance: bigint,
     decimals: number | undefined,
-    requiredAmount: number,
+    requiredAmount: bigint | null,
     loading: boolean,
 ) {
     if (loading || decimals === undefined) {
         return "Checking balance";
     }
 
-    const displayBalance = Number(formatUnits(balance, decimals));
-
-    return `${formatAmount(displayBalance)} / ${formatAmount(requiredAmount)} mUSDC`;
+    if (decimals > 18) return "Unsupported token precision";
+    const required = requiredAmount === null ? "Unavailable" : formatBaseUnits(requiredAmount, decimals);
+    return `${formatBaseUnits(balance, decimals)} / ${required} mUSDC`;
 }
 
 function formatGasBalance(balance: bigint) {

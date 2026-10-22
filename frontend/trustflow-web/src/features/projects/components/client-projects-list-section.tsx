@@ -1,4 +1,5 @@
 "use client";
+import { formatMoney as formatAmount, moneyText } from "@/lib/money/exact-money";
 import { MemberName } from "@/features/profile-photos/components/user-avatar";
 
 
@@ -232,6 +233,7 @@ function ClientProjectListItem({
 
     const handleDeleteProject =
         async () => {
+            if (project.hasEscrowHistory !== false) return;
             try {
                 await deleteMutation.mutateAsync(
                     project.id,
@@ -294,10 +296,8 @@ function ClientProjectListItem({
 
                         <ProjectHiddenBadge
                             status={project.status}
-                            budget={project.budget}
-                            allocatedAmount={
-                                project.allocatedAmount
-                            }
+                            budget={moneyText(project, "budget")}
+                            allocatedAmount={moneyText(project, "allocatedAmount")}
                         />
                     </div>
 
@@ -308,9 +308,7 @@ function ClientProjectListItem({
 
                 <div className="shrink-0 lg:text-right">
                     <p className="text-lg font-semibold">
-                        {formatAmount(
-                            project.budget,
-                        )}
+                        {formatAmount(moneyText(project, "budget"))}
                     </p>
 
                     <p className="text-xs text-muted-foreground">
@@ -347,9 +345,7 @@ function ClientProjectListItem({
 
                 <ProjectDetail
                     label="Allocated"
-                    value={formatAmount(
-                        project.allocatedAmount,
-                    )}
+                    value={formatAmount(moneyText(project, "allocatedAmount"))}
                     icon={CircleDollarSign}
                 />
             </div>
@@ -443,6 +439,8 @@ function ClientProjectListItem({
                                     variant="outline"
                                     size="sm"
                                     className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                    disabled={project.hasEscrowHistory !== false}
+                                    title={project.hasEscrowHistory ? "Projects with escrow history cannot be deleted." : undefined}
                                 >
                                     <Trash2 className="size-4" />
                                     Delete
@@ -478,7 +476,7 @@ function ClientProjectListItem({
                                         type="button"
                                         variant="destructive"
                                         disabled={
-                                            deleteMutation.isPending
+                                            deleteMutation.isPending || project.hasEscrowHistory !== false
                                         }
                                         onClick={() => {
                                             void handleDeleteProject();
@@ -509,6 +507,11 @@ function ClientProjectListItem({
                             to edit or delete this project.
                         </p>
                     )}
+                {project.status === "Open" && project.hasEscrowHistory && (
+                    <p className="w-full text-right text-xs text-muted-foreground">
+                        This project keeps escrow history and cannot be deleted.
+                    </p>
+                )}
             </div>
         </article >
     );
@@ -745,16 +748,7 @@ function formatDate(
     ).format(new Date(value));
 }
 
-function formatAmount(
-    value: number,
-) {
-    return new Intl.NumberFormat(
-        "en-US",
-        {
-            maximumFractionDigits: 2,
-        },
-    ).format(value);
-}
+
 
 function formatNumber(
     value: number,

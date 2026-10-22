@@ -1,4 +1,5 @@
 "use client";
+import { moneyText } from "@/lib/money/exact-money";
 
 import {
     AlertCircle,
@@ -134,9 +135,7 @@ export function EditProjectForm({
                 title: workspace.title,
                 description:
                     workspace.description,
-                budget: String(
-                    workspace.budget,
-                ),
+                budget: moneyText(workspace, "budget"),
                 deadline: toDateInputValue(
                     workspace.deadline,
                 ),

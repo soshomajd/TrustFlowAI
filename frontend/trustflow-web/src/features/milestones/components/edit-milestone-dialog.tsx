@@ -24,7 +24,7 @@ import type { ProjectMilestone } from
 type EditMilestoneDialogProps = {
     projectId: string;
     projectDeadline: string;
-    remainingBudget: number;
+    remainingBudget: number | string;
 
     existingSequenceNumbers: number[];
     milestone: ProjectMilestone;

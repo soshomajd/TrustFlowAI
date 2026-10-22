@@ -153,6 +153,38 @@ namespace TrustFlow.Api.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("TrustFlow.Api.Models.AdminAccessLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("AdminId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ResourceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AdminId", "CreatedAt");
+
+                    b.HasIndex("ProjectId", "CreatedAt");
+
+                    b.ToTable("AdminAccessLogs");
+                });
+
             modelBuilder.Entity("TrustFlow.Api.Models.Ai.AiRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -730,6 +762,47 @@ namespace TrustFlow.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TrustFlow.Api.Models.Identity.AdminMfaChallenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("AdminMfaChallenges");
+                });
+
             modelBuilder.Entity("TrustFlow.Api.Models.Identity.ApplicationUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -878,6 +951,13 @@ namespace TrustFlow.Api.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AdminMfaVerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AdminSecurityStamp")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1482,6 +1562,15 @@ namespace TrustFlow.Api.Migrations
                     b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", null)
                         .WithOne()
                         .HasForeignKey("TrustFlow.Api.Models.FreelancerResume", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.Identity.AdminMfaChallenge", b =>
+                {
+                    b.HasOne("TrustFlow.Api.Models.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

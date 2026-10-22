@@ -1,4 +1,6 @@
 "use client";
+import { sumMoney } from "@/lib/money/exact-money";
+import { formatMoney as formatAmount, moneyText } from "@/lib/money/exact-money";
 
 import { zodResolver } from
     "@hookform/resolvers/zod";
@@ -36,10 +38,12 @@ import { cn } from "@/lib/utils";
 type SubmitProposalFormProps = {
     projectId: string;
 
-    projectBudget?: number;
+    projectBudget?: number | string;
     projectTitle?: string;
 
     milestones: PublicMarketplaceMilestone[];
+    disabled?: boolean;
+    disabledReason?: string;
 
     onSubmitted: () => void;
     onCancel: () => void;
@@ -50,6 +54,8 @@ export function SubmitProposalForm({
     projectBudget,
     projectTitle,
     milestones,
+    disabled = false,
+    disabledReason,
     onSubmitted,
     onCancel,
 }: SubmitProposalFormProps) {
@@ -98,11 +104,13 @@ export function SubmitProposalForm({
 
     // The client fixes each stage's price, so the total is simply the sum
     // of the stages this freelancer is offering to deliver.
-    const selectedTotal = milestones
+    const selectedAmounts = milestones
         .filter((milestone) =>
             selectedMilestoneIds.includes(milestone.id),
         )
-        .reduce((total, milestone) => total + milestone.amount, 0);
+        .map((milestone) => moneyText(milestone, "amount"));
+
+    const selectedTotal = sumMoney(selectedAmounts);
 
     function toggleMilestone(milestoneId: string) {
         const next = selectedMilestoneIds.includes(milestoneId)
@@ -122,6 +130,7 @@ export function SubmitProposalForm({
         values:
             CreateProposalFormOutput,
     ) {
+        if (disabled) return;
         createProposalMutation.mutate(
             values,
             {
@@ -141,6 +150,7 @@ export function SubmitProposalForm({
                 handleSubmit,
             )}
         >
+            {disabledReason && <p role="status" className="rounded-xl border p-3 text-sm text-muted-foreground">{disabledReason}</p>}
             {(projectTitle ||
                 projectBudget !==
                 undefined) && (
@@ -225,7 +235,7 @@ export function SubmitProposalForm({
                                             </span>
 
                                             <span className="font-semibold">
-                                                {formatAmount(milestone.amount)}
+                                                {formatAmount(moneyText(milestone, "amount"))}
                                             </span>
                                         </span>
 
@@ -381,7 +391,7 @@ export function SubmitProposalForm({
 
                 <Button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || disabled}
                 >
                     {isSubmitting ? (
                         <>
@@ -395,16 +405,4 @@ export function SubmitProposalForm({
             </div>
         </form>
     );
-}
-
-function formatAmount(
-    value: number,
-) {
-    return new Intl.NumberFormat(
-        "en-US",
-        {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-        },
-    ).format(value);
 }

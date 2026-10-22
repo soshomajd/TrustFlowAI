@@ -10,8 +10,16 @@ import type {
   GetProjectProposalsParams,
   MyProposal,
   ProposalStatusResponse,
+  ProposalEligibility,
 } from "@/features/proposals/types/proposal";
 import { apiClient } from "@/lib/api/api-client";
+
+export async function getProposalEligibility(projectId: string, signal?: AbortSignal) {
+  const response = await apiClient.get<ProposalEligibility>(
+    `/projects/${projectId}/proposals/eligibility`, { signal },
+  );
+  return response.data;
+}
 
 export async function getProjectProposals(
   projectId: string,

@@ -11,6 +11,7 @@ export type ReviewCaseSummary = {
   projectTitle: string;
   milestoneTitle: string;
   milestoneAmount: number;
+  milestoneAmountExact?: string;
 
   kind: EscrowCaseKind;
   openedByRole: "Freelancer" | "Client";
@@ -24,10 +25,14 @@ export type ReviewCaseSummary = {
 
   hasAdvice: boolean;
   escrowEnded: boolean;
-  paidToFreelancer: number | null; // Gross award.
+  paidToFreelancer: number | null;
+  paidToFreelancerExact?: string | null; // Gross award.
   platformFeePaid?: number;
+  platformFeePaidExact?: string;
   freelancerNetPaid?: number | null;
+  freelancerNetPaidExact?: string | null;
   returnedToClient: number | null;
+  returnedToClientExact?: string | null;
   closedAt: string | null;
 };
 

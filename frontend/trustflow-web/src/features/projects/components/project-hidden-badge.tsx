@@ -1,11 +1,12 @@
+import { moneyUnits, subtractMoney, formatMoneyCurrency } from "@/lib/money/exact-money";
 import { EyeOff } from "lucide-react";
 
 import type { ProjectStatus } from "@/features/projects/types/project";
 
 type ProjectHiddenBadgeProps = {
     status: ProjectStatus;
-    budget: number;
-    allocatedAmount: number;
+    budget: number | string;
+    allocatedAmount: number | string;
 };
 
 // The marketplace only lists an open project once its milestone amounts add
@@ -16,23 +17,19 @@ export function ProjectHiddenBadge({
     budget,
     allocatedAmount,
 }: ProjectHiddenBadgeProps) {
-    if (status !== "Open" || allocatedAmount === budget) {
+    if (status !== "Open" || moneyUnits(allocatedAmount) === moneyUnits(budget)) {
         return null;
     }
 
-    const remaining = budget - allocatedAmount;
+    const remaining = subtractMoney(budget, allocatedAmount);
 
-    const remainingLabel = new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0,
-    }).format(Math.abs(remaining));
+    const remainingLabel = formatMoneyCurrency(remaining.replace(/^-/, ""));
 
     return (
         <div
             role="status"
             aria-label={
-                remaining > 0
+                moneyUnits(remaining) > 0n
                     ? `Hidden from freelancers, ${remainingLabel} of the budget is not assigned to milestones`
                     : `Hidden from freelancers, milestones exceed the budget by ${remainingLabel}`
             }
@@ -46,7 +43,7 @@ export function ProjectHiddenBadge({
 
             <span>
                 Hidden &middot;{" "}
-                {remaining > 0
+                {moneyUnits(remaining) > 0n
                     ? `${remainingLabel} unassigned`
                     : `${remainingLabel} over budget`}
             </span>

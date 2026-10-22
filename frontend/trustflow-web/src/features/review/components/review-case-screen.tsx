@@ -1,4 +1,7 @@
 "use client";
+import { formatMoney as formatAmount, moneyText, moneyUnits, moneyShare, subtractMoney } from "@/lib/money/exact-money";
+
+import { decimalToBaseUnits } from "@/lib/money/decimal-amount";
 
 import { previewPlatformFee, formatTokenPayment } from "@/features/escrow/lib/platform-fee";
 
@@ -118,7 +121,7 @@ function CaseView({
 
         <p className="text-sm text-muted-foreground">
           {detail.case.projectTitle} ·{" "}
-          {formatAmount(detail.case.milestoneAmount)} · milestone{" "}
+          {formatAmount(moneyText(detail.case, "milestoneAmount"))} · milestone{" "}
           {detail.milestoneSequence}
         </p>
 
@@ -387,8 +390,7 @@ function AdviceSection({
             Suggests{" "}
             <strong>{advice.freelancerSharePercent}% to the freelancer</strong>{" "}
             ({formatAmount(
-              (detail.case.milestoneAmount * advice.freelancerSharePercent) /
-                100,
+              moneyShare(moneyText(detail.case, "milestoneAmount"), advice.freelancerSharePercent),
             )}
             ), confidence {Math.round(advice.confidence * 100)}%.
           </p>
@@ -465,35 +467,36 @@ function DecisionSection({
   const settle = useSettleCase();
   const sync = useSyncReviewCase(caseId);
 
-  const amount = detail.case.milestoneAmount;
+  const amount = moneyText(detail.case, "milestoneAmount");
 
   const suggested =
     detail.advice !== null
-      ? (amount * detail.advice.freelancerSharePercent) / 100
+      ? moneyShare(amount, detail.advice.freelancerSharePercent)
       : detail.case.kind === "PaymentRequest"
         ? amount
-        : 0;
+        : "0";
 
   const [freelancerText, setFreelancerText] = useState(
-    suggested.toFixed(2),
+    suggested,
   );
   const [endEscrow, setEndEscrow] = useState(false);
   const [note, setNote] = useState(detail.reviewNote ?? "");
 
-  const freelancerAmount = Number(freelancerText);
-  const validAmount =
-    Number.isFinite(freelancerAmount) &&
-    freelancerAmount >= 0 &&
-    freelancerAmount <= amount &&
-    Math.round(freelancerAmount * 100) / 100 === freelancerAmount;
+  const freelancerAmount = freelancerText.trim();
+  let validAmount = false;
+  try {
+    decimalToBaseUnits(freelancerAmount, detail.tokenDecimals);
+    validAmount = /^\d+(?:\.\d{1,2})?$/.test(freelancerAmount)
+      && moneyUnits(freelancerAmount) <= moneyUnits(amount);
+  } catch { /* Invalid or inexact input keeps signing disabled. */ }
 
   const feePreview = validAmount
-    ? previewPlatformFee(freelancerAmount.toFixed(2), detail.tokenDecimals, detail.platformFeeBasisPoints ?? 0)
+    ? previewPlatformFee(freelancerText.trim(), detail.tokenDecimals, detail.platformFeeBasisPoints ?? 0)
     : { fee: "0", net: "0" };
 
   const clientAmount = validAmount
-    ? Math.round((amount - freelancerAmount) * 100) / 100
-    : 0;
+    ? subtractMoney(amount, freelancerAmount)
+    : "0";
 
   const isArbiterWallet =
     Boolean(connection.address) &&
@@ -514,13 +517,14 @@ function DecisionSection({
       await saveNote.mutateAsync(note.trim());
     }
 
-    await settle.mutateAsync({ detail, freelancerAmount, endEscrow });
+    await settle.mutateAsync({ detail, freelancerAmount: freelancerText, endEscrow });
 
     await sync.mutateAsync();
   }
 
   return (
     <Section title="Your decision">
+      <p className="mb-4 text-xs text-muted-foreground">Quick splits round down to whole cents. Check the exact amounts before you sign.</p>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="freelancer-amount">Gross freelancer award (before platform fee)</Label>
@@ -535,8 +539,8 @@ function DecisionSection({
 
           <div className="flex flex-wrap gap-2">
             {[
-              ["Nothing", 0],
-              ["Half", amount / 2],
+              ["Nothing", "0"],
+              ["Half", moneyShare(amount, 50)],
               ["All", amount],
             ].map(([label, value]) => (
               <Button
@@ -545,7 +549,7 @@ function DecisionSection({
                 size="sm"
                 variant="outline"
                 disabled={busy}
-                onClick={() => setFreelancerText((value as number).toFixed(2))}
+                onClick={() => setFreelancerText(value as string)}
               >
                 {label as string}
               </Button>
@@ -557,7 +561,7 @@ function DecisionSection({
                 size="sm"
                 variant="outline"
                 disabled={busy}
-                onClick={() => setFreelancerText(suggested.toFixed(2))}
+                onClick={() => setFreelancerText(suggested)}
               >
                 AI suggestion
               </Button>
@@ -687,9 +691,10 @@ function ClosedSection({ detail }: { detail: ReviewCaseDetail }) {
       {detail.case.status === "Settled" ? (
         <p className="text-sm leading-6">
           The freelancer received{" "}
-          {formatTokenPayment(detail.case.freelancerNetPaid ?? detail.case.paidToFreelancer ?? 0)} and{" "}
-          {formatAmount(detail.case.returnedToClient ?? 0)} went back to the
+          {formatTokenPayment(moneyText(detail.case, detail.case.freelancerNetPaid != null ? "freelancerNetPaid" : "paidToFreelancer"))} and{" "}
+          {formatAmount(moneyText(detail.case, "returnedToClient"))} went back to the
           client.
+          {" "}Platform fee: {formatTokenPayment(moneyText(detail.case, "platformFeePaid"))}.
           {detail.case.escrowEnded
             ? " The escrow was ended and the later milestones went back to the client."
             : ""}
@@ -713,11 +718,4 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(
     new Date(value),
   );
-}
-
-function formatAmount(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(value);
 }

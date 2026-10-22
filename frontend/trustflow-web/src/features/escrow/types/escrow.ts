@@ -27,11 +27,16 @@ export type ProjectEscrow = {
   arbiterWalletAddress: string | null;
 
   totalAmount: number;
-  releasedAmount: number; // Gross awarded, including the platform fee.
+
+  totalAmountExact?: string;
+  releasedAmount: number;
+  releasedAmountExact?: string; // Gross awarded, including the platform fee.
   platformFeeBasisPoints?: number;
   feeRecipientAddress?: string | null;
   platformFeesPaid?: number;
+  platformFeesPaidExact?: string;
   freelancerNetPaid?: number;
+  freelancerNetPaidExact?: string;
   tokenDecimals?: number | null;
 
   status: EscrowStatus;
@@ -55,6 +60,7 @@ export type ProjectEscrowParticipant = {
   freelancerFullName: string;
   milestoneCount: number;
   assignedTotal: number;
+  assignedTotalExact?: string;
   escrow: ProjectEscrow | null;
 };
 
@@ -72,6 +78,7 @@ export type EscrowCase = {
   milestoneId: string;
   milestoneTitle: string;
   milestoneAmount: number;
+  milestoneAmountExact?: string;
 
   kind: EscrowCaseKind;
   openedByRole: "Freelancer" | "Client";
@@ -87,11 +94,15 @@ export type EscrowCase = {
   stallableAt: string;
 
   closedAt: string | null;
-  paidToFreelancer: number | null; // Gross award, kept for API compatibility.
+  paidToFreelancer: number | null;
+  paidToFreelancerExact?: string | null; // Gross award, kept for API compatibility.
   platformFeePaid?: number;
+  platformFeePaidExact?: string;
   freelancerNetPaid?: number | null;
+  freelancerNetPaidExact?: string | null;
   platformFeeBasisPoints?: number;
   returnedToClient: number | null;
+  returnedToClientExact?: string | null;
   escrowEnded: boolean;
   reviewNote: string | null;
 

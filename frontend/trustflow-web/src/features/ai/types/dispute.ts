@@ -15,7 +15,9 @@ export type DisputeRuling = {
   freelancerSharePercent: number;
   clientSharePercent: number;
   freelancerAmount: number;
+  freelancerAmountExact?: string;
   clientAmount: number;
+  clientAmountExact?: string;
   confidence: number;
   summary: string;
   findings: AiCriterion[];
@@ -30,6 +32,7 @@ export type Dispute = {
   milestoneId: string;
   milestoneTitle: string;
   milestoneAmount: number;
+  milestoneAmountExact?: string;
   status: DisputeStatus;
   myRole: DisputeSide;
   openedByRole: DisputeSide;

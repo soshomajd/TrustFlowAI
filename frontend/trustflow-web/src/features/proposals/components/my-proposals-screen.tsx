@@ -1,4 +1,5 @@
 "use client";
+import { formatMoney as formatAmount, moneyText } from "@/lib/money/exact-money";
 
 import {
     BriefcaseBusiness,
@@ -305,7 +306,7 @@ function MyProposalCard({
                                     >
                                         {milestone.sequenceNumber}. {milestone.title}
                                         <span className="ml-2 text-muted-foreground">
-                                            {formatAmount(milestone.amount)}
+                                            {formatAmount(moneyText(milestone, "amount"))}
                                         </span>
                                     </li>
                                 ))}
@@ -327,9 +328,7 @@ function MyProposalCard({
                     <ProposalMeta
                         icon={CircleDollarSign}
                         label="Agreed price"
-                        value={formatAmount(
-                            proposal.bidAmount,
-                        )}
+                        value={formatAmount(moneyText(proposal, "bidAmount"))}
                     />
 
                     <ProposalMeta
@@ -565,17 +564,7 @@ function truncateText(
     )}...`;
 }
 
-function formatAmount(
-    value: number,
-) {
-    return new Intl.NumberFormat(
-        "en-US",
-        {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-        },
-    ).format(value);
-}
+
 
 function formatDateTime(
     value: string,

@@ -35,6 +35,8 @@ public sealed class ProjectDraftResponse
 
     public decimal Budget { get; init; }
 
+    public string BudgetExact => Budget.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     public string PriceRationale { get; init; } = string.Empty;
 
     public List<ProjectDraftMilestone> Milestones { get; init; } = [];
@@ -55,6 +57,8 @@ public sealed class ProjectDraftMilestone
     public string Description { get; init; } = string.Empty;
 
     public decimal Amount { get; init; }
+
+    public string AmountExact => Amount.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public int DueInDays { get; init; }
 }
@@ -178,7 +182,11 @@ public sealed class DisputeRulingResponse
 
     public decimal FreelancerAmount { get; init; }
 
+    public string FreelancerAmountExact => FreelancerAmount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     public decimal ClientAmount { get; init; }
+
+    public string ClientAmountExact => ClientAmount.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public decimal Confidence { get; init; }
 
@@ -204,6 +212,8 @@ public sealed class DisputeResponse
     public string MilestoneTitle { get; init; } = string.Empty;
 
     public decimal MilestoneAmount { get; init; }
+
+    public string MilestoneAmountExact => MilestoneAmount.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     // Open, Ruled, Inconclusive or Settled
     public string Status { get; init; } = string.Empty;

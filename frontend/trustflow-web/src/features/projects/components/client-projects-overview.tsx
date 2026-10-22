@@ -1,4 +1,5 @@
 "use client";
+import { formatMoney as formatAmount, moneyText } from "@/lib/money/exact-money";
 
 import {
     AlertCircle,
@@ -264,7 +265,7 @@ function ProjectRow({
 
                 <div className="shrink-0 text-left lg:text-right">
                     <p className="text-sm font-semibold">
-                        {formatAmount(project.budget)}
+                        {formatAmount(moneyText(project, "budget"))}
                     </p>
 
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -408,13 +409,4 @@ function formatDate(value: string) {
             dateStyle: "medium",
         },
     ).format(new Date(value));
-}
-
-function formatAmount(value: number) {
-    return new Intl.NumberFormat(
-        "en-US",
-        {
-            maximumFractionDigits: 2,
-        },
-    ).format(value);
 }

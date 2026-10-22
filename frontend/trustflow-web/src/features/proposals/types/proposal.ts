@@ -7,6 +7,7 @@ export type ProposalMilestone = {
   id: string;
   title: string;
   amount: number;
+  amountExact?: string;
   sequenceNumber: number;
 };
 
@@ -19,6 +20,7 @@ export type ClientProjectProposal = {
 
   coverLetter: string;
   bidAmount: number;
+  bidAmountExact?: string;
   estimatedDays: number;
 
   status: ProposalStatus;
@@ -45,6 +47,7 @@ export type CreatedProposal = {
 
   coverLetter: string;
   bidAmount: number;
+  bidAmountExact?: string;
   estimatedDays: number;
 
   status: ProposalStatus;
@@ -60,6 +63,7 @@ export type MyProposal = {
 
   coverLetter: string;
   bidAmount: number;
+  bidAmountExact?: string;
   estimatedDays: number;
 
   status: ProposalStatus;
@@ -87,4 +91,9 @@ export type AcceptProposalResponse = {
 
   proposalStatus: ProposalStatus;
   projectStatus: ProjectStatus;
+};
+export type ProposalEligibility = {
+  canSubmit: boolean;
+  reason: "ExistingEscrow" | "ActiveProposal" | "NotHiring" | null;
+  message: string | null;
 };

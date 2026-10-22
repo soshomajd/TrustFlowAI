@@ -1,4 +1,5 @@
 "use client";
+import { formatMoney as formatAmount, moneyText } from "@/lib/money/exact-money";
 
 import { LoaderCircle, Trash2, TriangleAlert, } from "lucide-react";
 import { useState } from "react";
@@ -106,9 +107,7 @@ export function DeleteMilestoneDialog({
                         </span>
 
                         <span className="font-medium">
-                            {formatAmount(
-                                milestone.amount,
-                            )}
+                            {formatAmount(moneyText(milestone, "amount"))}
                         </span>
                     </div>
                 </div>
@@ -147,16 +146,4 @@ export function DeleteMilestoneDialog({
             </DialogContent>
         </Dialog>
     );
-}
-
-function formatAmount(
-    value: number,
-) {
-    return new Intl.NumberFormat(
-        "en-US",
-        {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-        },
-    ).format(value);
 }

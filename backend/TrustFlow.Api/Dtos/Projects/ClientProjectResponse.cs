@@ -20,7 +20,11 @@ public sealed class ClientProjectResponse
 
     public decimal Budget { get; set; }
 
+    public string BudgetExact => Budget.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     public decimal AllocatedAmount { get; set; }
+
+    public string AllocatedAmountExact => AllocatedAmount.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public int MilestoneCount { get; set; }
 
@@ -29,6 +33,8 @@ public sealed class ClientProjectResponse
     public int ProposalCount { get; set; }
 
     public int PendingProposalCount { get; set; }
+
+    public bool HasEscrowHistory { get; set; }
 
     public DateTimeOffset Deadline { get; set; }
 

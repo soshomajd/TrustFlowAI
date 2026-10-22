@@ -21,6 +21,7 @@ using System.Globalization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using TrustFlow.Api.Constants;
+using TrustFlow.Api.Services.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -253,8 +254,30 @@ builder.Services
                 NameClaimType = ClaimTypes.Name,
                 RoleClaimType = ClaimTypes.Role
             };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var users = context.HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
+                var network = context.HttpContext.RequestServices.GetRequiredService<AdminNetworkAccess>();
+                if (context.Principal?.HasClaim(LocalAdminPreview.Claim, "true") == true)
+                {
+                    if (!await LocalAdminPreview.ValidateAsync(context.HttpContext, context.Principal, users,
+                        context.HttpContext.RequestServices.GetRequiredService<IWebHostEnvironment>(),
+                        context.HttpContext.RequestServices.GetRequiredService<IConfiguration>()))
+                        context.Fail("Local administrator preview is unavailable.");
+                    return;
+                }
+                if (context.Principal is null
+                    || (context.Principal.IsInRole(AppRoles.Admin) && !network.IsAllowed(context.HttpContext))
+                    || !await AdminSessionSecurity.ValidateAsync(context.Principal, users))
+                    context.Fail("Administrator multi-factor verification is required.");
+            }
+        };
     });
 
+builder.Services.AddSingleton<AdminNetworkAccess>();
+builder.Services.AddScoped<AdminMfaService>();
 builder.Services.AddAuthorization();
 
 var allowedOrigins = builder.Configuration
@@ -552,6 +575,7 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+_ = app.Services.GetRequiredService<AdminNetworkAccess>();
 
 if (app.Environment.IsEnvironment("Testing"))
 {
@@ -586,6 +610,17 @@ if (!app.Environment.IsEnvironment("Testing"))
 {
     app.UseRateLimiter();
 }
+app.Use(async (context, next) =>
+{
+    if (AdminNetworkAccess.IsManagementPath(context.Request.Path)
+        && !context.RequestServices.GetRequiredService<AdminNetworkAccess>().IsAllowed(context))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new { message = "Administrator access requires an approved private connection." });
+        return;
+    }
+    await next(context);
+});
 app.UseAuthentication();
 
 app.UseAuthorization();

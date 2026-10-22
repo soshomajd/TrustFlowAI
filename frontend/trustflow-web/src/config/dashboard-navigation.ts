@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   Search,
+  ShieldCheck,
   Send,
   UserRound,
 } from "lucide-react";
@@ -22,6 +23,18 @@ export type DashboardNavigationItem = {
 };
 
 export const dashboardNavigationItems: DashboardNavigationItem[] = [
+  {
+    label: "Admin overview",
+    href: "/dashboard/admin",
+    icon: ShieldCheck,
+    roles: ["Admin"],
+  },
+  {
+    label: "All projects",
+    href: "/dashboard/admin/projects",
+    icon: FolderKanban,
+    roles: ["Admin"],
+  },
   {
     label: "Overview",
     href: "/dashboard/client",
