@@ -583,6 +583,96 @@ public sealed class EscrowCaseTests
                 scenario.Client.Token, new { Note = "I win." })).StatusCode);
     }
 
+    [Theory]
+    [InlineData("0")]
+    [InlineData("200")]
+    [InlineData("1000")]
+    [InlineData("0.000011")]
+    public async Task SettlementReferenceReasonsReceiptsAndNoticesStayIdenticalAndAcknowledgementsArePrivate(string award)
+    {
+        var scenario = await CreateSubmittedMilestoneAsync(_client);
+        await OpenCaseAsync(scenario, OnChainCaseKind.RefundRequest, 15);
+        var caseId = await CaseIdAsync(scenario);
+        var reference = EscrowCaseReference.Format(caseId);
+        Assert.Equal(reference, (await ListCasesAsync(scenario, scenario.Client)).Single().GetProperty("referenceCode").GetString());
+        var reviewer = await NewReviewerAsync();
+        const string reason = "The delivered work supports this milestone split.";
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(_client, HttpMethod.Put,
+            $"/api/review/cases/{caseId}/note", reviewer.Token, new { Note = reason })).StatusCode);
+        var gross = decimal.Parse(award, System.Globalization.CultureInfo.InvariantCulture);
+        FakeEscrowChainDeployer.SettleMilestone(scenario.ContractAddress, 0, Units(gross), endEscrow: false);
+        await SyncAsync(scenario, scenario.Client);
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            // Offline users still get the notice after the former seven-day cutoff.
+            await db.EscrowCases.Where(item => item.Id == caseId).ExecuteUpdateAsync(setters => setters
+                .SetProperty(item => item.ClosedAt, DateTimeOffset.UtcNow.AddDays(-30)));
+        }
+        JsonElement? firstNotice = null;
+        foreach (var person in new[] { scenario.Client, scenario.Freelancer })
+        {
+            var record = Assert.Single(await ListCasesAsync(scenario, person));
+            Assert.Equal(reference, record.GetProperty("referenceCode").GetString());
+            Assert.Equal(reason, record.GetProperty("reviewNote").GetString());
+            Assert.StartsWith("0x", record.GetProperty("settlementTransactionHash").GetString());
+            Assert.NotEqual(JsonValueKind.Null, record.GetProperty("settlementAt").ValueKind);
+            var notice = Assert.Single(await NotificationsAsync(person), item => item.GetProperty("id").GetString() == $"case-settled:{caseId}");
+            Assert.True(notice.GetProperty("canMarkRead").GetBoolean());
+            Assert.Equal(reference, notice.GetProperty("referenceCode").GetString());
+            Assert.Equal(reason, notice.GetProperty("reviewNote").GetString());
+            var message = notice.GetProperty("message").GetString()!;
+            Assert.Contains($"gross freelancer award {record.GetProperty("paidToFreelancerExact").GetString()};", message);
+            Assert.Contains($"platform fee {record.GetProperty("platformFeePaidExact").GetString()};", message);
+            Assert.Contains($"freelancer receives {record.GetProperty("freelancerNetPaidExact").GetString()};", message);
+            if (firstNotice.HasValue) Assert.Equal(firstNotice.Value.GetProperty("message").GetString(), message);
+            else firstNotice = notice;
+        }
+        var review = await ReadAsync(await SendAsync(_client, HttpMethod.Get, $"/api/review/cases/{caseId}", reviewer.Token));
+        Assert.Equal(reference, review.GetProperty("case").GetProperty("referenceCode").GetString());
+        Assert.NotEqual(JsonValueKind.Null, review.GetProperty("case").GetProperty("settlementTransactionHash").ValueKind);
+        var admin = await ReadAsync(await SendAsync(_client, HttpMethod.Get,
+            $"/api/admin/projects/{scenario.ProjectId}/disputes/escrow/{caseId}", reviewer.Token));
+        Assert.Equal(reference, admin.GetProperty("record").GetProperty("referenceCode").GetString());
+        Assert.NotEqual(JsonValueKind.Null, admin.GetProperty("outcome").GetProperty("paymentTransactionHash").ValueKind);
+        Assert.Equal(HttpStatusCode.Conflict, (await SendAsync(_client, HttpMethod.Put,
+            $"/api/review/cases/{caseId}/note", reviewer.Token, new { Note = "Changed after settlement." })).StatusCode);
+        var stranger = await NewPersonAsync(_client, "Freelancer", "Unrelated person");
+        var readUrl = $"/api/notifications/case-settled:{caseId}/read";
+        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(_client, HttpMethod.Post, readUrl, stranger.Token)).StatusCode);
+        for (var retry = 0; retry < 2; retry++)
+            Assert.Equal(HttpStatusCode.NoContent, (await SendAsync(_client, HttpMethod.Post, readUrl, scenario.Client.Token)).StatusCode);
+        await SyncAsync(scenario, scenario.Client);
+        Assert.DoesNotContain(await NotificationsAsync(scenario.Client), item => item.GetProperty("id").GetString() == $"case-settled:{caseId}");
+        Assert.Contains(await NotificationsAsync(scenario.Freelancer), item => item.GetProperty("id").GetString() == $"case-settled:{caseId}");
+        Assert.Equal(HttpStatusCode.NoContent, (await SendAsync(_client, HttpMethod.Post, readUrl, scenario.Freelancer.Token)).StatusCode);
+        Assert.DoesNotContain(await NotificationsAsync(scenario.Freelancer), item => item.GetProperty("id").GetString() == $"case-settled:{caseId}");
+        var result = Assert.Single(await ListCasesAsync(scenario, scenario.Client));
+        Assert.Equal(reason, result.GetProperty("reviewNote").GetString());
+        Assert.Equal(gross, result.GetProperty("paidToFreelancer").GetDecimal());
+        using var finalScope = _factory.Services.CreateScope();
+        var finalDb = finalScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var records = await finalDb.EscrowExecutionRecords.Where(item => item.MilestoneId == scenario.MilestoneId && item.Kind == "CaseSettlement").CountAsync();
+        Assert.Equal(1, records);
+    }
+
+    [Fact]
+    public async Task ShortReasonsAndAcknowledgementsBeforeSettlementAreRefused()
+    {
+        var scenario = await CreateSubmittedMilestoneAsync(_client);
+        await OpenCaseAsync(scenario, OnChainCaseKind.PaymentRequest, 15);
+        var caseId = await CaseIdAsync(scenario);
+        var reviewer = await NewReviewerAsync();
+        Assert.Equal(HttpStatusCode.BadRequest, (await SendAsync(_client, HttpMethod.Put,
+            $"/api/review/cases/{caseId}/note", reviewer.Token, new { Note = "Too short" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(_client, HttpMethod.Post,
+            $"/api/notifications/case-settled:{caseId}/read", scenario.Client.Token)).StatusCode);
+        FakeEscrowChainDeployer.WithdrawCase(scenario.ContractAddress);
+        await SyncAsync(scenario, scenario.Client);
+        Assert.Equal(HttpStatusCode.Conflict, (await SendAsync(_client, HttpMethod.Put,
+            $"/api/review/cases/{caseId}/note", reviewer.Token, new { Note = "Cannot edit a withdrawn case." })).StatusCode);
+    }
+
     [Fact]
     public async Task ThereIsNoRouteThatSettlesOrMovesAnything()
     {

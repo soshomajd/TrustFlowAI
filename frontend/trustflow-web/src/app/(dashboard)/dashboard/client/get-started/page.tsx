@@ -92,6 +92,7 @@ const steps: GuideStep[] = [
 ];
 
 const reminders = [
+    "Confirmed work starts and milestone payments keep a transaction receipt. If the site cannot save it, wait for the wallet transaction to finish and use Refresh on-chain status. Do not sign again.",
     "Use the same wallet that you verified on your account.",
     "Disconnect in the top bar only signs the wallet out of this site. Your account keeps the address you verified.",
     "A new project stays hidden until its milestone amounts add up to the budget.",
@@ -114,6 +115,7 @@ const reminders = [
     "The fee is rounded down to the smallest token unit for each payment. The freelancer receives the rest. Fractions from different payments are not added together later.",
     "Ask for refund starts a 14 day clock on the escrow. During it you can still release payment or take the request back. After 14 days a human reviewer can pay the freelancer, pay you back, or split the milestone. The reviewer chooses the split between you and the freelancer; the contract deducts the fixed fee from the freelancer’s share.",
     "If the freelancer leaves the project, the money not yet paid comes back to you and their unpaid milestones open for hire again.",
+    "The reviewer can choose a percentage of the disputed milestone. The case and result notice show the same tracking reference and shared reason to both sides. The freelancer award is shown before and after the platform fee. Open the project to read the full result and transaction reference. Mark as read hides only your own notice.",
     "If the reviewer never answers for 90 days, either of you can split the milestone 50/50 and end the escrow.",
 ];
 

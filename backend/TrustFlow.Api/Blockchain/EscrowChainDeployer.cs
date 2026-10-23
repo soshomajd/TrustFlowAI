@@ -104,6 +104,9 @@ public interface IEscrowChainDeployer
         bool includeFunding,
         bool includeCancellation,
         CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<OnChainExecutionEvent>> GetExecutionEventsAsync(string contractAddress,
+        string deploymentTransactionHash, CancellationToken cancellationToken);
 }
 
 public sealed partial class EscrowChainDeployer(

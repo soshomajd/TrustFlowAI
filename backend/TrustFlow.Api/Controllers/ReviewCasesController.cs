@@ -165,22 +165,21 @@ public sealed class ReviewCasesController(
     {
         var note = (request.Note ?? string.Empty).Trim();
 
-        if (note.Length == 0 || note.Length > NoteMaxLength)
+        if (note.Length < 10 || note.Length > NoteMaxLength)
         {
             return BadRequest(new
             {
                 message =
-                    $"The note must be between 1 and {NoteMaxLength} " +
+                    $"The note must be between 10 and {NoteMaxLength} " +
                     "characters."
             });
         }
 
         var now = DateTimeOffset.UtcNow;
 
-        // A note can be written for an open case and until it is read by
-        // the sides; the settled case keeps whatever was written last.
+        // A closed case keeps the reasons the two sides saw at settlement.
         var written = await dbContext.EscrowCases
-            .Where(item => item.Id == caseId)
+            .Where(item => item.Id == caseId && item.Status == EscrowCaseStatus.Open)
             .ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(
@@ -193,7 +192,9 @@ public sealed class ReviewCasesController(
 
         if (written == 0)
         {
-            return NotFound(new { message = "Case not found." });
+            return await dbContext.EscrowCases.AnyAsync(item => item.Id == caseId, cancellationToken)
+                ? Conflict(new { message = "The case is closed. Its shared reasons cannot be changed." })
+                : NotFound(new { message = "Case not found." });
         }
 
         var detail = await BuildDetailAsync(caseId, cancellationToken);
@@ -305,6 +306,9 @@ public sealed class ReviewCasesController(
             row.TokenAddress,
             cancellationToken);
 
+        var receipt = await dbContext.EscrowExecutionRecords.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.EscrowId == row.Case.EscrowId &&
+                item.MilestoneId == row.Case.MilestoneId && item.Kind == "CaseSettlement", cancellationToken);
         var now = DateTimeOffset.UtcNow;
 
         return new ReviewCaseDetailResponse
@@ -315,7 +319,7 @@ public sealed class ReviewCasesController(
                 row.ProjectTitle,
                 row.MilestoneTitle,
                 row.MilestoneAmount,
-                now),
+                now, receipt),
             ProjectDescription = row.ProjectDescription,
             MilestoneDescription = row.MilestoneDescription,
             MilestoneSequence = row.MilestoneSequence,
@@ -345,7 +349,7 @@ public sealed class ReviewCasesController(
         string projectTitle,
         string milestoneTitle,
         decimal milestoneAmount,
-        DateTimeOffset now)
+        DateTimeOffset now, EscrowExecutionRecord? receipt = null)
     {
         var settleableAt = item.OpenedAt + EscrowCaseRules.ResponseWindow;
 
@@ -369,7 +373,9 @@ public sealed class ReviewCasesController(
             PlatformFeePaid = item.PlatformFeePaid,
             FreelancerNetPaid = item.PaidToFreelancer - item.PlatformFeePaid,
             ReturnedToClient = item.ReturnedToClient,
-            ClosedAt = item.ClosedAt
+            ClosedAt = item.ClosedAt,
+            SettlementTransactionHash = item.Status == EscrowCaseStatus.Settled ? receipt?.TransactionHash : null,
+            SettlementAt = item.Status == EscrowCaseStatus.Settled ? receipt?.OccurredAt : null
         };
     }
 

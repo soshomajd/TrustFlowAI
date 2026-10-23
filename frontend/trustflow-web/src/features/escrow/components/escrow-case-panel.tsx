@@ -283,6 +283,8 @@ function OpenCaseCard({
             : "You can still deliver the work or leave the project."}
       </p>
 
+      <p className="text-xs text-muted-foreground">Case reference: <code className="break-all">{item.referenceCode ?? "Not recorded"}</code></p>
+      {item.status === "Settled" && item.settlementTransactionHash && <p className="text-xs text-muted-foreground">Settlement transaction: <code className="break-all">{item.settlementTransactionHash}</code>{item.settlementAt ? ` · ${formatDate(item.settlementAt)}` : ""}</p>}
       {item.reviewNote && (
         <div className="rounded-lg border bg-card/50 p-3">
           <p className="text-xs font-medium">Note from the reviewer</p>
@@ -363,7 +365,7 @@ function SettledCaseCard({ item }: { item: EscrowCase }) {
   return (
     <article className="mt-3 space-y-2 text-sm">
       <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-xs text-blue-300">
-        Settled by a reviewer
+        Case settled
       </span>
 
       <p className="leading-6 text-muted-foreground">
@@ -375,6 +377,8 @@ function SettledCaseCard({ item }: { item: EscrowCase }) {
           : ""}
       </p>
 
+      <p className="text-xs text-muted-foreground">Case reference: <code className="break-all">{item.referenceCode ?? "Not recorded"}</code></p>
+      {item.status === "Settled" && item.settlementTransactionHash && <p className="text-xs text-muted-foreground">Settlement transaction: <code className="break-all">{item.settlementTransactionHash}</code>{item.settlementAt ? ` · ${formatDate(item.settlementAt)}` : ""}</p>}
       {item.reviewNote && (
         <div className="rounded-lg border bg-card/50 p-3">
           <p className="text-xs font-medium">Note from the reviewer</p>

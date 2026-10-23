@@ -59,6 +59,9 @@ public sealed class EscrowCase
 
     public bool EscrowEnded { get; set; }
 
+    public DateTimeOffset? ClientSettlementNoticeReadAt { get; set; }
+    public DateTimeOffset? FreelancerSettlementNoticeReadAt { get; set; }
+
     // The reviewer's reasons, written for the two parties.
     public string? ReviewNote { get; set; }
 

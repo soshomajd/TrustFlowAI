@@ -6,6 +6,7 @@ import type { Address } from "viem";
 import { readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { readContractQueryKey } from "wagmi/query";
 
+import { syncEscrow } from "@/features/escrow/api/escrow-api";
 import { escrowAbi } from "@/features/escrow/lib/escrow-abi";
 import { startWorkWithRecovery } from "@/features/escrow/lib/recoverable-escrow-actions";
 import { confirmEscrowTransaction } from "@/features/escrow/lib/transaction-confirmation";
@@ -29,6 +30,7 @@ export function useStartWork(projectId: string, freelancerId: string) {
     mutationFn: async ({ contractAddress, chainId }: StartWorkVariables) => {
       const address = contractAddress as Address;
       return startWorkWithRecovery({
+        sync: () => syncEscrow(normalizedProjectId, freelancerId),
         readStarted: () => readContract(wagmiConfig, {
           address,
           abi: escrowAbi,

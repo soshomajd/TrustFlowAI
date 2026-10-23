@@ -31,6 +31,29 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
 
     private static readonly ConcurrentDictionary<string, OnChainLifecycleEvents>
         LifecycleOverrides = new();
+    private static readonly ConcurrentDictionary<string, IReadOnlyList<OnChainExecutionEvent>> ExecutionOverrides = new();
+    private static readonly ConcurrentDictionary<(string Contract, int Index), DateTimeOffset> ExecutionTimes = new();
+    public static void SetExecutionEvents(string contract, IReadOnlyList<OnChainExecutionEvent> events) => ExecutionOverrides[contract] = events;
+
+    public Task<IReadOnlyList<OnChainExecutionEvent>> GetExecutionEventsAsync(string contractAddress, string deploymentTransactionHash, CancellationToken cancellationToken)
+    {
+        if (ExecutionOverrides.TryGetValue(contractAddress, out var overridden)) return Task.FromResult(overridden);
+        var request = GetDeployedRequest(contractAddress);
+        var result = new List<OnChainExecutionEvent>();
+        void Add(string kind, int index, BigInteger paid, BigInteger refunded, string participant, string sender)
+        {
+            var hash = "0x" + (index + 2).ToString("x").PadLeft(24, '0') + contractAddress[2..];
+            var at = ExecutionTimes.GetOrAdd((contractAddress, index), _ => DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds()));
+            result.Add(new OnChainExecutionEvent(kind, index, paid, refunded, participant, hash, hash, index + 2, 0, at, sender));
+        }
+        if (StartedEscrows.ContainsKey(contractAddress)) Add("WorkStarted", -1, 0, 0, request.FreelancerAddress, request.FreelancerAddress);
+        for (var index = 0; index < request.MilestoneAmounts.Count; index++)
+        {
+            if (SettledMilestones.TryGetValue((contractAddress, index), out var paid)) Add("CaseSettlement", index, paid, request.MilestoneAmounts[index] - paid, request.ArbiterAddress, request.ArbiterAddress);
+            else if (ReleasedMilestones.ContainsKey((contractAddress, index))) Add("ClientRelease", index, request.MilestoneAmounts[index], 0, request.FreelancerAddress, request.ClientAddress);
+        }
+        return Task.FromResult<IReadOnlyList<OnChainExecutionEvent>>(result);
+    }
 
     public static void SetLifecycleEvents(string contractAddress, OnChainLifecycleEvents events)
         => LifecycleOverrides[contractAddress] = events;

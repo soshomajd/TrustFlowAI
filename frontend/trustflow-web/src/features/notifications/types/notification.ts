@@ -8,6 +8,8 @@ export type NotificationItem = {
   message: string;
   href: string;
   projectTitle: string;
+  referenceCode?: string | null;
+  reviewNote?: string | null;
   canMarkRead: boolean;
 };
 

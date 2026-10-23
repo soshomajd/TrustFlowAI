@@ -10,6 +10,7 @@ export type AuthStatus =
   | "unavailable";
 
 type AuthState = {
+  readOnly: boolean;
   accessToken: string | null;
   expiresAtUtc: string | null;
   user: AuthUser | null;
@@ -23,6 +24,7 @@ type AuthState = {
 };
 
 export const useAuthStore = create<AuthState>()((set) => ({
+  readOnly: false,
   accessToken: null,
   expiresAtUtc: null,
   user: null,
@@ -37,6 +39,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
       accessToken: session.accessToken,
       expiresAtUtc: session.expiresAtUtc,
       user: session.user,
+      readOnly: session.readOnly === true,
       status: "authenticated",
     });
   },
@@ -46,6 +49,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
       accessToken: null,
       expiresAtUtc: null,
       user: null,
+      readOnly: false,
       status: "unauthenticated",
     });
   },

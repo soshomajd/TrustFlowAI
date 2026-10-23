@@ -173,6 +173,9 @@ function NotificationRow({
             {item.message}
           </p>
 
+          {item.referenceCode && <p className="mt-1 break-all text-xs text-muted-foreground">Case reference: <code>{item.referenceCode}</code></p>}
+          {item.reviewNote && <p dir="auto" className="mt-1 line-clamp-3 whitespace-pre-wrap break-words text-xs text-muted-foreground">Reason: {item.reviewNote}</p>}
+
           <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
             <span className={cn("size-1.5 rounded-full", style.dot)} />
             <span className="truncate">{item.projectTitle}</span>

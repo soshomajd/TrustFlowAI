@@ -43,7 +43,7 @@ public sealed class EscrowCasesController(
         var rows = await dbContext.EscrowCases
             .AsNoTracking()
             .Where(item =>
-                item.Escrow.ProjectId == projectId &&
+                item.Escrow.ProjectId == projectId && item.Milestone.ProjectId == projectId &&
                 (isClient || item.Escrow.FreelancerId == userId))
             .OrderByDescending(item => item.OpenedAt)
             .Take(100)
@@ -59,6 +59,11 @@ public sealed class EscrowCasesController(
                 MilestoneAmount = item.Milestone.Amount
             })
             .ToListAsync(cancellationToken);
+
+        var escrowIds = rows.Select(row => row.Case.EscrowId).Distinct().ToArray();
+        var receipts = await dbContext.EscrowExecutionRecords.AsNoTracking()
+            .Where(item => escrowIds.Contains(item.EscrowId) && item.Kind == "CaseSettlement")
+            .ToDictionaryAsync(item => (item.EscrowId, item.MilestoneId), cancellationToken);
 
         return Ok(rows.Select(row => new EscrowCaseResponse
         {
@@ -76,6 +81,10 @@ public sealed class EscrowCasesController(
             SettleableAt = row.Case.OpenedAt + EscrowCaseRules.ResponseWindow,
             StallableAt = row.Case.OpenedAt + EscrowCaseRules.StallWindow,
             ClosedAt = row.Case.ClosedAt,
+            SettlementTransactionHash = row.Case.Status == EscrowCaseStatus.Settled
+                ? receipts.GetValueOrDefault((row.Case.EscrowId, row.Case.MilestoneId))?.TransactionHash : null,
+            SettlementAt = row.Case.Status == EscrowCaseStatus.Settled
+                ? receipts.GetValueOrDefault((row.Case.EscrowId, row.Case.MilestoneId))?.OccurredAt : null,
             PaidToFreelancer = row.Case.PaidToFreelancer,
             PlatformFeePaid = row.Case.PlatformFeePaid,
             FreelancerNetPaid = row.Case.PaidToFreelancer - row.Case.PlatformFeePaid,

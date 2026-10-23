@@ -86,8 +86,11 @@ section pages saved escrow summaries and per-escrow milestone payouts/settled ca
 Exact strings preserve gross awards, recorded fees, net freelancer receipts and
 known refunds. Each contract retains its network/token identity; case outcomes are
 not added to the totals again. Funding/cancellation references are shown when saved.
-Missing payout hashes/timestamps, incomplete legacy payouts and untraced termination
-refunds are explicitly unknown. These are saved accounting records, not live balances.
+Verified work-start, client-release and case-settlement receipt hashes/block times
+are retained in EscrowExecutionRecords and shown in the timeline, financial history
+and CSV. Required execution evidence is validated before new approval; sync also
+backfills completed legacy escrows without crediting funds again. Unverifiable
+legacy evidence and untraced termination refunds remain explicitly unknown. These are saved accounting records, not live balances.
 Finance reads and returned resource IDs are audited under the authenticated admin.
 The selected escrow's CSV report includes its whole saved summary, payouts and
 settled cases, independently of UI pagination. Export uses one consistent database
@@ -110,7 +113,12 @@ original written parties and saved AI opinions as advice only. Historical provid
 labels and missing/corrupt opinion text remain explicit. No chain sync, new AI call,
 settlement or note editing occurs here; the existing reviewer case can be opened
 separately. All successful list/detail reads are audited. New administrative
-mutations remain separate work.
+mutations remain separate work. The Timeline and admin access section aggregates
+saved event metadata with bounded category/date/actor filtering and protected keyset
+cursors. Admin access is a separate category; access paging pins its upper boundary
+before writing its own audit records. Undated status transitions remain separate
+from dated events. No content bodies, unread markers or payments are changed by
+viewing. The home page About section contains the English product overview.
 
 Run `node --test tests/admin-overview.test.mjs` for the admin landing-page states,
 role-specific navigation and default dashboard routing. Backend
@@ -169,3 +177,9 @@ convert them to JavaScript numbers. Existing numeric API fields and request
 bodies remain compatible. Project/stage forms still refuse values that the
 numeric request format cannot send exactly. Run `npm run test:amounts` for
 conversion, request-boundary and exact-display regressions.
+
+### Arbitration follow-up (23 October 2026)
+
+Review desk offers full refund, full gross award, percentage or exact-amount settlement for the disputed milestone. Percentages use integer token base units; fee/net/refund previews remain exact. A shared reason is required and closed-case notes cannot be edited. A stable case reference is visible to both parties, the reviewer and admin dossier. Result notices retain exact amounts and shared reasons until each party independently marks their notice as read. Verified settlement receipt/time is shown when captured. Local preview remains read-only; financial actions require the immutable human arbiter wallet and the contract's 14-day wait. Pending receipt retries reuse the same submitted transaction within the page; after a reload, wait for the wallet and refresh chain status before another action.
+
+Validation: 355 backend tests on a separate test database and 172 web tests pass, together with TypeScript, lint and the final production build. Populated financial cases are covered by isolated fixtures; no new live settlement was signed for this change. Report/moderation workflow, staff permissions and production acceptance remain later work.

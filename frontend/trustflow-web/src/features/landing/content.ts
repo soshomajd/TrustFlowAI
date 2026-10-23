@@ -73,6 +73,7 @@ export const images = {
 export type NavLink = { label: string; href: string };
 
 export const navLinks: NavLink[] = [
+  { label: "About", href: "#about-trustflow" },
   { label: "How it works", href: "#how-it-works" },
   { label: "Protection", href: "#protection" },
   { label: "AI help", href: "#ai-help" },

@@ -6,7 +6,7 @@ export type AdminDossier = {
   deadline: string; createdAt: string; participantCount: number;
   milestoneCount: number; proposalCount: number; escrowCount: number; deliveryCount: number;
 };
-export type DossierSection = "participants" | "milestones" | "proposals" | "escrows" | "deliveries" | "finance" | "conversations" | "disputes";
+export type DossierSection = "participants" | "milestones" | "proposals" | "escrows" | "deliveries" | "finance" | "conversations" | "disputes" | "timeline";
 export type DossierParticipant = {
   kind: "participant"; id: string; fullName: string; isClient: boolean;
   currentFreelancer: boolean; hasEscrow: boolean; hasProposal: boolean;

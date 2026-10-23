@@ -14,6 +14,7 @@ public sealed record AdminDisputeSummary(Guid Id, string RecordType, Guid Milest
     decimal MilestoneAmount, string Status, string OpenedByRole, Guid? ClientId, string ClientName,
     Guid? FreelancerId, string FreelancerName, DateTimeOffset OpenedAt, DateTimeOffset? ClosedAt)
 {
+    public string? ReferenceCode => RecordType == "escrow" ? TrustFlow.Api.Models.EscrowCaseReference.Format(Id) : null;
     public string? CaseKind { get; init; }
     public string MilestoneAmountExact => MilestoneAmount.ToString(CultureInfo.InvariantCulture);
     public DateTimeOffset? ReviewableAt => RecordType == "escrow" ? Add(EscrowCaseRules.ResponseWindow) : null;

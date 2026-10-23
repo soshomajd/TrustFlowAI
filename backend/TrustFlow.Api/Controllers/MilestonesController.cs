@@ -18,7 +18,8 @@ namespace TrustFlow.Api.Controllers;
 [Route("api/projects/{projectId:guid}/milestones")]
 public class MilestonesController(
     AppDbContext dbContext,
-    IEscrowChainDeployer chainDeployer)
+    IEscrowChainDeployer chainDeployer,
+    IEscrowExecutionTrace executionTrace)
     : ControllerBase
 {
     private static bool IsSerializationFailure(Exception exception)
@@ -1063,6 +1064,7 @@ public class MilestonesController(
                         escrow.FreelancerId == milestone.FreelancerId)
                     .Select(escrow => new
                     {
+                        escrow.Id,
                         escrow.ContractAddress,
                         escrow.TokenAddress,
                         escrow.PlatformFeeBasisPoints
@@ -1202,6 +1204,9 @@ public class MilestonesController(
 
         var escrowCompletedOnChain =
             escrowSnapshot.State == OnChainEscrowState.Completed;
+
+        // Keep verified receipt/block evidence before off-chain approval. A retry never transfers funds.
+        await executionTrace.CaptureAsync(preCheck.Escrow.Id, cancellationToken);
 
         const int maxAttempts = 3;
 

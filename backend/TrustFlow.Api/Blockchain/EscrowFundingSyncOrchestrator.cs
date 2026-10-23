@@ -15,7 +15,8 @@ public interface IEscrowChainSyncOrchestrator
 
 public sealed class EscrowChainSyncOrchestrator(
     AppDbContext dbContext,
-    IEscrowChainDeployer deployer)
+    IEscrowChainDeployer deployer,
+    IEscrowExecutionTrace executionTrace)
     : IEscrowChainSyncOrchestrator
 {
     public async Task<bool> TrySyncAsync(
@@ -96,6 +97,8 @@ public sealed class EscrowChainSyncOrchestrator(
         }
 
         var traced = await SyncLifecycleEventsAsync(escrow, snapshot, cancellationToken);
+        if (snapshot.WorkStarted || snapshot.NextMilestoneIndex > 0)
+            traced |= await executionTrace.CaptureAsync(escrow.Id, cancellationToken);
 
         switch (snapshot.State)
         {

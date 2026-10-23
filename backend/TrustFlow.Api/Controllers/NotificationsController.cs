@@ -29,6 +29,7 @@ public sealed class NotificationsController(
     private const string WarningSeverity = "warning";
     private const string InfoSeverity = "info";
     private const string CancellationIdPrefix = "escrow-cancelled:";
+    private const string SettlementIdPrefix = "case-settled:";
 
     [HttpGet]
     public async Task<IActionResult> GetNotifications(
@@ -96,7 +97,7 @@ public sealed class NotificationsController(
     }
 
     [HttpPost("{notificationId}/read")]
-    [Authorize(Roles = AppRoles.Freelancer)]
+    [Authorize(Roles = AppRoles.Client + "," + AppRoles.Freelancer)]
     public async Task<IActionResult> MarkRead(
         string notificationId,
         CancellationToken cancellationToken)
@@ -105,6 +106,31 @@ public sealed class NotificationsController(
         {
             return Unauthorized();
         }
+
+        if (notificationId.StartsWith(SettlementIdPrefix, StringComparison.Ordinal) &&
+            Guid.TryParse(notificationId[SettlementIdPrefix.Length..], out var caseId))
+        {
+            var cases = dbContext.EscrowCases.Where(item => item.Id == caseId &&
+                item.Status == EscrowCaseStatus.Settled && item.Escrow.ProjectId == item.Milestone.ProjectId &&
+                (item.Escrow.Project.ClientId == userId || item.Escrow.FreelancerId == userId));
+            var participant = await cases.Select(item => new { Client = item.Escrow.Project.ClientId == userId })
+                .SingleOrDefaultAsync(cancellationToken);
+            if (participant is null) return NotFound();
+            // Keep the update target at the case table; the authorized query
+            // becomes an EXISTS subquery instead of an update with navigation joins.
+            var authorizedIds = cases.Select(item => item.Id);
+            var notices = dbContext.EscrowCases.Where(item => authorizedIds.Contains(item.Id));
+            if (participant.Client)
+                await notices.Where(item => item.ClientSettlementNoticeReadAt == null).ExecuteUpdateAsync(
+                    setters => setters.SetProperty(item => item.ClientSettlementNoticeReadAt, DateTimeOffset.UtcNow), cancellationToken);
+            else
+                await notices.Where(item => item.FreelancerSettlementNoticeReadAt == null).ExecuteUpdateAsync(
+                    setters => setters.SetProperty(item => item.FreelancerSettlementNoticeReadAt, DateTimeOffset.UtcNow), cancellationToken);
+            return NoContent();
+        }
+
+        if (notificationId.StartsWith(CancellationIdPrefix, StringComparison.Ordinal) && !User.IsInRole(AppRoles.Freelancer))
+            return Forbid();
 
         if (!notificationId.StartsWith(CancellationIdPrefix, StringComparison.Ordinal) ||
             !Guid.TryParse(notificationId[CancellationIdPrefix.Length..], out var escrowId))
@@ -224,18 +250,19 @@ public sealed class NotificationsController(
             CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
-        var recently = now.AddDays(-7);
         var isReviewer = User.IsInRole(AppRoles.Admin);
 
         var cases = await dbContext.EscrowCases
             .AsNoTracking()
             .Where(item =>
+                item.Escrow.ProjectId == item.Milestone.ProjectId &&
                 (isReviewer ||
                  item.Escrow.FreelancerId == userId ||
                  item.Milestone.Project.ClientId == userId) &&
                 (item.Status == EscrowCaseStatus.Open ||
                  (item.Status == EscrowCaseStatus.Settled &&
-                  item.ClosedAt > recently)))
+                  ((item.Escrow.Project.ClientId == userId && item.ClientSettlementNoticeReadAt == null) ||
+                   (item.Escrow.FreelancerId == userId && item.FreelancerSettlementNoticeReadAt == null)))))
             .Select(item => new
             {
                 item.Id,
@@ -243,6 +270,8 @@ public sealed class NotificationsController(
                 item.Status,
                 item.OpenedAt,
                 item.PaidToFreelancer,
+                item.PlatformFeePaid,
+                item.ReviewNote,
                 item.ReturnedToClient,
                 ProjectId = item.Milestone.ProjectId,
                 MilestoneTitle = item.Milestone.Title,
@@ -277,7 +306,8 @@ public sealed class NotificationsController(
                         Message =
                             $"The 14 days are over for \"{row.MilestoneTitle}\".",
                         Href = $"/dashboard/review/{row.Id}",
-                        ProjectTitle = row.ProjectTitle
+                        ProjectTitle = row.ProjectTitle,
+                        ReferenceCode = EscrowCaseReference.Format(row.Id)
                     });
                 }
 
@@ -313,7 +343,8 @@ public sealed class NotificationsController(
                             : $"Answer for \"{row.MilestoneTitle}\" before "
                               + $"{settleDate}, when a person can decide.",
                     Href = href,
-                    ProjectTitle = row.ProjectTitle
+                    ProjectTitle = row.ProjectTitle,
+                    ReferenceCode = EscrowCaseReference.Format(row.Id)
                 });
             }
             else
@@ -324,13 +355,14 @@ public sealed class NotificationsController(
                     Kind = "CaseSettled",
                     Severity = InfoSeverity,
                     Title = "A case was settled",
-                    Message =
-                        $"\"{row.MilestoneTitle}\": the freelancer received "
-                        + $"{row.PaidToFreelancer:0.##} and "
-                        + $"{row.ReturnedToClient:0.##} went back to the "
-                        + "client.",
+                    Message = $"\"{row.MilestoneTitle}\": gross freelancer award {Exact(row.PaidToFreelancer)}; "
+                        + $"platform fee {Exact(row.PlatformFeePaid)}; freelancer receives {Exact(row.PaidToFreelancer - row.PlatformFeePaid)}; "
+                        + $"client refund {Exact(row.ReturnedToClient)}.",
+                    CanMarkRead = true,
+                    ReviewNote = row.ReviewNote,
                     Href = href,
-                    ProjectTitle = row.ProjectTitle
+                    ProjectTitle = row.ProjectTitle,
+                    ReferenceCode = EscrowCaseReference.Format(row.Id)
                 });
             }
         }
@@ -778,6 +810,8 @@ public sealed class NotificationsController(
 
         return items;
     }
+
+    private static string Exact(decimal? amount) => amount?.ToString(CultureInfo.InvariantCulture) ?? "not recorded";
 
     private static string FormatAmount(decimal amount) =>
         amount.ToString("N2", CultureInfo.InvariantCulture);

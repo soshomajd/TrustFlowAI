@@ -8,6 +8,7 @@ export type AuthUser = {
 };
 
 export type AuthSessionResponse = {
+  readOnly?: boolean;
   accessToken: string;
   expiresAtUtc: string;
   user: AuthUser;

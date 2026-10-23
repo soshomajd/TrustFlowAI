@@ -134,6 +134,44 @@ public sealed class EscrowLifecycleEventsTests
         Assert.DoesNotContain("eth_sendRawTransaction", rpc.Methods);
     }
 
+    [Theory]
+    [InlineData("valid")]
+    [InlineData("reverted")]
+    [InlineData("reorg")]
+    public async Task ExecutionReaderRequiresCanonicalSuccessfulReceiptsAndDecodesWorkReleaseAndSettlement(string mode)
+    {
+        var freelancer = "0x3333333333333333333333333333333333333333";
+        var arbiter = "0x5555555555555555555555555555555555555555";
+        string Topic(string value) => "0x" + Sha3Keccack.Current.CalculateHash(value);
+        string Word(long value) => value.ToString("x").PadLeft(64,'0');
+        string Address(string value) => "0x"+value[2..].PadLeft(64,'0');
+        object Event(string hash, string[] topics, string data) => new {
+            address=Contract,transactionHash=hash,blockNumber="0xf",logIndex="0x0",transactionIndex="0x0",blockHash=DeploymentHash,removed=false,topics,data };
+        await using var rpc = new RpcServer(request => {
+            var method=request.GetProperty("method").GetString();
+            if(method=="eth_getTransactionReceipt") {
+                var hash=request.GetProperty("params")[0].GetString();
+                if(hash==DeploymentHash) return Receipt(Contract,"0x1");
+                return new {transactionHash=hash,blockNumber="0xf",blockHash=mode=="reorg"?FundingHash:DeploymentHash,status=mode=="reverted"?"0x0":"0x1",from=Client,logs=Array.Empty<object>()};
+            }
+            if(method=="eth_blockNumber") return "0x14";
+            if(method=="eth_getBlockByNumber") return new {number="0xf",hash=DeploymentHash,timestamp="0x68f38000",transactions=Array.Empty<string>()};
+            Assert.Equal("eth_getLogs",method);
+            var topic=request.GetProperty("params")[0].GetProperty("topics")[0].GetString();
+            if(topic==Topic("WorkStarted(address)")) return new[]{Event(FundingHash,[topic!,Address(freelancer)],"0x")};
+            if(topic==Topic("MilestoneReleased(uint256,uint256,address)")) return new[]{Event(CancellationHash,[topic!,"0x"+Word(0),Address(freelancer)],"0x"+Word(100))};
+            return new[]{Event("0x"+new string('c',64),[topic!,"0x"+Word(1),Address(arbiter)],"0x"+Word(40)+Word(60)+Word(0))};
+        });
+        if(mode!="valid") await Assert.ThrowsAsync<InvalidOperationException>(()=>Reader(rpc.Url).GetExecutionEventsAsync(Contract,DeploymentHash,CancellationToken.None));
+        else {
+            var rows=await Reader(rpc.Url).GetExecutionEventsAsync(Contract,DeploymentHash,CancellationToken.None);
+            Assert.Equal(3,rows.Count);Assert.Equal(new[]{"WorkStarted","ClientRelease","CaseSettlement"},rows.Select(item=>item.Kind));
+            Assert.Equal(new[]{-1,0,1},rows.Select(item=>item.MilestoneIndex));Assert.Equal(100,rows[1].GrossPaid);Assert.Equal(40,rows[2].GrossPaid);Assert.Equal(60,rows[2].Refunded);
+            Assert.All(rows,item=>{Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(0x68f38000),item.OccurredAt);Assert.Equal(Client,item.TransactionSender,ignoreCase:true);Assert.Equal(DeploymentHash,item.BlockHash);});
+        }
+        Assert.DoesNotContain("eth_sendRawTransaction",rpc.Methods);
+    }
+
     private sealed record RpcError(int Code, string Message);
 
     private static object Receipt(string contract, string status) => new

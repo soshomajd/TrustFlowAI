@@ -3,13 +3,18 @@ type EscrowRecord = { status: string };
 export async function startWorkWithRecovery(actions: {
   readStarted: () => Promise<boolean>;
   start: () => Promise<void>;
+  sync?: () => Promise<unknown>;
 }) {
-  if (await actions.readStarted()) return { alreadyStarted: true };
-  await actions.start();
-  if (!await actions.readStarted()) {
+  const alreadyStarted = await actions.readStarted();
+  if (!alreadyStarted) await actions.start();
+  if (!alreadyStarted && !await actions.readStarted()) {
     throw new Error("Work start is not yet confirmed on-chain. Wait for your wallet, then refresh the on-chain status before trying again.");
   }
-  return { alreadyStarted: false };
+  if (actions.sync) {
+    try { await actions.sync(); }
+    catch { throw new Error("Work started on-chain, but the site could not save its receipt. Use Refresh on-chain status; no new signature is needed."); }
+  }
+  return { alreadyStarted };
 }
 
 export async function releaseMilestoneWithRecovery(actions: {

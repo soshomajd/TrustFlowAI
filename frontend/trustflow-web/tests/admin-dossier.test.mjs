@@ -13,6 +13,7 @@ registerHooks({
     if (specifier === "@/features/admin/api/admin-finance-api") return { url: moduleUrl('export async function downloadAdminFinanceReport(){throw new Error("No network during render");}'), shortCircuit: true };
     if (specifier === "@/features/admin/hooks/use-admin-conversations") return { url: moduleUrl('export function useAdminConversations(){return {};} export function useAdminConversationMessages(){return {};}'), shortCircuit: true };
     if (specifier === "@/features/admin/hooks/use-admin-disputes") return { url: moduleUrl('export function useAdminDisputes(){return {};} export function useAdminDispute(){return {};}'), shortCircuit: true };
+    if (specifier === "@/features/admin/hooks/use-admin-timeline") return { url: moduleUrl('export function useAdminTimeline(){return {};}'), shortCircuit: true };
     if (specifier === "next/link") return nextResolve("next/link.js", context);
     if (specifier === "@/features/admin/hooks/use-admin-dossier") return { url: moduleUrl('export function useAdminDossier(){return globalThis.dossierProject;} export function useAdminDossierRecords(){return globalThis.dossierRecords;}'), shortCircuit: true };
     if (specifier === "@/features/admin/api/admin-dossier-api") return { url: moduleUrl('export async function downloadAdminDeliveryFile(){throw new Error("No network during render");}'), shortCircuit: true };

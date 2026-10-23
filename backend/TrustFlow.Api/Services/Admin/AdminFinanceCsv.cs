@@ -47,7 +47,8 @@ public static class AdminFinanceCsv
         Summary("deployment_transaction_hash", escrow.DeploymentTransactionHash); Summary("funding_transaction_hash", escrow.FundingTransactionHash);
         Summary("cancellation_transaction_hash", escrow.CancellationTransactionHash); Summary("funding_recorded_at", Time(escrow.FundedAt));
         Summary("cancellation_recorded_at", Time(escrow.CancelledAt)); Summary("last_saved_update", Time(escrow.UpdatedAt));
-        Summary("traceability_note", "Milestone payment transaction hashes and ordinary client-release timestamps are not stored. Case times are recorded closure times.");
+        Summary("work_start_transaction_hash", escrow.WorkStartTransactionHash); Summary("work_started_chain_time", Time(escrow.WorkStartedAt));
+        Summary("traceability_note", "Verified execution records provide payment hashes and block times. Missing historical evidence stays Not recorded. Case closure recording times can differ from chain times.");
         foreach (var gap in escrow.Gaps) Summary("missing_or_inconsistent_record", gap);
         foreach (var payout in payouts)
         {
@@ -55,7 +56,7 @@ public static class AdminFinanceCsv
             Payout("title", payout.Title); Payout("status", payout.Status.ToString()); Payout("gross_freelancer_award", payout.GrossAmountExact);
             Payout("recorded_platform_fee", payout.PlatformFeePaidExact); Payout("freelancer_net_paid", payout.FreelancerNetPaidExact);
             Payout("settlement_case_id", payout.CaseId?.ToString()); Payout("recorded_settlement_time", Time(payout.RecordedAt));
-            Payout("payment_transaction_hash", "Not recorded");
+            Payout("payment_transaction_hash", payout.PaymentTransactionHash ?? "Not recorded"); Payout("payment_chain_time", Time(payout.PaymentAt));
         }
         foreach (var outcome in settlements)
         {
@@ -64,7 +65,7 @@ public static class AdminFinanceCsv
             Outcome("gross_freelancer_award", outcome.GrossAmountExact); Outcome("recorded_platform_fee", outcome.PlatformFeePaidExact);
             Outcome("freelancer_net_paid", outcome.FreelancerNetPaidExact); Outcome("returned_to_client", outcome.ReturnedToClientExact);
             Outcome("escrow_ended", outcome.EscrowEnded ? "Yes" : "No"); Outcome("recorded_closure_time", Time(outcome.ClosedAt));
-            Outcome("payment_transaction_hash", "Not recorded");
+            Outcome("payment_transaction_hash", outcome.PaymentTransactionHash ?? "Not recorded"); Outcome("payment_chain_time", Time(outcome.PaymentAt));
         }
         // BOM makes UTF-8 names readable in common spreadsheet importers.
         return Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv.ToString())).ToArray();

@@ -21,7 +21,7 @@ export function AdminDisputeDetails({ projectId, kind, id }: { projectId: string
     {query.isError && <div role="alert"><p>Could not load this dispute.</p><p>{getApiErrorMessage(query.error, "Try Refresh saved dispute.")}</p>{data && <p>The details below are from the last successful refresh.</p>}</div>}
     {data && <>
       <dl className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
-        <Field label="Record ID">{data.record.id}</Field><Field label="Milestone">{data.record.milestoneTitle}</Field>
+        {data.record.referenceCode && <Field label="Case reference">{data.record.referenceCode}</Field>}<Field label="Record ID">{data.record.id}</Field><Field label="Milestone">{data.record.milestoneTitle}</Field>
         <Field label="Saved status">{data.record.status}</Field><Field label="Opened by">{data.record.openedByRole}</Field>
         <Field label="Client">{data.record.clientName}</Field><Field label="Freelancer">{data.record.freelancerName}</Field>
         <Field label="Client account">{data.record.clientId}</Field><Field label="Freelancer account">{data.record.freelancerId}</Field>
@@ -40,10 +40,10 @@ export function AdminDisputeDetails({ projectId, kind, id }: { projectId: string
         {data.outcome ? <div className="rounded-lg border p-4"><h4 className="font-semibold">Recorded settlement outcome</h4>
           <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2"><Field label="Gross freelancer award">{money(data.outcome.grossAmountExact)}</Field>
             <Field label="Platform fee">{money(data.outcome.platformFeePaidExact)}</Field><Field label="Freelancer net">{money(data.outcome.freelancerNetPaidExact)}</Field>
-            <Field label="Returned to client">{money(data.outcome.returnedToClientExact)}</Field><Field label="Escrow ended">{data.outcome.escrowEnded ? "Yes" : "No"}</Field><Field label="Payment transaction hash">Not recorded</Field></dl>
+            <Field label="Returned to client">{money(data.outcome.returnedToClientExact)}</Field><Field label="Escrow ended">{data.outcome.escrowEnded ? "Yes" : "No"}</Field><Field label="Payment transaction hash">{data.outcome.paymentTransactionHash}</Field><Field label="Payment block time">{date(data.outcome.paymentAt ?? null)}</Field></dl>
         </div> : <p className="text-sm text-muted-foreground">No settled financial outcome is recorded for this case.</p>}
         <p className="text-sm text-muted-foreground">Written disagreements are listed separately. No direct case-to-statement link is stored, so statements are not automatically attached to this case.</p>
-        <Link href={`/dashboard/review/${encodeURIComponent(data.record.id)}`} className="text-sm text-electric underline">Open existing reviewer case</Link>
+        <Link href={`/dashboard/review/${encodeURIComponent(data.record.id)}`} className="text-sm text-electric underline">Review financial decision</Link>
       </> : <div className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-lg border p-4"><h4 className="font-semibold">Opener’s statement</h4><p dir="auto" className="mt-2 whitespace-pre-wrap wrap-anywhere text-sm">{data.openerStatement ?? "Not recorded"}</p></div>
         <div className="rounded-lg border p-4"><h4 className="font-semibold">Respondent’s statement</h4><p dir="auto" className="mt-2 whitespace-pre-wrap wrap-anywhere text-sm">{data.respondentStatement ?? "No response recorded."}</p><p className="mt-2 text-xs text-muted-foreground">{date(data.respondentStatementAt)}</p></div>

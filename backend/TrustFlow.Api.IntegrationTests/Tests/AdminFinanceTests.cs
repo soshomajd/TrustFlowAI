@@ -256,6 +256,32 @@ public sealed class AdminFinanceTests(CustomWebApplicationFactory factory) : ICl
     }
 
     private static void Money(JsonElement row, string key, decimal expected) => Assert.Equal(expected, decimal.Parse(row.GetProperty(key).GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+    [Fact]
+    public async Task VerifiedExecutionEvidenceAppearsInFinanceCsvAndTimelineWithoutInventedTimes()
+    {
+        var s = await SeedAsync(); var at = new DateTimeOffset(2026,10,18,12,0,0,TimeSpan.Zero);
+        var workHash="0x"+new string('a',64);var payHash="0x"+new string('b',64);
+        using (var scope=factory.Services.CreateScope()) {
+            var db=scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.EscrowExecutionRecords.AddRange(
+                new EscrowExecutionRecord {EscrowId=s.Escrow.Id,MilestoneIndex=-1,Kind="WorkStarted",TransactionHash=workHash,BlockHash=workHash,BlockNumber=10,LogIndex=0,OccurredAt=at,TransactionSender="0x"+new string('1',40)},
+                new EscrowExecutionRecord {EscrowId=s.Escrow.Id,MilestoneId=s.Stage.Id,MilestoneIndex=0,Kind="ClientRelease",TransactionHash=payHash,BlockHash=payHash,BlockNumber=11,LogIndex=1,OccurredAt=at.AddMinutes(1),TransactionSender="0x"+new string('2',40)});
+            await db.SaveChangesAsync();
+        }
+        var overview=Assert.Single((await GetAsync(s,Url(s.Project.Id))).GetProperty("items").EnumerateArray());
+        Assert.Equal(workHash,overview.GetProperty("workStartTransactionHash").GetString());Assert.Equal(at,overview.GetProperty("workStartedAt").GetDateTimeOffset());
+        var payout=Assert.Single((await GetAsync(s,Url(s.Project.Id,s.Escrow.Id))).GetProperty("items").EnumerateArray());
+        Assert.Equal(payHash,payout.GetProperty("paymentTransactionHash").GetString());Assert.Equal(at.AddMinutes(1),payout.GetProperty("paymentAt").GetDateTimeOffset());
+        var report=await SendAsync(client,HttpMethod.Get,Url(s.Project.Id,s.Escrow.Id,"report.csv"),s.Admin.Token);
+        var csv=await report.Content.ReadAsStringAsync();Assert.Contains(workHash,csv);Assert.Contains(payHash,csv);Assert.Contains("payment_chain_time",csv);
+        var timeline=await GetAsync(s,$"/api/admin/projects/{s.Project.Id}/timeline?pageSize=100");
+        var events=timeline.GetProperty("items").EnumerateArray().ToArray();
+        Assert.Contains(events,item=>item.GetProperty("code").GetInt32()==37&&item.GetProperty("transactionHash").GetString()==workHash);
+        Assert.Contains(events,item=>item.GetProperty("code").GetInt32()==13&&item.GetProperty("transactionHash").GetString()==payHash);
+        var gaps=await GetAsync(s,$"/api/admin/projects/{s.Project.Id}/timeline?timing=missing");
+        Assert.DoesNotContain(gaps.GetProperty("items").EnumerateArray(),item=>item.GetProperty("code").GetInt32()==11);
+    }
+
     private async Task<JsonElement> GetAsync(Scenario s, string url)
     {
         var response = await SendAsync(client, HttpMethod.Get, url, s.Admin.Token); Assert.Equal(HttpStatusCode.OK, response.StatusCode);

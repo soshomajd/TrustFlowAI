@@ -1,5 +1,6 @@
 export type AdminDisputeKind = "escrow" | "written";
 export type AdminDisputeSummary = {
+  referenceCode?: string | null;
   id: string; recordType: AdminDisputeKind; milestoneId: string; milestoneTitle: string; milestoneAmountExact: string;
   caseKind: string | null; status: string; openedByRole: string; clientId: string | null; clientName: string;
   freelancerId: string | null; freelancerName: string; openedAt: string; closedAt: string | null;
@@ -11,6 +12,6 @@ export type AdminDisputeDetail = {
   tokenAddress: string | null; arbiterWalletAddress: string | null; clientWalletAddress: string | null; freelancerWalletAddress: string | null;
   openerStatement: string | null; respondentStatement: string | null; respondentStatementAt: string | null;
   reviewNote: string | null; reviewNoteAt: string | null;
-  outcome: { grossAmountExact: string | null; platformFeePaidExact: string | null; freelancerNetPaidExact: string | null; returnedToClientExact: string | null; escrowEnded: boolean } | null;
+  outcome: { paymentTransactionHash?: string | null; paymentAt?: string | null; grossAmountExact: string | null; platformFeePaidExact: string | null; freelancerNetPaidExact: string | null; returnedToClientExact: string | null; escrowEnded: boolean } | null;
   opinion: { readable: boolean; summary: string | null; reasoning: string | null; freelancerSharePercent: number | null; verdict: string | null; recordedAt: string | null; isDemo: boolean | null } | null;
 };

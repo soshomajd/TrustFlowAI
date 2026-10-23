@@ -73,6 +73,7 @@ public sealed class LocalAdminPreviewTests(CustomWebApplicationFactory factory) 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.False(response.Headers.Contains("Set-Cookie"));
         var body = await ReadAsync(response);
+        Assert.True(body.GetProperty("readOnly").GetBoolean());
         var token = body.GetProperty("accessToken").GetString()!;
         Assert.Equal(HttpStatusCode.OK, (await SendAsync(client, HttpMethod.Get, "/api/admin/overview", token)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await SendAsync(client, HttpMethod.Get, "/api/admin/projects", token)).StatusCode);

@@ -21,6 +21,7 @@ public class AppDbContext(
         Set<Project>();
 
     public DbSet<AdminAccessLog> AdminAccessLogs => Set<AdminAccessLog>();
+    public DbSet<EscrowExecutionRecord> EscrowExecutionRecords => Set<EscrowExecutionRecord>();
     public DbSet<AdminMfaChallenge> AdminMfaChallenges => Set<AdminMfaChallenge>();
 
     public DbSet<MileStone> Milestones =>
@@ -69,6 +70,22 @@ public class AppDbContext(
 
 
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<EscrowExecutionRecord>(record =>
+        {
+            record.Property(item => item.Kind).HasMaxLength(24).IsRequired();
+            record.Property(item => item.TransactionHash).HasMaxLength(66).IsRequired();
+            record.Property(item => item.BlockHash).HasMaxLength(66).IsRequired();
+            record.Property(item => item.TransactionSender).HasMaxLength(42).IsRequired();
+            record.HasOne(item => item.Escrow).WithMany().HasForeignKey(item => item.EscrowId).OnDelete(DeleteBehavior.Cascade);
+            record.HasIndex(item => new { item.EscrowId, item.MilestoneIndex }).IsUnique();
+            record.HasIndex(item => new { item.EscrowId, item.OccurredAt });
+            record.ToTable(table => table.HasCheckConstraint("CK_EscrowExecutionRecords_Evidence",
+                "length(\"TransactionHash\") = 66 AND length(\"BlockHash\") = 66 AND length(\"TransactionSender\") = 42 " +
+                "AND \"BlockNumber\" >= 0 AND \"LogIndex\" >= 0 AND \"OccurredAt\" > '1970-01-01'::timestamptz " +
+                "AND ((\"Kind\" = 'WorkStarted' AND \"MilestoneIndex\" = -1 AND \"MilestoneId\" IS NULL) " +
+                "OR (\"Kind\" IN ('ClientRelease','CaseSettlement') AND \"MilestoneIndex\" >= 0 AND \"MilestoneId\" IS NOT NULL))"));
+        });
 
         modelBuilder.Entity<AdminMfaChallenge>(entity =>
         {

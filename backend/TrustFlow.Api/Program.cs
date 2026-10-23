@@ -380,6 +380,7 @@ builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 builder.Services.AddScoped<IEscrowChainDeployer, EscrowChainDeployer>();
 builder.Services.AddScoped<IEscrowDeploymentOrchestrator, EscrowDeploymentOrchestrator>();
 builder.Services.AddScoped<IEscrowChainSyncOrchestrator, EscrowChainSyncOrchestrator>();
+builder.Services.AddScoped<IEscrowExecutionTrace, EscrowExecutionTrace>();
 builder.Services.Configure<MalwareScannerOptions>(
     builder.Configuration.GetSection(MalwareScannerOptions.SectionName));
 builder.Services.AddScoped<IMalwareScanner, ClamAvMalwareScanner>();

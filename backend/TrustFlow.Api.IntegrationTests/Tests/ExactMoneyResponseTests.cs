@@ -6,6 +6,14 @@ namespace TrustFlow.Api.IntegrationTests.Tests;
 
 public sealed class ExactMoneyResponseTests
 {
+    private static object CreateResponse(Type type)
+    {
+        var constructor = type.GetConstructors().OrderBy(item => item.GetParameters().Length).First();
+        return constructor.Invoke(constructor.GetParameters().Select(parameter => parameter.HasDefaultValue ? parameter.DefaultValue
+            : parameter.ParameterType == typeof(string) ? ""
+            : parameter.ParameterType.IsValueType ? Activator.CreateInstance(parameter.ParameterType) : null).ToArray());
+    }
+
     [Fact]
     public void FinancialResponseFields_PreserveExactDecimalsAndNumericCompatibility()
     {
@@ -33,8 +41,11 @@ public sealed class ExactMoneyResponseTests
                 Assert.NotNull(companion);
                 foreach (var value in new[] { 0m, 0.000001m, 9007199254740991.01m, decimal.MaxValue, 0.0000000000000000000000000001m })
                 {
-                    var response = Activator.CreateInstance(type)!;
+                    var response = CreateResponse(type);
                     property.SetValue(response, value);
+                    // Finance fee companions deliberately require a matching gross award.
+                    if (property.Name == "PlatformFeePaid" && type.GetProperty("GrossAmount") is { } gross)
+                        gross.SetValue(response, value);
                     var json = JsonSerializer.SerializeToElement(response, type, options);
                     var name = JsonNamingPolicy.CamelCase.ConvertName(property.Name);
                     Assert.Equal(JsonValueKind.Number, json.GetProperty(name).ValueKind);
@@ -43,7 +54,7 @@ public sealed class ExactMoneyResponseTests
                 }
                 if (Nullable.GetUnderlyingType(property.PropertyType) is not null)
                 {
-                    var json = JsonSerializer.SerializeToElement(Activator.CreateInstance(type), type, options);
+                    var json = JsonSerializer.SerializeToElement(CreateResponse(type), type, options);
                     Assert.Equal(JsonValueKind.Null, json.GetProperty(JsonNamingPolicy.CamelCase.ConvertName(companion.Name)).ValueKind);
                 }
                 checkedFields++;

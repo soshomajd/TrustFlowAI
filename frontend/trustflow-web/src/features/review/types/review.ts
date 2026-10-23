@@ -6,6 +6,9 @@ import type {
 import type { MilestoneSubmission } from "@/features/milestones/types/milestone";
 
 export type ReviewCaseSummary = {
+  referenceCode?: string;
+  settlementTransactionHash?: string | null;
+  settlementAt?: string | null;
   id: string;
   projectId: string;
   projectTitle: string;

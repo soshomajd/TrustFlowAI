@@ -77,6 +77,8 @@ public sealed class AdminFinanceController(AppDbContext db) : ControllerBase
                 DeploymentTransactionHash = item.DeploymentTransactionHash, FundingTransactionHash = item.FundingTransactionHash,
                 CancellationTransactionHash = item.CancellationTransactionHash, FundedAt = item.FundedAt,
                 CancelledAt = item.CancelledAt, UpdatedAt = item.UpdatedAt,
+                WorkStartedAt = db.EscrowExecutionRecords.Where(r => r.EscrowId == item.Id && r.Kind == "WorkStarted").Select(r => (DateTimeOffset?)r.OccurredAt).FirstOrDefault(),
+                WorkStartTransactionHash = db.EscrowExecutionRecords.Where(r => r.EscrowId == item.Id && r.Kind == "WorkStarted").Select(r => r.TransactionHash).FirstOrDefault(),
                 RecordedCaseRefunds = db.EscrowCases.Where(c => c.EscrowId == item.Id && c.Status == EscrowCaseStatus.Settled).Sum(c => c.ReturnedToClient) ?? 0,
                 UnknownCaseRefundCount = db.EscrowCases.Count(c => c.EscrowId == item.Id && c.Status == EscrowCaseStatus.Settled && c.ReturnedToClient == null),
                 RecordedMilestoneGross = db.Milestones.Where(m => m.ProjectId == projectId && m.FreelancerId == item.FreelancerId
@@ -95,7 +97,9 @@ public sealed class AdminFinanceController(AppDbContext db) : ControllerBase
             db.EscrowCases.Where(c => c.EscrowId == escrow.Id && c.MilestoneId == item.Id && c.Status == EscrowCaseStatus.Settled)
                 .OrderBy(c => c.Id).Select(c => (Guid?)c.Id).FirstOrDefault(),
             db.EscrowCases.Where(c => c.EscrowId == escrow.Id && c.MilestoneId == item.Id && c.Status == EscrowCaseStatus.Settled)
-                .OrderBy(c => c.Id).Select(c => c.ClosedAt).FirstOrDefault()));
+                .OrderBy(c => c.Id).Select(c => c.ClosedAt).FirstOrDefault(),
+            db.EscrowExecutionRecords.Where(r => r.EscrowId == escrow.Id && r.MilestoneId == item.Id).Select(r => r.TransactionHash).FirstOrDefault(),
+            db.EscrowExecutionRecords.Where(r => r.EscrowId == escrow.Id && r.MilestoneId == item.Id).Select(r => (DateTimeOffset?)r.OccurredAt).FirstOrDefault()));
 
     private IQueryable<AdminFinanceSettlement> Settlements(Escrow escrow) => db.EscrowCases.AsNoTracking()
         .Where(item => item.EscrowId == escrow.Id && item.Status == EscrowCaseStatus.Settled)
@@ -104,7 +108,9 @@ public sealed class AdminFinanceController(AppDbContext db) : ControllerBase
             item.PaidToFreelancer.HasValue && item.Milestone.PaidAmount.HasValue
                 && item.Milestone.PaidAmount == item.PaidToFreelancer && item.Milestone.FreelancerId == escrow.FreelancerId
                 ? (decimal?)item.Milestone.PlatformFeePaid : null,
-            item.ReturnedToClient, item.EscrowEnded, item.ClosedAt));
+            item.ReturnedToClient, item.EscrowEnded, item.ClosedAt,
+            db.EscrowExecutionRecords.Where(r => r.EscrowId == escrow.Id && r.MilestoneId == item.MilestoneId && r.Kind == "CaseSettlement").Select(r => r.TransactionHash).FirstOrDefault(),
+            db.EscrowExecutionRecords.Where(r => r.EscrowId == escrow.Id && r.MilestoneId == item.MilestoneId && r.Kind == "CaseSettlement").Select(r => (DateTimeOffset?)r.OccurredAt).FirstOrDefault()));
 
     private async Task<IActionResult> PageAsync<T>(Guid projectId, string action, IQueryable<T> query,
         AdminPageQuery request, Func<T, Guid> id, CancellationToken cancellationToken)

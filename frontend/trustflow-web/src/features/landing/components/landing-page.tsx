@@ -75,6 +75,7 @@ export function LandingPage() {
 
       <main id="main">
         <Hero />
+        <ProjectOverview />
         <Problems />
         <HowItWorks />
         <Specialists />
@@ -170,6 +171,21 @@ function Hero() {
             compact
             className="absolute -bottom-2 -left-24 z-10 hidden w-72 xl:block"
           />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ProjectOverview() {
+  return (
+    <section id="about-trustflow" aria-labelledby="overview-title" className="scroll-mt-24 px-4 pb-20 sm:px-6">
+      <div className="mx-auto max-w-7xl rounded-2xl border border-primary/20 bg-card/50 p-6 sm:p-10">
+        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-electric">About TrustFlow AI</p>
+        <h2 id="overview-title" className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">Milestone escrow with a clear project history</h2>
+        <div className="mt-5 max-w-4xl space-y-4 text-base leading-7 text-muted-foreground">
+          <p>TrustFlow AI is an experimental platform for freelance escrow contracts and milestone payments, with a fixed 10% fee deducted from the freelancer&apos;s gross award. Its read-only admin panel brings together financial records, deliveries, conversations, disputes and a project timeline.</p>
+          <p>Confirmed work starts, milestone releases and case settlements are recorded with verified transaction references and block timestamps. Reconciliation can run again without duplicating records or payments.</p>
         </div>
       </div>
     </section>

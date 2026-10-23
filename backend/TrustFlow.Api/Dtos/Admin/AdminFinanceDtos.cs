@@ -27,6 +27,8 @@ public sealed class AdminFinanceEscrow
     public DateTimeOffset? FundedAt { get; init; }
     public DateTimeOffset? CancelledAt { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
+    public DateTimeOffset? WorkStartedAt { get; init; }
+    public string? WorkStartTransactionHash { get; init; }
     private bool HasFunding => FundedAt.HasValue || !string.IsNullOrWhiteSpace(FundingTransactionHash);
     private bool ValidAmounts => TotalAmount >= 0 && GrossReleased >= 0 && GrossReleased <= TotalAmount
         && PlatformFeesPaid >= 0 && PlatformFeesPaid <= GrossReleased
@@ -69,7 +71,8 @@ public sealed class AdminFinanceEscrow
 }
 
 public sealed record AdminFinancePayout(Guid Id, string Title, MileStoneStatus Status, decimal? GrossAmount,
-    decimal PlatformFeePaid, Guid? CaseId, DateTimeOffset? RecordedAt)
+    decimal PlatformFeePaid, Guid? CaseId, DateTimeOffset? RecordedAt,
+    string? PaymentTransactionHash = null, DateTimeOffset? PaymentAt = null)
 {
     public string Kind => "payout";
     public string? GrossAmountExact => GrossAmount?.ToString(CultureInfo.InvariantCulture);
@@ -80,7 +83,8 @@ public sealed record AdminFinancePayout(Guid Id, string Title, MileStoneStatus S
 }
 
 public sealed record AdminFinanceSettlement(Guid Id, Guid MilestoneId, string MilestoneTitle, decimal? GrossAmount,
-    decimal? PlatformFeePaid, decimal? ReturnedToClient, bool EscrowEnded, DateTimeOffset? ClosedAt)
+    decimal? PlatformFeePaid, decimal? ReturnedToClient, bool EscrowEnded, DateTimeOffset? ClosedAt,
+    string? PaymentTransactionHash = null, DateTimeOffset? PaymentAt = null)
 {
     public string Kind => "settlement";
     public string? GrossAmountExact => GrossAmount?.ToString(CultureInfo.InvariantCulture);

@@ -128,3 +128,16 @@ test("a failed release cannot advance to off-chain approval", async () => {
   })(), /Payment reverted/);
   assert.equal(approved, false);
 });
+
+test("work start saves its receipt after confirmation and recovers a failed sync without signing twice", async () => {
+  let started = false, writes = 0, syncs = 0;
+  const actions = {
+    readStarted: async () => started,
+    start: async () => { started = true; writes++; },
+    sync: async () => { if (++syncs === 1) throw new Error("Lost API response"); },
+  };
+  await assert.rejects(startWorkWithRecovery(actions), /no new signature is needed/);
+  assert.equal(writes, 1);
+  assert.equal((await startWorkWithRecovery(actions)).alreadyStarted, true);
+  assert.equal(writes, 1); assert.equal(syncs, 2);
+});

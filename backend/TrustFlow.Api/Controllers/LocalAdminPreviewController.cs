@@ -32,7 +32,7 @@ public sealed class LocalAdminPreviewController(IWebHostEnvironment environment,
         await db.SaveChangesAsync(cancellationToken);
         Response.Headers.CacheControl = "private, no-store";
         // Deliberately no refresh cookie, account confirmation or MFA enrollment.
-        return Ok(new { token.AccessToken, token.ExpiresAtUtc,
+        return Ok(new { token.AccessToken, token.ExpiresAtUtc, ReadOnly = true,
             User = new { user.Id, user.FullName, user.Email, Roles = new[] { AppRoles.Admin } } });
     }
 }

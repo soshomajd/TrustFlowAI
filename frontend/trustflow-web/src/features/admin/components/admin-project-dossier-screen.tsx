@@ -9,6 +9,7 @@ import type { DossierRow, DossierSection } from "@/features/admin/types/admin-do
 import { formatMoney } from "@/lib/money/exact-money";
 import { getApiErrorMessage } from "@/lib/api/get-api-error-message";
 import { AdminDeliveryCard } from "@/features/admin/components/admin-delivery-card";
+import { AdminTimeline } from "@/features/admin/components/admin-timeline";
 import { AdminDisputes } from "@/features/admin/components/admin-disputes";
 import { AdminConversations } from "@/features/admin/components/admin-conversations";
 import { AdminFinancialHistory } from "@/features/admin/components/admin-financial-history";
@@ -20,6 +21,7 @@ const sections: { key: DossierSection; label: string }[] = [
   { key: "finance", label: "Financial history" },
   { key: "conversations", label: "Conversations" },
   { key: "disputes", label: "Disputes" },
+  { key: "timeline", label: "Timeline and admin access" },
 ];
 const date = (value: string) => new Date(value).toLocaleString();
 const status = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
@@ -79,7 +81,7 @@ export function AdminProjectDossierScreen({ projectId }: { projectId: string }) 
   const [section, setSection] = useState<DossierSection>("participants");
   const [page, setPage] = useState(1);
   const project = useAdminDossier(projectId);
-  const records = useAdminDossierRecords(projectId, section, page, Boolean(project.data) && section !== "finance" && section !== "conversations" && section !== "disputes");
+  const records = useAdminDossierRecords(projectId, section, page, Boolean(project.data) && section !== "finance" && section !== "conversations" && section !== "disputes" && section !== "timeline");
   const notFound = axios.isAxiosError(project.error) && project.error.response?.status === 404;
   const data = project.data;
   return <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6">
@@ -88,7 +90,7 @@ export function AdminProjectDossierScreen({ projectId }: { projectId: string }) 
         <p className="mt-4 text-xs uppercase tracking-widest text-electric">Project dossier</p>
         <h1 className="mt-2 text-3xl font-semibold wrap-anywhere">{data?.title ?? "Project record"}</h1>
       </div>
-      <Button variant="outline" disabled={project.isFetching || (Boolean(data) && section !== "finance" && section !== "conversations" && section !== "disputes" && records.isFetching)} onClick={() => { void project.refetch(); if (data && section !== "finance" && section !== "conversations" && section !== "disputes") void records.refetch(); }}>Refresh dossier</Button>
+      <Button variant="outline" disabled={project.isFetching || (Boolean(data) && section !== "finance" && section !== "conversations" && section !== "disputes" && section !== "timeline" && records.isFetching)} onClick={() => { void project.refetch(); if (data && section !== "finance" && section !== "conversations" && section !== "disputes" && section !== "timeline") void records.refetch(); }}>Refresh dossier</Button>
     </header>
     {project.isPending && <p role="status">Loading project dossier…</p>}
     {project.isError && <div role="alert" className="rounded-xl border border-destructive/40 p-5">
@@ -110,7 +112,7 @@ export function AdminProjectDossierScreen({ projectId }: { projectId: string }) 
       <p className="rounded-xl border p-4 text-sm text-muted-foreground">Read-only project records. Views are recorded. Current account wallets can differ from wallets fixed into an older contract. Contract information is the last saved record, not a fresh blockchain check.</p>
       <nav aria-label="Dossier sections" className="flex flex-wrap gap-2">{sections.map((item) =>
         <Button key={item.key} variant={section === item.key ? "default" : "outline"} aria-pressed={section === item.key} onClick={() => { setSection(item.key); setPage(1); }}>{item.label}</Button>)}</nav>
-      {section === "finance" ? <AdminFinancialHistory key={projectId} projectId={projectId} /> : section === "conversations" ? <AdminConversations key={projectId} projectId={projectId} /> : section === "disputes" ? <AdminDisputes key={projectId} projectId={projectId} /> : <section aria-label={sections.find((item) => item.key === section)?.label} className="space-y-4">
+      {section === "timeline" ? <AdminTimeline key={projectId} projectId={projectId} onInspect={(next) => { setSection(next); setPage(1); }} /> : section === "finance" ? <AdminFinancialHistory key={projectId} projectId={projectId} /> : section === "conversations" ? <AdminConversations key={projectId} projectId={projectId} /> : section === "disputes" ? <AdminDisputes key={projectId} projectId={projectId} /> : <section aria-label={sections.find((item) => item.key === section)?.label} className="space-y-4">
         {records.isPending && <p role="status">Loading records…</p>}
         {records.isError && <div role="alert" className="rounded-xl border border-destructive/40 p-5"><p>Could not load these records.</p>
           <p className="mt-2 text-sm">{getApiErrorMessage(records.error, "Try loading these records again.")}</p>

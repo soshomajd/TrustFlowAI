@@ -1,6 +1,8 @@
 "use client";
-import { formatMoney as formatAmount, moneyText, moneyUnits, moneyShare, subtractMoney } from "@/lib/money/exact-money";
+import { formatMoney as formatAmount, moneyText, subtractMoney } from "@/lib/money/exact-money";
 
+import { percentageSettlement } from "@/features/review/lib/settlement-amount";
+import { useAuthStore } from "@/stores/auth-store";
 import { decimalToBaseUnits } from "@/lib/money/decimal-amount";
 
 import { previewPlatformFee, formatTokenPayment } from "@/features/escrow/lib/platform-fee";
@@ -98,6 +100,7 @@ function CaseView({
   caseId: string;
   detail: ReviewCaseDetail;
 }) {
+  const readOnly = useAuthStore((state) => state.readOnly);
   const open = detail.case.status === "Open";
   const sync = useSyncReviewCase(caseId);
 
@@ -125,6 +128,8 @@ function CaseView({
           {detail.milestoneSequence}
         </p>
 
+        <p className="text-xs text-muted-foreground">Case reference: <code className="break-all">{detail.case.referenceCode ?? "Not recorded"}</code></p>
+
         <p className="text-sm leading-6">
           {detail.case.kind === "PaymentRequest"
             ? "The freelancer says the work was delivered and asks to be paid."
@@ -143,7 +148,7 @@ function CaseView({
           type="button"
           size="sm"
           variant="outline"
-          disabled={sync.isPending}
+          disabled={sync.isPending || readOnly}
           onClick={() => sync.mutate()}
         >
           {sync.isPending ? (
@@ -372,6 +377,7 @@ function AdviceSection({
   caseId: string;
   detail: ReviewCaseDetail;
 }) {
+  const readOnly = useAuthStore((state) => state.readOnly);
   const advise = useAdviseReviewCase(caseId);
   const advice = detail.advice;
 
@@ -390,7 +396,7 @@ function AdviceSection({
             Suggests{" "}
             <strong>{advice.freelancerSharePercent}% to the freelancer</strong>{" "}
             ({formatAmount(
-              moneyShare(moneyText(detail.case, "milestoneAmount"), advice.freelancerSharePercent),
+              percentageSettlement(moneyText(detail.case, "milestoneAmount"), String(advice.freelancerSharePercent), detail.tokenDecimals).freelancer,
             )}
             ), confidence {Math.round(advice.confidence * 100)}%.
           </p>
@@ -438,7 +444,7 @@ function AdviceSection({
           size="sm"
           variant="outline"
           className="mt-3"
-          disabled={advise.isPending}
+          disabled={advise.isPending || readOnly}
           onClick={() => advise.mutate()}
         >
           {advise.isPending ? (
@@ -469,29 +475,28 @@ function DecisionSection({
 
   const amount = moneyText(detail.case, "milestoneAmount");
 
-  const suggested =
-    detail.advice !== null
-      ? moneyShare(amount, detail.advice.freelancerSharePercent)
-      : detail.case.kind === "PaymentRequest"
-        ? amount
-        : "0";
-
-  const [freelancerText, setFreelancerText] = useState(
-    suggested,
-  );
+  const readOnly = useAuthStore((state) => state.readOnly);
+  const [mode, setMode] = useState<"" | "refund" | "award" | "percent" | "amount">("");
+  const [percent, setPercent] = useState("50");
+  const [freelancerText, setFreelancerText] = useState("0");
   const [endEscrow, setEndEscrow] = useState(false);
   const [note, setNote] = useState(detail.reviewNote ?? "");
 
-  const freelancerAmount = freelancerText.trim();
+  let freelancerAmount = mode === "award" ? amount : mode === "refund" ? "0" : freelancerText.trim();
+  let rounded = false;
   let validAmount = false;
   try {
-    decimalToBaseUnits(freelancerAmount, detail.tokenDecimals);
-    validAmount = /^\d+(?:\.\d{1,2})?$/.test(freelancerAmount)
-      && moneyUnits(freelancerAmount) <= moneyUnits(amount);
+    if (mode === "percent") {
+      const split = percentageSettlement(amount, percent, detail.tokenDecimals);
+      freelancerAmount = split.freelancer;
+      rounded = split.rounded;
+    }
+    validAmount = mode !== "" && decimalToBaseUnits(freelancerAmount, detail.tokenDecimals)
+      <= decimalToBaseUnits(amount, detail.tokenDecimals);
   } catch { /* Invalid or inexact input keeps signing disabled. */ }
 
   const feePreview = validAmount
-    ? previewPlatformFee(freelancerText.trim(), detail.tokenDecimals, detail.platformFeeBasisPoints ?? 0)
+    ? previewPlatformFee(freelancerAmount, detail.tokenDecimals, detail.platformFeeBasisPoints ?? 0)
     : { fee: "0", net: "0" };
 
   const clientAmount = validAmount
@@ -505,83 +510,60 @@ function DecisionSection({
       detail.arbiterWalletAddress?.toLowerCase();
 
   const busy = settle.isPending || saveNote.isPending || sync.isPending;
-  const noteReady = note.trim().length >= 10;
+  const noteReady = note.trim().length >= 10 && note.trim().length <= 2000;
 
   const canSign =
-    detail.case.isReady && validAmount && noteReady && isArbiterWallet && !busy;
+    detail.case.isReady && validAmount && noteReady && isArbiterWallet && !readOnly && !busy;
 
   async function sign() {
+    if (!canSign) return;
     // The reasons are saved first, so the two sides can read them as soon as
     // the settlement shows up.
     if (note.trim() !== (detail.reviewNote ?? "")) {
       await saveNote.mutateAsync(note.trim());
     }
 
-    await settle.mutateAsync({ detail, freelancerAmount: freelancerText, endEscrow });
+    await settle.mutateAsync({ detail, freelancerAmount, endEscrow });
 
     await sync.mutateAsync();
   }
 
   return (
     <Section title="Your decision">
-      <p className="mb-4 text-xs text-muted-foreground">Quick splits round down to whole cents. Check the exact amounts before you sign.</p>
+      <p className="mb-4 text-xs text-muted-foreground">Decide only this disputed milestone: {formatAmount(amount)}. The client receives the remainder. The contract deducts its fixed platform fee from the gross freelancer award.</p>
+      {readOnly && <p role="note" className="mb-4 rounded-lg border p-3 text-sm">Local preview is read-only. Sign in with your administrator account to save reasons or sign a settlement.</p>}
+      <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Settlement choice">
+        {([
+          ["refund", "Refund client in full"], ["award", "Award freelancer in full"],
+          ["percent", "Percentage split"], ["amount", "Exact amount"],
+        ] as const).map(([value, label]) => <Button key={value} type="button" size="sm"
+          variant={mode === value ? "default" : "outline"} aria-pressed={mode === value}
+          disabled={busy || readOnly} onClick={() => setMode(value)}>{label}</Button>)}
+      </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
+          {mode === "percent" && <>
+            <Label htmlFor="freelancer-percent">Freelancer share of this milestone (%)</Label>
+            <Input id="freelancer-percent" inputMode="decimal" value={percent} disabled={busy || readOnly}
+              onChange={(event) => setPercent(event.target.value)} />
+            <p className="text-xs text-muted-foreground">0–100%, with up to two decimal places. Any fraction smaller than one token base unit stays with the client.</p>
+          </>}
           <Label htmlFor="freelancer-amount">Gross freelancer award (before platform fee)</Label>
-
-          <Input
-            id="freelancer-amount"
-            inputMode="decimal"
-            value={freelancerText}
-            disabled={busy}
-            onChange={(event) => setFreelancerText(event.target.value)}
-          />
-
-          <div className="flex flex-wrap gap-2">
-            {[
-              ["Nothing", "0"],
-              ["Half", moneyShare(amount, 50)],
-              ["All", amount],
-            ].map(([label, value]) => (
-              <Button
-                key={label as string}
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={busy}
-                onClick={() => setFreelancerText(value as string)}
-              >
-                {label as string}
-              </Button>
-            ))}
-
-            {detail.advice && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={busy}
-                onClick={() => setFreelancerText(suggested)}
-              >
-                AI suggestion
-              </Button>
-            )}
-          </div>
+          <Input id="freelancer-amount" inputMode="decimal" value={freelancerAmount}
+            readOnly={mode !== "amount"} disabled={busy || readOnly || mode === ""}
+            onChange={(event) => setFreelancerText(event.target.value)} />
+          {detail.advice && <Button type="button" size="sm" variant="outline" disabled={busy || readOnly}
+            onClick={() => { setPercent(String(detail.advice!.freelancerSharePercent)); setMode("percent"); }}>Use AI suggestion for review</Button>}
+          {rounded && <p className="text-xs text-muted-foreground">The percentage award was rounded down to the smallest token unit.</p>}
         </div>
-
         <div className="space-y-2 text-sm">
-          <p className="text-xs text-muted-foreground">Client gets back</p>
-
-          <p className="text-lg font-semibold">
-            {formatAmount(clientAmount)}
-          </p>
-
-          {!validAmount && (
-            <p role="alert" className="text-xs text-destructive">
-              Enter an amount from 0 to {formatAmount(amount)}, with at most 2
-              decimals.
-            </p>
-          )}
+          <p className="text-xs text-muted-foreground">Client gets back from this milestone</p>
+          <p className="text-lg font-semibold">{formatAmount(clientAmount)}</p>
+          <p>Platform fee: {formatAmount(feePreview.fee)}</p>
+          <p>Freelancer receives: {formatAmount(feePreview.net)}</p>
+          {!validAmount && <p role="alert" className="text-xs text-destructive">
+            Choose a decision and enter a valid percentage or an exact token amount from 0 to {formatAmount(amount)}.
+          </p>}
         </div>
       </div>
 
@@ -590,7 +572,7 @@ function DecisionSection({
           type="checkbox"
           className="mt-1"
           checked={endEscrow}
-          disabled={busy}
+          disabled={busy || readOnly}
           onChange={(event) => setEndEscrow(event.target.checked)}
         />
 
@@ -612,11 +594,13 @@ function DecisionSection({
           rows={5}
           maxLength={2000}
           value={note}
-          disabled={busy}
+          disabled={busy || readOnly}
           onChange={(event) => setNote(event.target.value)}
           placeholder="Say what you checked and why you chose this split. Be short and factual."
         />
       </div>
+
+      {!noteReady && <p className="mt-2 text-xs text-muted-foreground">Write a shared reason of 10–2,000 characters before signing.</p>}
 
       <div className="mt-4 space-y-1 text-xs leading-5 text-muted-foreground">
         <p>
@@ -656,6 +640,8 @@ function DecisionSection({
                   Your wallet will ask you to confirm. This cannot be undone.
                 </p>
 
+                <p>Case reference: <code className="break-all">{detail.case.referenceCode}</code></p>
+                <p className="whitespace-pre-wrap">Shared reason: {note.trim()}</p>
                 <ul className="list-disc space-y-1 pl-5">
                   <li>Gross freelancer award: {formatAmount(freelancerAmount)}.</li>
                   <li>Platform fee: {feePreview.fee} token units; freelancer receives {feePreview.net} token units.</li>
@@ -675,7 +661,7 @@ function DecisionSection({
           <AlertDialogFooter>
             <AlertDialogCancel>Not now</AlertDialogCancel>
 
-            <AlertDialogAction onClick={() => void sign()}>
+            <AlertDialogAction onClick={() => { void sign().catch(() => { /* Mutations show the error; refresh can recover a confirmed transaction. */ }); }}>
               Sign
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -688,6 +674,8 @@ function DecisionSection({
 function ClosedSection({ detail }: { detail: ReviewCaseDetail }) {
   return (
     <Section title="Result">
+      <p className="mb-3 text-xs text-muted-foreground">Case reference: <code className="break-all">{detail.case.referenceCode ?? "Not recorded"}</code></p>
+      {detail.case.settlementTransactionHash && <p className="mb-3 text-xs text-muted-foreground">Settlement transaction: <code className="break-all">{detail.case.settlementTransactionHash}</code>{detail.case.settlementAt ? ` · ${formatDate(detail.case.settlementAt)}` : ""}</p>}
       {detail.case.status === "Settled" ? (
         <p className="text-sm leading-6">
           The freelancer received{" "}

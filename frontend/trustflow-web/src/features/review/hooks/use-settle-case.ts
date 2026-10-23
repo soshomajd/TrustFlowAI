@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import type { Address } from "viem";
 import {
   getAccount,
+  getBlock,
   readContract,
   waitForTransactionReceipt,
   writeContract,
@@ -13,6 +14,9 @@ import {
 
 import { escrowAbi } from "@/features/escrow/lib/escrow-abi";
 import { getSettlementBaseUnits } from "@/features/review/lib/settlement-amount";
+import { settleWithRecovery } from "@/features/review/lib/settlement-recovery";
+import { confirmEscrowTransaction } from "@/features/escrow/lib/transaction-confirmation";
+import { useAuthStore } from "@/stores/auth-store";
 import type { ReviewCaseDetail } from "@/features/review/types/review";
 import { getWalletErrorMessage } from "@/lib/wallet/get-wallet-error-message";
 import { wagmiConfig } from "@/lib/wallet/wagmi-config";
@@ -20,7 +24,7 @@ import { wagmiConfig } from "@/lib/wallet/wagmi-config";
 export type SettleCaseVariables = {
   detail: ReviewCaseDetail;
 
-  // What the freelancer receives from this milestone, in the token units a
+  // Gross freelancer award before the platform fee, in the token units a
   // person reads (for example dollars). The rest goes back to the client.
   freelancerAmount: string;
 
@@ -38,6 +42,9 @@ export function useSettleCase() {
       freelancerAmount,
       endEscrow,
     }: SettleCaseVariables) => {
+      if (useAuthStore.getState().readOnly) {
+        throw new Error("Local preview is read-only. Sign in with your administrator account to make a decision.");
+      }
       if (!detail.contractAddress) {
         throw new Error("This escrow has no contract.");
       }
@@ -79,21 +86,27 @@ export function useSettleCase() {
         detail.tokenDecimals, milestone[0],
       );
 
-      const hash = await writeContract(wagmiConfig, {
-        address,
-        abi: escrowAbi,
-        functionName: "settleCase",
-        args: [
-          BigInt(detail.onChainMilestoneIndex),
-          amountBaseUnits,
-          endEscrow,
-        ],
-        chainId,
+      const index = BigInt(detail.onChainMilestoneIndex);
+      return settleWithRecovery({
+        expectedKind: detail.case.kind === "PaymentRequest" ? 1 : 2,
+        expectedOpenedAt: BigInt(Math.floor(new Date(detail.case.openedAt).getTime() / 1000)),
+        index,
+        read: async () => {
+          const [stage, settled, open, nextIndex, block] = await Promise.all([
+            readContract(wagmiConfig, { address, abi: escrowAbi, functionName: "getMilestone", args: [index], chainId }),
+            readContract(wagmiConfig, { address, abi: escrowAbi, functionName: "isSettledByCase", args: [index], chainId }),
+            readContract(wagmiConfig, { address, abi: escrowAbi, functionName: "getOpenCase", chainId }),
+            readContract(wagmiConfig, { address, abi: escrowAbi, functionName: "nextMilestoneIndex", chainId }),
+            getBlock(wagmiConfig, { chainId }),
+          ]);
+          return { released: stage[1], settled, kind: open[0], openedAt: open[1], nextIndex, timestamp: block.timestamp };
+        },
+        settle: () => confirmEscrowTransaction(
+          `${chainId}:${address.toLowerCase()}:settle:${index}:${detail.case.openedAt}`,
+          () => writeContract(wagmiConfig, { address, abi: escrowAbi, functionName: "settleCase", args: [index, amountBaseUnits, endEscrow], chainId }),
+          (hash) => waitForTransactionReceipt(wagmiConfig, { hash, chainId }),
+        ),
       });
-
-      await waitForTransactionReceipt(wagmiConfig, { hash, chainId });
-
-      return hash;
     },
 
     onError: (error) => {

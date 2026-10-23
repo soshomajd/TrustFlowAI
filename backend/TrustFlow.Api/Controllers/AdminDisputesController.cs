@@ -61,8 +61,10 @@ public sealed class AdminDisputesController(AppDbContext db) : ControllerBase
             // Do not attach the latest statement/opinion from another freelancer's history.
             var fee = row.PaidToFreelancer.HasValue && row.Milestone.PaidAmount == row.PaidToFreelancer
                 && row.Milestone.FreelancerId == row.Escrow.FreelancerId ? (decimal?)row.Milestone.PlatformFeePaid : null;
+            var receipt = await db.EscrowExecutionRecords.AsNoTracking().SingleOrDefaultAsync(item =>
+                item.EscrowId == row.EscrowId && item.MilestoneId == row.MilestoneId && item.Kind == "CaseSettlement", cancellationToken);
             var outcome = row.Status == EscrowCaseStatus.Settled ? new AdminFinanceSettlement(row.Id, row.MilestoneId, row.Milestone.Title,
-                row.PaidToFreelancer, fee, row.ReturnedToClient, row.EscrowEnded, row.ClosedAt) : null;
+                row.PaidToFreelancer, fee, row.ReturnedToClient, row.EscrowEnded, row.ClosedAt, receipt?.TransactionHash, receipt?.OccurredAt) : null;
             detail = new(CaseSummary(row, clientId, names), row.EscrowId, row.Escrow.ChainId, row.Escrow.ContractAddress,
                 row.Escrow.TokenAddress, row.Escrow.ArbiterWalletAddress, row.Escrow.ClientWalletAddress, row.Escrow.FreelancerWalletAddress,
                 null, null, null, row.ReviewNote, row.ReviewNoteAt, outcome,

@@ -83,3 +83,11 @@ test("private export describes its full selected-escrow scope and exact-text imp
     assert.ok(html.includes(text), text);
   assert.doesNotMatch(render({ data: page([]) }, {}), /Download selected escrow report/);
 });
+
+test("verified work-start and payment receipts show their actual block times", () => {
+  const at = "2026-10-18T12:00:00Z";
+  const html = render({ data: page([{ ...escrow, workStartedAt: at, workStartTransactionHash: "verified-work-receipt" }]) },
+    { data: page([{ ...payout, paymentAt: at, paymentTransactionHash: "verified-payment-receipt" }]) });
+  for (const text of ["verified-work-receipt", "verified-payment-receipt", "Payment block time", "Work-start block time"]) assert.ok(html.includes(text), text);
+  assert.doesNotMatch(html, /hashes and client-release timestamps are not stored/);
+});

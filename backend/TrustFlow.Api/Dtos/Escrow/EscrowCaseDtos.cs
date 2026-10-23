@@ -9,6 +9,8 @@ public sealed class EscrowCaseResponse
 {
     public Guid Id { get; init; }
 
+    public string ReferenceCode => TrustFlow.Api.Models.EscrowCaseReference.Format(Id);
+
     public Guid EscrowId { get; init; }
 
     public Guid ProjectId { get; init; }
@@ -43,6 +45,9 @@ public sealed class EscrowCaseResponse
 
     public DateTimeOffset? ClosedAt { get; init; }
 
+    public string? SettlementTransactionHash { get; init; }
+    public DateTimeOffset? SettlementAt { get; init; }
+
     // Gross award before the fixed platform fee.
     public decimal? PaidToFreelancer { get; init; }
     public string? PaidToFreelancerExact => PaidToFreelancer?.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -70,6 +75,8 @@ public sealed class EscrowCaseResponse
 public sealed class ReviewCaseSummaryResponse
 {
     public Guid Id { get; init; }
+
+    public string ReferenceCode => TrustFlow.Api.Models.EscrowCaseReference.Format(Id);
 
     public Guid ProjectId { get; init; }
 
@@ -111,6 +118,9 @@ public sealed class ReviewCaseSummaryResponse
     public string? ReturnedToClientExact => ReturnedToClient?.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public DateTimeOffset? ClosedAt { get; init; }
+
+    public string? SettlementTransactionHash { get; init; }
+    public DateTimeOffset? SettlementAt { get; init; }
 }
 
 public sealed class ReviewCaseAdviceResponse

@@ -71,6 +71,9 @@ export type EscrowCaseStatus = "Open" | "Withdrawn" | "Settled";
 // A request on the contract that starts a 14 day clock. The chain decides;
 // this is the backend's copy of it.
 export type EscrowCase = {
+  referenceCode?: string;
+  settlementTransactionHash?: string | null;
+  settlementAt?: string | null;
   id: string;
   escrowId: string;
   projectId: string;

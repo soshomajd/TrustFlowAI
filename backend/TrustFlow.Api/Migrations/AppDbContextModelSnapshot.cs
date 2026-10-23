@@ -622,6 +622,9 @@ namespace TrustFlow.Api.Migrations
                     b.Property<DateTimeOffset?>("AdviceStartedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("ClientSettlementNoticeReadAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset?>("ClosedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -633,6 +636,9 @@ namespace TrustFlow.Api.Migrations
 
                     b.Property<Guid>("EscrowId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("FreelancerSettlementNoticeReadAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Kind")
                         .IsRequired()
@@ -681,6 +687,63 @@ namespace TrustFlow.Api.Migrations
                     b.HasIndex("Status", "OpenedAt");
 
                     b.ToTable("EscrowCases");
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.EscrowExecutionRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BlockHash")
+                        .IsRequired()
+                        .HasMaxLength(66)
+                        .HasColumnType("character varying(66)");
+
+                    b.Property<long>("BlockNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("EscrowId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<int>("LogIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("MilestoneId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("MilestoneIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TransactionHash")
+                        .IsRequired()
+                        .HasMaxLength(66)
+                        .HasColumnType("character varying(66)");
+
+                    b.Property<string>("TransactionSender")
+                        .IsRequired()
+                        .HasMaxLength(42)
+                        .HasColumnType("character varying(42)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EscrowId", "MilestoneIndex")
+                        .IsUnique();
+
+                    b.HasIndex("EscrowId", "OccurredAt");
+
+                    b.ToTable("EscrowExecutionRecords", t =>
+                        {
+                            t.HasCheckConstraint("CK_EscrowExecutionRecords_Evidence", "length(\"TransactionHash\") = 66 AND length(\"BlockHash\") = 66 AND length(\"TransactionSender\") = 42 AND \"BlockNumber\" >= 0 AND \"LogIndex\" >= 0 AND \"OccurredAt\" > '1970-01-01'::timestamptz AND ((\"Kind\" = 'WorkStarted' AND \"MilestoneIndex\" = -1 AND \"MilestoneId\" IS NULL) OR (\"Kind\" IN ('ClientRelease','CaseSettlement') AND \"MilestoneIndex\" >= 0 AND \"MilestoneId\" IS NOT NULL))");
+                        });
                 });
 
             modelBuilder.Entity("TrustFlow.Api.Models.FreelancerProfile", b =>
@@ -1546,6 +1609,17 @@ namespace TrustFlow.Api.Migrations
                     b.Navigation("Escrow");
 
                     b.Navigation("Milestone");
+                });
+
+            modelBuilder.Entity("TrustFlow.Api.Models.EscrowExecutionRecord", b =>
+                {
+                    b.HasOne("TrustFlow.Api.Models.Escrow", "Escrow")
+                        .WithMany()
+                        .HasForeignKey("EscrowId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Escrow");
                 });
 
             modelBuilder.Entity("TrustFlow.Api.Models.FreelancerProfile", b =>

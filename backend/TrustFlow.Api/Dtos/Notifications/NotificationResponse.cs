@@ -19,6 +19,10 @@ public sealed class NotificationItemResponse
 
     public string ProjectTitle { get; init; } = string.Empty;
 
+    public string? ReferenceCode { get; init; }
+
+    public string? ReviewNote { get; init; }
+
     public bool CanMarkRead { get; init; }
 }
 
