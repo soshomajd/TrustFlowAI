@@ -167,6 +167,10 @@ export function ProjectMilestonesSection({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3">
+                        <Button type="button" size="sm" variant="outline" disabled={milestonesQuery.isFetching}
+                            onClick={() => void milestonesQuery.refetch()}>
+                            <RefreshCw className="size-4" />Refresh milestones
+                        </Button>
                         <span className="rounded-full border px-3 py-1 text-xs font-medium text-muted-foreground">
                             {milestones.length}{" "}
                             {milestones.length === 1

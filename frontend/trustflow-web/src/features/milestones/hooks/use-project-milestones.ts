@@ -16,5 +16,9 @@ export function useProjectMilestones(projectId: string | undefined) {
     queryFn: () => getProjectMilestones(normalizedProjectId),
 
     enabled: isProjectIdValid,
+    staleTime: 15_000,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 }

@@ -27,12 +27,15 @@ public sealed class LocalAdminPreviewController(IWebHostEnvironment environment,
         if (string.IsNullOrWhiteSpace(email) || !ReviewerAccess.IsReviewer(configuration, email)) return NotFound();
         var user = await users.FindByEmailAsync(email);
         if (user is null || !await users.IsInRoleAsync(user, AppRoles.Admin)) return NotFound();
-        var token = tokens.CreateLocalAdminPreviewToken(user);
-        db.AdminAccessLogs.Add(new AdminAccessLog { AdminId = user.Id, Action = "LocalAdminPreviewEntered" });
+        var review = LocalAdminPreview.ReviewEnabled(environment, configuration);
+        if (configuration.GetValue<bool>("AdminSecurity:LocalReviewEnabled") && !review) return NotFound();
+        var token = tokens.CreateLocalAdminPreviewToken(user, review);
+        db.AdminAccessLogs.Add(new AdminAccessLog { AdminId = user.Id,
+            Action = review ? "LocalAdminReviewEntered" : "LocalAdminPreviewEntered" });
         await db.SaveChangesAsync(cancellationToken);
         Response.Headers.CacheControl = "private, no-store";
         // Deliberately no refresh cookie, account confirmation or MFA enrollment.
-        return Ok(new { token.AccessToken, token.ExpiresAtUtc, ReadOnly = true,
+        return Ok(new { token.AccessToken, token.ExpiresAtUtc, ReadOnly = !review, LocalReview = review,
             User = new { user.Id, user.FullName, user.Email, Roles = new[] { AppRoles.Admin } } });
     }
 }

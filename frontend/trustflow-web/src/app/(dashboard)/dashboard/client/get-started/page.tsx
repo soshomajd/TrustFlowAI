@@ -92,6 +92,7 @@ const steps: GuideStep[] = [
 ];
 
 const reminders = [
+    "Use Refresh proposals or Refresh milestones to see recent changes from the freelancer. These lists also update while the page is open.",
     "Confirmed work starts and milestone payments keep a transaction receipt. If the site cannot save it, wait for the wallet transaction to finish and use Refresh on-chain status. Do not sign again.",
     "Use the same wallet that you verified on your account.",
     "Disconnect in the top bar only signs the wallet out of this site. Your account keeps the address you verified.",
@@ -117,6 +118,8 @@ const reminders = [
     "If the freelancer leaves the project, the money not yet paid comes back to you and their unpaid milestones open for hire again.",
     "The reviewer can choose a percentage of the disputed milestone. The case and result notice show the same tracking reference and shared reason to both sides. The freelancer award is shown before and after the platform fee. Open the project to read the full result and transaction reference. Mark as read hides only your own notice.",
     "If the reviewer never answers for 90 days, either of you can split the milestone 50/50 and end the escrow.",
+    "Use Check chain time on an open request to check the waiting period. The split stays unavailable when the contract cannot be checked.",
+    "If a request or withdrawal is confirmed in your wallet but the site does not update, wait for the transaction to finish and use Refresh on-chain status. A failed transaction does not complete the action.",
 ];
 
 export default function ClientGettingStartedPage() {

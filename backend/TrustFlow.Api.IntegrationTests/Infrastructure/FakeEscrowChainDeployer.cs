@@ -33,6 +33,7 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
         LifecycleOverrides = new();
     private static readonly ConcurrentDictionary<string, IReadOnlyList<OnChainExecutionEvent>> ExecutionOverrides = new();
     private static readonly ConcurrentDictionary<(string Contract, int Index), DateTimeOffset> ExecutionTimes = new();
+    private static readonly ConcurrentDictionary<(string Contract, int Index), bool> EndingSettlements = new();
     public static void SetExecutionEvents(string contract, IReadOnlyList<OnChainExecutionEvent> events) => ExecutionOverrides[contract] = events;
 
     public Task<IReadOnlyList<OnChainExecutionEvent>> GetExecutionEventsAsync(string contractAddress, string deploymentTransactionHash, CancellationToken cancellationToken)
@@ -40,16 +41,23 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
         if (ExecutionOverrides.TryGetValue(contractAddress, out var overridden)) return Task.FromResult(overridden);
         var request = GetDeployedRequest(contractAddress);
         var result = new List<OnChainExecutionEvent>();
-        void Add(string kind, int index, BigInteger paid, BigInteger refunded, string participant, string sender)
+        void Add(string kind, int index, BigInteger paid, BigInteger refunded, string participant, string sender, bool ended = false)
         {
             var hash = "0x" + (index + 2).ToString("x").PadLeft(24, '0') + contractAddress[2..];
             var at = ExecutionTimes.GetOrAdd((contractAddress, index), _ => DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds()));
-            result.Add(new OnChainExecutionEvent(kind, index, paid, refunded, participant, hash, hash, index + 2, 0, at, sender));
+            result.Add(new OnChainExecutionEvent(kind, index, paid, refunded, participant, hash, hash, index + 2, 0, at, sender, ended));
         }
         if (StartedEscrows.ContainsKey(contractAddress)) Add("WorkStarted", -1, 0, 0, request.FreelancerAddress, request.FreelancerAddress);
         for (var index = 0; index < request.MilestoneAmounts.Count; index++)
         {
-            if (SettledMilestones.TryGetValue((contractAddress, index), out var paid)) Add("CaseSettlement", index, paid, request.MilestoneAmounts[index] - paid, request.ArbiterAddress, request.ArbiterAddress);
+            if (SettledMilestones.TryGetValue((contractAddress, index), out var paid))
+            {
+                var ended = EndingSettlements.GetValueOrDefault((contractAddress, index));
+                var refund = (ended
+                    ? request.MilestoneAmounts.Skip(index).Aggregate(BigInteger.Zero, (sum, amount) => sum + amount)
+                    : request.MilestoneAmounts[index]) - paid;
+                Add("CaseSettlement", index, paid, refund, request.ArbiterAddress, request.ArbiterAddress, ended);
+            }
             else if (ReleasedMilestones.ContainsKey((contractAddress, index))) Add("ClientRelease", index, request.MilestoneAmounts[index], 0, request.FreelancerAddress, request.ClientAddress);
         }
         return Task.FromResult<IReadOnlyList<OnChainExecutionEvent>>(result);
@@ -94,6 +102,7 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
     {
         SettledMilestones[(contractAddress, milestoneIndex)] =
             paidBaseUnits;
+        EndingSettlements[(contractAddress, milestoneIndex)] = endEscrow;
 
         OpenCases.TryRemove(contractAddress, out _);
 
@@ -278,7 +287,9 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
                     ? totalBaseUnits
                     : TerminatedEscrows.ContainsKey(contractAddress)
                     ? totalBaseUnits - released
-                    : BigInteger.Zero,
+                    : Enumerable.Range(0, nextIndex).Aggregate(BigInteger.Zero,
+                        (sum, index) => sum + (SettledMilestones.TryGetValue((contractAddress, index), out var paid)
+                            ? request.MilestoneAmounts[index] - paid : BigInteger.Zero)),
                 nextIndex,
                 openCase?.Kind ?? OnChainCaseKind.None,
                 openCase?.OpenedAt

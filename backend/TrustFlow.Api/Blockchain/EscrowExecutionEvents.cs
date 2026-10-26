@@ -8,7 +8,8 @@ namespace TrustFlow.Api.Blockchain;
 
 public sealed record OnChainExecutionEvent(string Kind, int MilestoneIndex, BigInteger GrossPaid,
     BigInteger Refunded, string Participant, string TransactionHash, string BlockHash,
-    long BlockNumber, int LogIndex, DateTimeOffset OccurredAt, string TransactionSender);
+    long BlockNumber, int LogIndex, DateTimeOffset OccurredAt, string TransactionSender,
+    bool EscrowEnded = false);
 
 public sealed partial class EscrowChainDeployer
 {
@@ -21,6 +22,10 @@ public sealed partial class EscrowChainDeployer
             !string.Equals(deployment.ContractAddress, contractAddress, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Missing or mismatched deployment evidence for execution history.");
         var latest = await web3.Eth.Blocks.GetBlockNumber.SendRequestAsync().WaitAsync(cancellationToken);
+        var latestBlock = await web3.Eth.Blocks.GetBlockWithTransactionsHashesByNumber
+            .SendRequestAsync(new BlockParameter(latest)).WaitAsync(cancellationToken);
+        if (latestBlock?.Number?.Value != latest.Value || latestBlock.Timestamp is null || latestBlock.Timestamp.Value <= 0)
+            throw new InvalidOperationException("Execution history requires a canonical chain clock.");
         var work = web3.Eth.GetEvent<StartedEvent>(contractAddress);
         var release = web3.Eth.GetEvent<ReleasedEvent>(contractAddress);
         var settle = web3.Eth.GetEvent<SettledEvent>(contractAddress);
@@ -29,7 +34,7 @@ public sealed partial class EscrowChainDeployer
         var receipts = new Dictionary<string, TransactionReceipt>(StringComparer.OrdinalIgnoreCase);
         var blocks = new Dictionary<string, BlockWithTransactionHashes>(StringComparer.OrdinalIgnoreCase);
 
-        async Task Add(FilterLog log, string kind, BigInteger index, BigInteger paid, BigInteger refunded, string participant)
+        async Task Add(FilterLog log, string kind, BigInteger index, BigInteger paid, BigInteger refunded, string participant, bool ended = false)
         {
             if (log.Removed == true) return;
             if (log.BlockNumber is null || log.LogIndex is null || index < -1 || index > int.MaxValue || paid < 0 || refunded < 0 ||
@@ -51,12 +56,13 @@ public sealed partial class EscrowChainDeployer
                 !string.Equals(receipt.TransactionHash, log.TransactionHash, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(receipt.BlockHash, log.BlockHash, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(block.BlockHash, log.BlockHash, StringComparison.OrdinalIgnoreCase) ||
-                block.Timestamp is null || block.Number?.Value != log.BlockNumber.Value ||
+                block.Timestamp is null || block.Timestamp.Value <= 0 || block.Timestamp.Value > latestBlock.Timestamp.Value ||
+                block.Number?.Value != log.BlockNumber.Value ||
                 log.BlockNumber.Value < deployment.BlockNumber.Value || log.BlockNumber.Value > latest.Value)
                 throw new InvalidOperationException("Execution event is not backed by a successful canonical receipt and block.");
             result.Add(new OnChainExecutionEvent(kind, (int)index, paid, refunded, participant, log.TransactionHash,
                 log.BlockHash, checked((long)log.BlockNumber.Value), checked((int)log.LogIndex.Value),
-                DateTimeOffset.FromUnixTimeSeconds(checked((long)block.Timestamp.Value)), receipt.From));
+                DateTimeOffset.FromUnixTimeSeconds(checked((long)block.Timestamp.Value)), receipt.From, ended));
         }
 
         for (var start = deployment.BlockNumber.Value; start <= latest.Value; start += 2000)
@@ -69,7 +75,7 @@ public sealed partial class EscrowChainDeployer
             foreach (var log in await release.GetAllChangesAsync(release.CreateFilterInput(from, to)).WaitAsync(cancellationToken))
                 await Add(log.Log, "ClientRelease", log.Event.Index, log.Event.Amount, 0, log.Event.Freelancer);
             foreach (var log in await settle.GetAllChangesAsync(settle.CreateFilterInput(from, to)).WaitAsync(cancellationToken))
-                await Add(log.Log, "CaseSettlement", log.Event.Index, log.Event.Paid, log.Event.Returned, log.Event.SettledBy);
+                await Add(log.Log, "CaseSettlement", log.Event.Index, log.Event.Paid, log.Event.Returned, log.Event.SettledBy, log.Event.Ended);
         }
         return result;
     }

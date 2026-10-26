@@ -138,6 +138,8 @@ public sealed class EscrowLifecycleEventsTests
     [InlineData("valid")]
     [InlineData("reverted")]
     [InlineData("reorg")]
+    [InlineData("advanced-chain-clock")]
+    [InlineData("later-than-chain")]
     public async Task ExecutionReaderRequiresCanonicalSuccessfulReceiptsAndDecodesWorkReleaseAndSettlement(string mode)
     {
         var freelancer = "0x3333333333333333333333333333333333333333";
@@ -145,6 +147,8 @@ public sealed class EscrowLifecycleEventsTests
         string Topic(string value) => "0x" + Sha3Keccack.Current.CalculateHash(value);
         string Word(long value) => value.ToString("x").PadLeft(64,'0');
         string Address(string value) => "0x"+value[2..].PadLeft(64,'0');
+        var chainTime = mode == "advanced-chain-clock"
+            ? DateTimeOffset.UtcNow.AddDays(15).ToUnixTimeSeconds() : 0x68f38000L;
         object Event(string hash, string[] topics, string data) => new {
             address=Contract,transactionHash=hash,blockNumber="0xf",logIndex="0x0",transactionIndex="0x0",blockHash=DeploymentHash,removed=false,topics,data };
         await using var rpc = new RpcServer(request => {
@@ -155,19 +159,24 @@ public sealed class EscrowLifecycleEventsTests
                 return new {transactionHash=hash,blockNumber="0xf",blockHash=mode=="reorg"?FundingHash:DeploymentHash,status=mode=="reverted"?"0x0":"0x1",from=Client,logs=Array.Empty<object>()};
             }
             if(method=="eth_blockNumber") return "0x14";
-            if(method=="eth_getBlockByNumber") return new {number="0xf",hash=DeploymentHash,timestamp="0x68f38000",transactions=Array.Empty<string>()};
+            if(method=="eth_getBlockByNumber") {
+                var number = request.GetProperty("params")[0].GetString();
+                var timestamp = mode == "later-than-chain" && number == "0xf" ? chainTime + 1 : chainTime;
+                return new {number, hash=DeploymentHash,timestamp="0x"+timestamp.ToString("x"),transactions=Array.Empty<string>()};
+            }
             Assert.Equal("eth_getLogs",method);
             var topic=request.GetProperty("params")[0].GetProperty("topics")[0].GetString();
             if(topic==Topic("WorkStarted(address)")) return new[]{Event(FundingHash,[topic!,Address(freelancer)],"0x")};
             if(topic==Topic("MilestoneReleased(uint256,uint256,address)")) return new[]{Event(CancellationHash,[topic!,"0x"+Word(0),Address(freelancer)],"0x"+Word(100))};
-            return new[]{Event("0x"+new string('c',64),[topic!,"0x"+Word(1),Address(arbiter)],"0x"+Word(40)+Word(60)+Word(0))};
+            return new[]{Event("0x"+new string('c',64),[topic!,"0x"+Word(1),Address(arbiter)],"0x"+Word(40)+Word(60)+Word(1))};
         });
-        if(mode!="valid") await Assert.ThrowsAsync<InvalidOperationException>(()=>Reader(rpc.Url).GetExecutionEventsAsync(Contract,DeploymentHash,CancellationToken.None));
+        if(mode is not ("valid" or "advanced-chain-clock")) await Assert.ThrowsAsync<InvalidOperationException>(()=>Reader(rpc.Url).GetExecutionEventsAsync(Contract,DeploymentHash,CancellationToken.None));
         else {
             var rows=await Reader(rpc.Url).GetExecutionEventsAsync(Contract,DeploymentHash,CancellationToken.None);
             Assert.Equal(3,rows.Count);Assert.Equal(new[]{"WorkStarted","ClientRelease","CaseSettlement"},rows.Select(item=>item.Kind));
             Assert.Equal(new[]{-1,0,1},rows.Select(item=>item.MilestoneIndex));Assert.Equal(100,rows[1].GrossPaid);Assert.Equal(40,rows[2].GrossPaid);Assert.Equal(60,rows[2].Refunded);
-            Assert.All(rows,item=>{Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(0x68f38000),item.OccurredAt);Assert.Equal(Client,item.TransactionSender,ignoreCase:true);Assert.Equal(DeploymentHash,item.BlockHash);});
+            Assert.True(rows[2].EscrowEnded);Assert.False(rows[1].EscrowEnded);
+            Assert.All(rows,item=>{Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(chainTime),item.OccurredAt);Assert.Equal(Client,item.TransactionSender,ignoreCase:true);Assert.Equal(DeploymentHash,item.BlockHash);});
         }
         Assert.DoesNotContain("eth_sendRawTransaction",rpc.Methods);
     }

@@ -30,9 +30,9 @@ export function LocalAdminPreview({ next }: { next?: string }) {
   }, [mutate, status]);
 
   return <section className="w-full max-w-md rounded-2xl border bg-card p-7">
-    <h1 className="text-xl font-semibold">Local administrator preview</h1>
+    <h1 className="text-xl font-semibold">Local administrator access</h1>
     {isError ? <div role="alert" className="mt-4 space-y-4">
-      <p>{getApiErrorMessage(error, "Local preview is unavailable.")}</p>
+      <p>{getApiErrorMessage(error, "Local administrator access is unavailable.")}</p>
       <Button onClick={() => mutate()}>Try again</Button>
     </div> : <p role="status" className="mt-4 text-sm text-muted-foreground">Opening the administrator panel…</p>}
   </section>;

@@ -532,6 +532,7 @@ public sealed class EscrowChainSyncOrchestrator(
                 Status = EscrowCaseStatus.Settled,
                 ClosedAt = now,
                 PaidToFreelancer = paid,
+                PlatformFeePaid = fee,
                 ReturnedToClient = amount - paid,
                 EscrowEnded = escrowEnded
             });

@@ -45,6 +45,9 @@ export function useSettleCase() {
       if (useAuthStore.getState().readOnly) {
         throw new Error("Local preview is read-only. Sign in with your administrator account to make a decision.");
       }
+      if (useAuthStore.getState().localReview && detail.chainId !== 31_337) {
+        throw new Error("Local development review can only settle a local test escrow.");
+      }
       if (!detail.contractAddress) {
         throw new Error("This escrow has no contract.");
       }

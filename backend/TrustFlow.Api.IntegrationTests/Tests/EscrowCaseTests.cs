@@ -215,6 +215,52 @@ public sealed class EscrowCaseTests
     }
 
     [Fact]
+    public async Task ASettlementDiscoveredAfterClosurePreservesTheFeeAndNetAward()
+    {
+        var scenario = await CreateSubmittedMilestoneAsync(_client);
+
+        // The backend was offline for the entire open-and-settle interval.
+        // Its first sync must create the same exact financial record as a
+        // case it watched while open.
+        FakeEscrowChainDeployer.OpenCase(
+            scenario.ContractAddress,
+            OnChainCaseKind.RefundRequest,
+            DateTimeOffset.UtcNow.AddDays(-15));
+        FakeEscrowChainDeployer.SettleMilestone(
+            scenario.ContractAddress, 0, Units(333.33m), endEscrow: false);
+
+        Assert.Empty(await ListCasesAsync(scenario, scenario.Client));
+        await SyncAsync(scenario, scenario.Client);
+
+        var clientCase = Assert.Single(await ListCasesAsync(scenario, scenario.Client));
+        var freelancerCase = Assert.Single(await ListCasesAsync(scenario, scenario.Freelancer));
+        foreach (var recorded in new[] { clientCase, freelancerCase })
+        {
+            Assert.Equal("Settled", recorded.GetProperty("status").GetString());
+            Assert.Equal(333.33m, recorded.GetProperty("paidToFreelancer").GetDecimal());
+            Assert.Equal(33.333m, recorded.GetProperty("platformFeePaid").GetDecimal());
+            Assert.Equal(299.997m, recorded.GetProperty("freelancerNetPaid").GetDecimal());
+            Assert.Equal(666.67m, recorded.GetProperty("returnedToClient").GetDecimal());
+        }
+
+        // Retrying discovery preserves the case identity and does not
+        // increment escrow accounting a second time.
+        await SyncAsync(scenario, scenario.Freelancer);
+        var retried = Assert.Single(await ListCasesAsync(scenario, scenario.Client));
+        Assert.Equal(clientCase.GetProperty("id").GetGuid(), retried.GetProperty("id").GetGuid());
+        Assert.Equal(33.333m, retried.GetProperty("platformFeePaid").GetDecimal());
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var escrow = await db.Escrows.SingleAsync(item => item.ProjectId == scenario.ProjectId);
+        var milestone = await db.Milestones.SingleAsync(item => item.Id == scenario.MilestoneId);
+        var settledCase = await db.EscrowCases.SingleAsync(item => item.EscrowId == escrow.Id);
+        Assert.Equal(333.33m, escrow.ReleasedAmount);
+        Assert.Equal(33.333m, escrow.PlatformFeesPaid);
+        Assert.Equal(milestone.PlatformFeePaid, settledCase.PlatformFeePaid);
+    }
+
+    [Fact]
     public async Task ARefundThatEndsTheEscrowPutsTheLaterStagesBackOnTheMarket()
     {
         var scenario = await CreateSubmittedMilestoneAsync(

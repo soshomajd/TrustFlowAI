@@ -134,6 +134,16 @@ export function ProjectProposalsSection({
                     </div>
 
                     <div className="flex items-center gap-3">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={proposalsQuery.isFetching}
+                            onClick={() => void proposalsQuery.refetch()}
+                        >
+                            <RefreshCw className="size-3.5" />
+                            Refresh proposals
+                        </Button>
                         <span className="rounded-full border px-3 py-1 text-xs font-medium text-muted-foreground">
                             {pagination?.totalItems ??
                                 0}{" "}

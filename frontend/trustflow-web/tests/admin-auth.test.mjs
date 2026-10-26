@@ -13,7 +13,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 const moduleUrl = (source) => `data:text/javascript,${encodeURIComponent(source)}`;
 const authMock = 'export function useAuthStore(select){return select(globalThis.adminAuthTestState || {user:null,status:"unauthenticated"});}';
 const adminMock = 'export function useAdminLogin(){return {isPending:false,mutate(){}};} export const useAdminSetup=useAdminLogin; export const useAdminMfa=useAdminLogin;';
-const navigationMock = 'export function useRouter(){return {replace(){},refresh(){},push(){}};} export function usePathname(){return "/dashboard/admin";}';
+const navigationMock = 'export function useRouter(){return {replace(){},refresh(){},push(){}};} export function usePathname(){return "/dashboard/admin";} export function notFound(){throw new Error("Route not found");}';
 const recoveryMock = 'const hook=()=>({isPending:false,mutate(){}}); export const useVerifyEmail=hook,useResendVerification=hook,useForgotPassword=hook,useResetPassword=hook,useResendResetCode=hook; export function getResendWaitSeconds(){return null;}';
 
 registerHooks({
@@ -48,6 +48,8 @@ registerHooks({
 const { AdminLoginForm } = await import("../src/features/admin/components/admin-login-form.tsx");
 const { AdminMfaForm } = await import("../src/features/admin/components/admin-mfa-form.tsx");
 const { LocalAdminPreview } = await import("../src/features/admin/components/local-admin-preview.tsx");
+const { LocalAdminSessionNotice } = await import("../src/features/admin/components/local-admin-session-notice.tsx");
+const { default: LocalAdminPage } = await import("../src/app/(auth)/admin/local/page.tsx");
 const { AdminSetupForm } = await import("../src/features/admin/components/admin-setup-form.tsx");
 const { VerifyEmailForm } = await import("../src/features/auth/components/verify-email-form.tsx");
 const { ForgotPasswordForm } = await import("../src/features/auth/components/forgot-password-form.tsx");
@@ -61,6 +63,44 @@ test("local administrator preview has no password, email-code or wallet input", 
   const html = renderToStaticMarkup(React.createElement(QueryClientProvider, { client: new QueryClient() }, React.createElement(LocalAdminPreview)));
   assert.match(html, /Opening the administrator panel/);
   assert.doesNotMatch(html, /<input|type="password"|Connect wallet|Verification code/);
+});
+
+test("local session notice follows the issued capability rather than a server flag", () => {
+  globalThis.adminAuthTestState = { readOnly: true, localReview: false };
+  assert.match(render(LocalAdminSessionNotice), /Local preview · read-only access/);
+  globalThis.adminAuthTestState = { readOnly: false, localReview: true };
+  const local = render(LocalAdminSessionNotice);
+  assert.match(local, /Local development review · decisions enabled/);
+  assert.match(local, /arbiter wallet signature required/);
+  assert.doesNotMatch(local, /read-only|no wallet required/);
+  globalThis.adminAuthTestState = { readOnly: false, localReview: false };
+  assert.equal(render(LocalAdminSessionNotice), "");
+  globalThis.adminAuthTestState = undefined;
+});
+
+test("direct local administrator entry stays unavailable outside explicitly enabled development", () => {
+  const previousEnvironment = process.env.NODE_ENV;
+  const previousFlag = process.env.TRUSTFLOW_LOCAL_ADMIN_PREVIEW;
+  try {
+    process.env.TRUSTFLOW_LOCAL_ADMIN_PREVIEW = "1";
+    for (const environment of ["production", "test"]) {
+      process.env.NODE_ENV = environment;
+      assert.throws(() => LocalAdminPage(), /Route not found/);
+    }
+    process.env.NODE_ENV = "development";
+    process.env.TRUSTFLOW_LOCAL_ADMIN_PREVIEW = "0";
+    assert.throws(() => LocalAdminPage(), /Route not found/);
+    process.env.TRUSTFLOW_LOCAL_ADMIN_PREVIEW = "1";
+    const html = renderToStaticMarkup(React.createElement(QueryClientProvider,
+      { client: new QueryClient() }, React.createElement(LocalAdminPage)));
+    assert.match(html, /Opening the administrator panel/);
+    assert.doesNotMatch(html, /<input|type="password"|Verification code/);
+  } finally {
+    if (previousEnvironment === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousEnvironment;
+    if (previousFlag === undefined) delete process.env.TRUSTFLOW_LOCAL_ADMIN_PREVIEW;
+    else process.env.TRUSTFLOW_LOCAL_ADMIN_PREVIEW = previousFlag;
+  }
 });
 
 test("anonymous admin and reviewer destinations use the dedicated sign-in route", () => {

@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { Address } from "viem";
 import {
-  readContract,
+  getAccount,
   waitForTransactionReceipt,
   writeContract,
 } from "wagmi/actions";
@@ -13,19 +13,12 @@ import { syncEscrow } from "@/features/escrow/api/escrow-api";
 import { escrowAbi } from "@/features/escrow/lib/escrow-abi";
 import { escrowQueryKeys } from "@/features/escrow/queries/escrow-query-keys";
 import type { ProjectEscrow } from "@/features/escrow/types/escrow";
-import { milestoneQueryKeys } from "@/features/milestones/queries/milestone-query-keys";
-import { notificationQueryKeys } from "@/features/notifications/queries/notification-query-keys";
-import { projectQueryKeys } from "@/features/projects/queries/project-query-keys";
-import { proposalQueryKeys } from "@/features/proposals/queries/proposal-query-keys";
+import { invalidateEscrowWorkflow } from "@/features/escrow/queries/invalidate-escrow-workflow";
+import { readCaseChainState } from "@/features/escrow/lib/read-case-chain-state";
+import { runCaseActionWithRecovery, type CaseAction, type ExpectedCase } from "@/features/escrow/lib/recoverable-case-actions";
+export type { CaseAction } from "@/features/escrow/lib/recoverable-case-actions";
 import { getWalletErrorMessage } from "@/lib/wallet/get-wallet-error-message";
 import { wagmiConfig } from "@/lib/wallet/wagmi-config";
-
-export type CaseAction =
-  | "requestPayment"
-  | "requestRefund"
-  | "withdrawRequest"
-  | "settleStalledCase"
-  | "resign";
 
 export type CaseActionVariables = {
   escrow: ProjectEscrow;
@@ -34,6 +27,7 @@ export type CaseActionVariables = {
   // The position of the milestone among this freelancer's stages. A request
   // always concerns the next unpaid one.
   onChainIndex?: number;
+  expectedCase?: ExpectedCase;
 };
 
 const successMessages: Record<CaseAction, string> = {
@@ -58,101 +52,47 @@ export function useCaseAction(projectId: string, freelancerId: string) {
   return useMutation({
     mutationKey: escrowQueryKeys.caseAction(normalizedProjectId, freelancerId),
 
-    mutationFn: async ({ escrow, action, onChainIndex }: CaseActionVariables) => {
+    mutationFn: async ({ escrow, action, onChainIndex, expectedCase }: CaseActionVariables) => {
       if (!escrow.contractAddress) {
         throw new Error("The escrow contract has not been deployed yet.");
       }
-
       const address = escrow.contractAddress as Address;
       const chainId = escrow.chainId;
-
-      const workStarted = await readContract(wagmiConfig, {
-        address,
-        abi: escrowAbi,
-        functionName: "workStarted",
-        chainId,
+      const key = `${chainId}:${address.toLowerCase()}:${action}:${onChainIndex ?? "next"}:${expectedCase?.kind ?? ""}:${expectedCase?.openedAt ?? ""}`;
+      await runCaseActionWithRecovery({
+        key, action, index: onChainIndex, expectedCase,
+        read: async (index) => {
+          const state = await readCaseChainState(address, chainId, index);
+          if (!escrow.clientWalletAddress || !escrow.freelancerWalletAddress ||
+            state.client.toLowerCase() !== escrow.clientWalletAddress.toLowerCase() ||
+            state.freelancer.toLowerCase() !== escrow.freelancerWalletAddress.toLowerCase()) {
+            throw new Error("The contract participants do not match this escrow. Refresh before continuing.");
+          }
+          return state;
+        },
+        send: async (before) => {
+          const account = getAccount(wagmiConfig);
+          const expectedWallet = action === "requestPayment" || action === "resign" ? before.freelancer
+            : action === "requestRefund" ? before.client
+            : action === "withdrawRequest" ? (before.kind === 1 ? before.freelancer : before.client) : null;
+          if (!account.address || account.chainId !== chainId ||
+            (expectedWallet ? account.address.toLowerCase() !== expectedWallet.toLowerCase()
+              : ![before.client, before.freelancer].some((wallet) => wallet.toLowerCase() === account.address?.toLowerCase()))) {
+            throw new Error("Connect the correct participant wallet on this escrow's network before signing.");
+          }
+          return writeContract(wagmiConfig, { address, abi: escrowAbi, functionName: action, chainId });
+        },
+        wait: (hash) => waitForTransactionReceipt(wagmiConfig, { hash, chainId }),
+        sync: () => syncEscrow(normalizedProjectId, freelancerId),
       });
-
-      if (!workStarted) {
-        throw new Error("Work has not started on the contract yet.");
-      }
-
-      if (action === "requestPayment" || action === "requestRefund") {
-        const [openKind, nextIndex] = await Promise.all([
-          readContract(wagmiConfig, {
-            address,
-            abi: escrowAbi,
-            functionName: "getOpenCase",
-            chainId,
-          }),
-          readContract(wagmiConfig, {
-            address,
-            abi: escrowAbi,
-            functionName: "nextMilestoneIndex",
-            chainId,
-          }),
-        ]);
-
-        if (openKind[0] !== 0) {
-          throw new Error("A request is already open on this escrow.");
-        }
-
-        if (
-          onChainIndex !== undefined &&
-          BigInt(onChainIndex) !== nextIndex
-        ) {
-          throw new Error(
-            "A request always concerns the next unpaid milestone. Finish the earlier ones first.",
-          );
-        }
-      }
-
-      const hash = await writeContract(wagmiConfig, {
-        address,
-        abi: escrowAbi,
-        functionName: action,
-        chainId,
-      });
-
-      await waitForTransactionReceipt(wagmiConfig, { hash, chainId });
-
-      // The chain is the truth. Reading it back is what makes the app show
-      // the change.
-      await syncEscrow(normalizedProjectId, freelancerId);
-
       return action;
     },
 
-    onSuccess: async (action) => {
+    onSuccess: async (action, { escrow }) => {
       await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: escrowQueryKeys.cases(normalizedProjectId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: escrowQueryKeys.participants(normalizedProjectId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: milestoneQueryKeys.projectList(normalizedProjectId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: projectQueryKeys.workspace(normalizedProjectId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: notificationQueryKeys.all,
-        }),
-
-        // Ending an escrow early hands stages back and rejects a proposal.
-        queryClient.invalidateQueries({
-          queryKey: proposalQueryKeys.projectLists(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: projectQueryKeys.clientLists(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: projectQueryKeys.assignedLists(),
-        }),
+        invalidateEscrowWorkflow(queryClient, normalizedProjectId),
+        queryClient.invalidateQueries({ queryKey: ["escrow-case-window", escrow.chainId, escrow.contractAddress?.toLowerCase()] }),
       ]);
-
       toast.success(successMessages[action]);
     },
 

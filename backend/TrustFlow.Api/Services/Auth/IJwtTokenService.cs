@@ -10,5 +10,5 @@ public interface IJwtTokenService
         DateTimeOffset? adminMfaVerifiedAt = null
     );
 
-    JwtTokenResult CreateLocalAdminPreviewToken(ApplicationUser user);
+    JwtTokenResult CreateLocalAdminPreviewToken(ApplicationUser user, bool allowReview = false);
 }

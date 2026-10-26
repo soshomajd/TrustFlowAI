@@ -57,7 +57,7 @@ public sealed class MilestoneSubmissionsController(
             item => item.Id == milestoneId && item.ProjectId == projectId &&
                     item.FreelancerId == freelancerId &&
                     item.Project.Status == ProjectStatus.InProgress &&
-                    item.Status == MileStoneStatus.InProgress,
+                    item.Status == MileStoneStatus.InProgress && item.PaidAmount == null,
             cancellationToken);
         if (!canSubmit)
             return Conflict(new { message = "Only your in-progress milestone can be submitted." });
@@ -96,14 +96,17 @@ public sealed class MilestoneSubmissionsController(
         }
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        var milestone = await dbContext.Milestones
-            .Include(item => item.Project)
-            .SingleOrDefaultAsync(item => item.Id == milestoneId && item.ProjectId == projectId,
-                cancellationToken);
-        if (milestone is null || milestone.FreelancerId != freelancerId)
-            return NotFound(new { message = "Milestone not found." });
-        if (milestone.Project.Status != ProjectStatus.InProgress ||
-            milestone.Status != MileStoneStatus.InProgress)
+
+        // Scanning and other requests may finish after the first validation.
+        // Claim the still-unpaid stage at the write itself, holding its row
+        // until the new version and files commit in this same transaction.
+        var claimed = await dbContext.Milestones
+            .Where(item => item.Id == milestoneId && item.ProjectId == projectId &&
+                item.FreelancerId == freelancerId && item.Project.Status == ProjectStatus.InProgress &&
+                item.Status == MileStoneStatus.InProgress && item.PaidAmount == null)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(
+                item => item.Status, MileStoneStatus.Submitted), cancellationToken);
+        if (claimed == 0)
             return Conflict(new { message = "Only an in-progress milestone can be submitted." });
 
         var version = await dbContext.MilestoneSubmissions
@@ -121,7 +124,6 @@ public sealed class MilestoneSubmissionsController(
             Attachments = attachments
         };
         dbContext.MilestoneSubmissions.Add(submission);
-        milestone.Status = MileStoneStatus.Submitted;
 
         try
         {
@@ -185,14 +187,14 @@ public sealed class MilestoneSubmissionsController(
         CancellationToken cancellationToken)
     {
         if (!TryGetUserId(out var clientId)) return Unauthorized();
-        var milestone = await dbContext.Milestones
+        var milestone = await dbContext.Milestones.AsNoTracking()
             .Include(item => item.Project)
             .SingleOrDefaultAsync(item => item.Id == milestoneId && item.ProjectId == projectId,
                 cancellationToken);
         if (milestone is null || milestone.Project.ClientId != clientId)
             return NotFound(new { message = "Milestone not found." });
         if (milestone.Project.Status != ProjectStatus.InProgress ||
-            milestone.Status != MileStoneStatus.Submitted)
+            milestone.Status != MileStoneStatus.Submitted || milestone.PaidAmount != null)
             return Conflict(new { message = "Only a submitted milestone can be returned for changes." });
 
         if (await dbContext.Disputes.AnyAsync(
@@ -204,6 +206,21 @@ public sealed class MilestoneSubmissionsController(
                 message = "This milestone is under dispute. Changes cannot be requested until it is ruled on."
             });
 
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        // A payment or resignation can be reconciled while the request is
+        // checking its evidence. Never overwrite that terminal state, or
+        // attach feedback to a stage now owned by a different freelancer.
+        var claimed = await dbContext.Milestones
+            .Where(item => item.Id == milestoneId && item.ProjectId == projectId &&
+                item.Project.ClientId == clientId && item.Project.Status == ProjectStatus.InProgress &&
+                item.FreelancerId == milestone.FreelancerId && item.Status == MileStoneStatus.Submitted &&
+                item.PaidAmount == null && !dbContext.Disputes.Any(dispute =>
+                    dispute.MilestoneId == item.Id && dispute.Status == DisputeStatus.Open))
+            .ExecuteUpdateAsync(setters => setters.SetProperty(
+                item => item.Status, MileStoneStatus.Rejected), cancellationToken);
+        if (claimed == 0)
+            return Conflict(new { message = "This milestone changed. Reload before requesting changes." });
+
         var submission = await dbContext.MilestoneSubmissions
             .Where(item => item.MilestoneId == milestoneId)
             .OrderByDescending(item => item.Version)
@@ -213,9 +230,9 @@ public sealed class MilestoneSubmissionsController(
 
         submission.ClientFeedback = request.Reason.Trim();
         submission.ReviewedAt = DateTimeOffset.UtcNow;
-        milestone.Status = MileStoneStatus.Rejected;
         await dbContext.SaveChangesAsync(cancellationToken);
-        return Ok(new MilestoneStatusResponse { Id = milestoneId, Status = milestone.Status });
+        await transaction.CommitAsync(cancellationToken);
+        return Ok(new MilestoneStatusResponse { Id = milestoneId, Status = MileStoneStatus.Rejected });
     }
 
     private async Task<bool> CanAccessAsync(

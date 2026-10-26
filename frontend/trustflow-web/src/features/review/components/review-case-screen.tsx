@@ -49,6 +49,8 @@ import {
   useSyncReviewCase,
 } from "@/features/review/hooks/use-review-cases";
 import { useSettleCase } from "@/features/review/hooks/use-settle-case";
+import { useReviewCaseReadiness } from "@/features/review/hooks/use-review-case-readiness";
+import { settlementReadinessMessage } from "@/features/review/lib/settlement-readiness";
 import type { ReviewCaseDetail } from "@/features/review/types/review";
 import { getApiErrorMessage } from "@/lib/api/get-api-error-message";
 
@@ -103,6 +105,7 @@ function CaseView({
   const readOnly = useAuthStore((state) => state.readOnly);
   const open = detail.case.status === "Open";
   const sync = useSyncReviewCase(caseId);
+  const readiness = useReviewCaseReadiness(detail);
 
   return (
     <main className="mx-auto max-w-4xl space-y-6 px-4 py-8 sm:px-6">
@@ -136,11 +139,7 @@ function CaseView({
             : "The client says the work was not delivered, or not good enough, and asks for the money back."}{" "}
           <span className="text-muted-foreground">
             Opened {formatDate(detail.case.openedAt)}.
-            {open
-              ? detail.case.isReady
-                ? " The 14 days are over, so you can decide."
-                : ` You can decide from ${formatDate(detail.case.settleableAt)}.`
-              : ""}
+            {open ? ` Recorded response deadline: ${formatDate(detail.case.settleableAt)}. Eligibility is checked against the chain below.` : ""}
           </span>
         </p>
 
@@ -149,7 +148,7 @@ function CaseView({
           size="sm"
           variant="outline"
           disabled={sync.isPending || readOnly}
-          onClick={() => sync.mutate()}
+          onClick={() => { sync.mutate(); void readiness.refetch(); }}
         >
           {sync.isPending ? (
             <LoaderCircle className="size-4 animate-spin" />
@@ -236,7 +235,7 @@ function CaseView({
       {open && <AdviceSection caseId={caseId} detail={detail} />}
 
       {open ? (
-        <DecisionSection caseId={caseId} detail={detail} />
+        <DecisionSection caseId={caseId} detail={detail} readiness={readiness} />
       ) : (
         <ClosedSection detail={detail} />
       )}
@@ -464,9 +463,11 @@ function AdviceSection({
 function DecisionSection({
   caseId,
   detail,
+  readiness,
 }: {
   caseId: string;
   detail: ReviewCaseDetail;
+  readiness: ReturnType<typeof useReviewCaseReadiness>;
 }) {
   const connection = useConnection();
   const saveNote = useSaveReviewNote(caseId);
@@ -513,7 +514,7 @@ function DecisionSection({
   const noteReady = note.trim().length >= 10 && note.trim().length <= 2000;
 
   const canSign =
-    detail.case.isReady && validAmount && noteReady && isArbiterWallet && !readOnly && !busy;
+    readiness.ready && validAmount && noteReady && isArbiterWallet && !readOnly && !busy;
 
   async function sign() {
     if (!canSign) return;
@@ -615,11 +616,11 @@ function DecisionSection({
             : ""}
         </p>
 
-        {!detail.case.isReady && (
-          <p>
-            The contract will refuse until {formatDate(detail.case.settleableAt)}.
-          </p>
-        )}
+        <p role="status">
+          {readiness.isPending && readiness.fetchStatus === "fetching"
+            ? "Checking the current case and response window on the chain. Signing remains disabled."
+            : settlementReadinessMessage(readiness.status)}
+        </p>
       </div>
 
       <AlertDialog>

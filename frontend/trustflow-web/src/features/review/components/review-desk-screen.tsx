@@ -106,8 +106,8 @@ function CaseRow({ item }: { item: ReviewCaseSummary }) {
         >
           {item.status === "Open"
             ? item.isReady
-              ? "Ready to decide"
-              : `Wait ${Math.max(days, 1)} ${days <= 1 ? "day" : "days"}`
+              ? "Estimated window ended · open to check chain"
+              : `Estimated wait: ${Math.max(days, 1)} ${days <= 1 ? "day" : "days"}`
             : item.status === "Settled"
               ? "Settled"
               : "Taken back"}

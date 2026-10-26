@@ -88,6 +88,7 @@ const steps: GuideStep[] = [
 ];
 
 const reminders = [
+    "Use Refresh milestones to see the client's latest review. The list also updates while the page is open.",
     "Confirmed work starts and milestone payments keep a transaction receipt. If the site cannot save it, wait for the wallet transaction to finish and use Refresh on-chain status. Do not sign again.",
     "Use the same wallet that you verified on your account.",
     "Disconnect in the top bar only signs the wallet out of this site. Your account keeps the address you verified.",
@@ -111,6 +112,8 @@ const reminders = [
     "Leave this project gives up your unpaid milestones. The money not yet paid goes back to the client. Milestones already paid stay yours.",
     "The reviewer can choose a percentage of the disputed milestone. The case and result notice show the same tracking reference and shared reason to both sides. The freelancer award is shown before and after the platform fee. Open the project to read the full result and transaction reference. Mark as read hides only your own notice.",
     "If the reviewer never answers for 90 days, either of you can split the milestone 50/50 and end the escrow.",
+    "Use Check chain time on an open request to check the waiting period. The split stays unavailable when the contract cannot be checked.",
+    "If a request, withdrawal or resignation is confirmed in your wallet but the site does not update, wait for the transaction to finish and use Refresh on-chain status. A failed transaction does not complete the action.",
     "While a dispute is open you cannot restart that milestone. Put your best evidence in the delivery note and files, because the AI cannot open links.",
 ];
 

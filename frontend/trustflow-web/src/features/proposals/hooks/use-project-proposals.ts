@@ -31,6 +31,11 @@ export function useProjectProposals(
 
     enabled: isProjectIdValid,
 
+    // A proposal can arrive from a different browser/profile while this
+    // project stays open. Keep the client review list current.
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
+
     placeholderData: (previousData) => previousData,
   });
 }

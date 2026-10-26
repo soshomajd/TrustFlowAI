@@ -49,7 +49,7 @@ public sealed class EscrowExecutionTrace(AppDbContext db, IEscrowChainDeployer c
         foreach (var item in events)
         {
             if (!Hex(item.TransactionHash, 64) || !Hex(item.BlockHash, 64) || !Hex(item.TransactionSender, 40) ||
-                item.BlockNumber < 0 || item.LogIndex < 0 || item.OccurredAt <= DateTimeOffset.UnixEpoch || item.OccurredAt > DateTimeOffset.UtcNow.AddMinutes(1))
+                item.BlockNumber < 0 || item.LogIndex < 0 || item.OccurredAt <= DateTimeOffset.UnixEpoch)
                 throw new InvalidOperationException("Execution evidence is incomplete.");
             Guid? milestoneId = null;
             if (item.Kind == "WorkStarted")
@@ -64,9 +64,30 @@ public sealed class EscrowExecutionTrace(AppDbContext db, IEscrowChainDeployer c
                 var milestone = milestones[item.MilestoneIndex]; milestoneId = milestone.Id;
                 var onChain = await chain.GetMilestoneAsync(escrow.ContractAddress, item.MilestoneIndex, cancellationToken, escrow.PlatformFeeBasisPoints > 0);
                 EscrowFeePolicy.ValidatePayment(onChain, escrow.PlatformFeeBasisPoints);
+                // An ending settlement returns this stage's remainder AND all later
+                // stages. Earlier stages have already consumed their whole amounts,
+                // regardless of how their individual awards/refunds were divided.
+                var expectedRefund = onChain.Amount - item.GrossPaid;
+                if (item.EscrowEnded)
+                {
+                    if (item.Kind != "CaseSettlement" ||
+                        snapshot.State is not (OnChainEscrowState.Terminated or OnChainEscrowState.Completed) ||
+                        item.MilestoneIndex != snapshot.NextMilestoneIndex - 1)
+                        throw new InvalidOperationException("Ending settlement does not match the terminal escrow position.");
+                    var priorStageAmounts = milestones.Take(item.MilestoneIndex).Aggregate(BigInteger.Zero,
+                        (sum, stage) => sum + TokenAmountConverter.ToBaseUnits(stage.Amount, decimals));
+                    expectedRefund = snapshot.TotalAmount - priorStageAmounts - item.GrossPaid;
+                    var priorCaseRefunds = events.Where(previous => previous.MilestoneIndex >= 0 &&
+                        previous.MilestoneIndex < item.MilestoneIndex).Aggregate(BigInteger.Zero,
+                        (sum, previous) => sum + previous.Refunded);
+                    if (expectedRefund < onChain.Amount - item.GrossPaid ||
+                        snapshot.RefundedAmount != priorCaseRefunds + expectedRefund ||
+                        snapshot.ReleasedAmount + snapshot.RefundedAmount != snapshot.TotalAmount)
+                        throw new InvalidOperationException("Ending settlement does not conserve the escrow's exact remaining funds.");
+                }
                 if (!onChain.Released || onChain.Amount != TokenAmountConverter.ToBaseUnits(milestone.Amount, decimals) || item.GrossPaid != onChain.Paid ||
                     (item.Kind == "ClientRelease" && (onChain.SettledByCase || item.GrossPaid != onChain.Amount || item.Refunded != BigInteger.Zero || !Same(item.Participant, escrow.FreelancerWalletAddress))) ||
-                    (item.Kind == "CaseSettlement" && (!onChain.SettledByCase || item.GrossPaid + item.Refunded != onChain.Amount)) ||
+                    (item.Kind == "CaseSettlement" && (!onChain.SettledByCase || item.Refunded != expectedRefund)) ||
                     item.Kind is not ("ClientRelease" or "CaseSettlement"))
                     throw new InvalidOperationException("Payment event does not match the exact milestone outcome.");
             }

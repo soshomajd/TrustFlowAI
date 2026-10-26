@@ -23,11 +23,11 @@ import {
   type CaseAction,
 } from "@/features/escrow/hooks/use-case-action";
 import { useEscrowCases } from "@/features/escrow/hooks/use-escrow-cases";
+import { useCaseWindow } from "@/features/escrow/hooks/use-case-window";
+import type { ExpectedCase } from "@/features/escrow/lib/recoverable-case-actions";
 import type { EscrowCase, ProjectEscrow } from "@/features/escrow/types/escrow";
 import type { MilestoneStatus } from "@/features/milestones/types/milestone";
 import { useNow } from "@/lib/hooks/use-now";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 type EscrowCasePanelProps = {
   projectId: string;
@@ -105,7 +105,7 @@ export function EscrowCasePanel({
           (milestone.status === "Pending" ||
             milestone.status === "InProgress")));
 
-  const run = (variables: { action: CaseAction }) =>
+  const run = (variables: { action: CaseAction; expectedCase?: ExpectedCase }) =>
     action.mutate({ escrow, onChainIndex, ...variables });
 
   if (!open && !settled && !canOpen) {
@@ -153,10 +153,12 @@ export function EscrowCasePanel({
       {open && (
         <OpenCaseCard
           item={open}
+          escrow={escrow}
+          onChainIndex={onChainIndex}
           viewerRole={viewerRole}
           pending={action.isPending}
-          onWithdraw={() => run({ action: "withdrawRequest" })}
-          onSplit={() => run({ action: "settleStalledCase" })}
+          onWithdraw={() => run({ action: "withdrawRequest", expectedCase: { kind: open.kind, openedAt: open.openedAt } })}
+          onSplit={() => run({ action: "settleStalledCase", expectedCase: { kind: open.kind, openedAt: open.openedAt } })}
         />
       )}
 
@@ -237,25 +239,29 @@ function OpenCaseDialog({
 
 function OpenCaseCard({
   item,
+  escrow,
+  onChainIndex,
   viewerRole,
   pending,
   onWithdraw,
   onSplit,
 }: {
   item: EscrowCase;
+  escrow: ProjectEscrow;
+  onChainIndex: number;
   viewerRole: "Client" | "Freelancer";
   pending: boolean;
   onWithdraw: () => void;
   onSplit: () => void;
 }) {
-  const now = useNow();
-  const settleAt = new Date(item.settleableAt).getTime();
-  const stallAt = new Date(item.stallableAt).getTime();
+  const chainWindow = useCaseWindow(escrow.contractAddress, escrow.chainId, onChainIndex,
+    { kind: item.kind, openedAt: item.openedAt });
 
   const openedByMe = item.openedByRole === viewerRole;
-  const waiting = now < settleAt;
-  const daysLeft = Math.max(1, Math.ceil((settleAt - now) / DAY_MS));
-  const canSplit = now >= stallAt;
+  const waiting = chainWindow.known && !chainWindow.reviewerReady;
+  const daysLeft = chainWindow.data ? Math.max(1,
+    Math.ceil(Number(chainWindow.data.openedAt + 14n * 86400n - chainWindow.data.timestamp) / 86400)) : 0;
+  const canSplit = chainWindow.canSplit;
 
   return (
     <article className="mt-3 space-y-3 text-sm">
@@ -273,11 +279,13 @@ function OpenCaseCard({
       </div>
 
       <p className="leading-6 text-muted-foreground">
-        {waiting
-          ? `A reviewer can decide in ${daysLeft} ${daysLeft === 1 ? "day" : "days"} (${formatDate(item.settleableAt)}).`
-          : "The 14 days are over. The reviewer can now decide."}{" "}
+        {!chainWindow.known
+          ? "Current chain time and this open request could not yet be confirmed. The 90-day split stays unavailable until they are checked."
+          : waiting
+            ? `The contract response window ends in about ${daysLeft} ${daysLeft === 1 ? "day" : "days"} (${formatDate(item.settleableAt)}).`
+            : "The 14-day window has ended on the chain. The reviewer can decide after checking the current case."}{" "}
         {openedByMe
-          ? "You can take the request back at any time before that."
+          ? "You can take the request back while it is still open."
           : item.kind === "PaymentRequest"
             ? "You can still release payment yourself, which closes it."
             : "You can still deliver the work or leave the project."}
@@ -296,6 +304,8 @@ function OpenCaseCard({
       )}
 
       <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" variant="outline" disabled={chainWindow.isFetching || pending}
+          onClick={() => void chainWindow.refetch()}>Check chain time</Button>
         {openedByMe && (
           <Button
             type="button"
@@ -313,7 +323,7 @@ function OpenCaseCard({
         )}
       </div>
 
-      {!canSplit && !waiting && (
+      {chainWindow.known && !canSplit && !waiting && (
         <p className="text-xs leading-5 text-muted-foreground">
           If nobody settles it by {formatDate(item.stallableAt)}, either side
           can split the milestone 50/50 and end the escrow.

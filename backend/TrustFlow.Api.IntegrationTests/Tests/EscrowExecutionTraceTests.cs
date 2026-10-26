@@ -104,4 +104,106 @@ public sealed class EscrowExecutionTraceTests(CustomWebApplicationFactory factor
         Assert.Equal("CaseSettlement",evidence.Kind);Assert.Equal(s.MilestoneId,evidence.MilestoneId);Assert.True(evidence.OccurredAt>DateTimeOffset.UnixEpoch);
         var after=await db.Escrows.AsNoTracking().SingleAsync(item=>item.Id==escrow.Id);Assert.Equal(gross,after.ReleasedAmount);Assert.Equal(gross/10,after.PlatformFeesPaid);
     }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(0, 160)]
+    [InlineData(1, 20)]
+    [InlineData(1, 50)]
+    [InlineData(2, 20)]
+    public async Task EndingSettlementRecordsTheExactRefundOfThisAndLaterStages(int index, int gross)
+    {
+        var scenario = await CreateSubmittedMilestoneAsync(client, milestoneCount: 3);
+        for (var previous = 0; previous < index; previous++)
+            FakeEscrowChainDeployer.MarkMilestoneReleased(scenario.ContractAddress, previous);
+        FakeEscrowChainDeployer.SettleMilestone(scenario.ContractAddress, index,
+            TokenAmountConverter.ToBaseUnits(gross, 6), endEscrow: true);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var escrow = await db.Escrows.AsNoTracking().SingleAsync(item => item.ProjectId == scenario.ProjectId);
+        var chain = scope.ServiceProvider.GetRequiredService<IEscrowChainDeployer>();
+        var events = await chain.GetExecutionEventsAsync(scenario.ContractAddress, "", CancellationToken.None);
+        var settlement = Assert.Single(events, item => item.Kind == "CaseSettlement");
+        Assert.True(settlement.EscrowEnded);
+        var earlierAmounts = index == 0 ? 0 : 800 + (index - 1) * 100;
+        var expectedRefund = 1000 - earlierAmounts - gross;
+        Assert.Equal(TokenAmountConverter.ToBaseUnits(expectedRefund, 6), settlement.Refunded);
+        var trace = scope.ServiceProvider.GetRequiredService<IEscrowExecutionTrace>();
+        Assert.True(await trace.CaptureAsync(escrow.Id, CancellationToken.None));
+        Assert.False(await trace.CaptureAsync(escrow.Id, CancellationToken.None));
+        Assert.Equal(index + 2, await db.EscrowExecutionRecords.CountAsync(item => item.EscrowId == escrow.Id));
+        Assert.Equal(scenario.AllMilestoneIds![index],
+            (await db.EscrowExecutionRecords.SingleAsync(item => item.EscrowId == escrow.Id && item.MilestoneIndex == index)).MilestoneId);
+        Assert.Equal(0, (await db.Escrows.AsNoTracking().SingleAsync(item => item.Id == escrow.Id)).ReleasedAmount);
+    }
+
+    [Fact]
+    public async Task EndingSettlementDoesNotRefundAnEarlierPartialSettlementAgain()
+    {
+        var scenario = await CreateSubmittedMilestoneAsync(client, milestoneCount: 3);
+        FakeEscrowChainDeployer.SettleMilestone(scenario.ContractAddress, 0,
+            TokenAmountConverter.ToBaseUnits(200, 6), endEscrow: false);
+        FakeEscrowChainDeployer.SettleMilestone(scenario.ContractAddress, 1,
+            TokenAmountConverter.ToBaseUnits(20, 6), endEscrow: true);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var escrow = await db.Escrows.AsNoTracking().SingleAsync(item => item.ProjectId == scenario.ProjectId);
+        var chain = scope.ServiceProvider.GetRequiredService<IEscrowChainDeployer>();
+        var events = await chain.GetExecutionEventsAsync(scenario.ContractAddress, "", CancellationToken.None);
+        Assert.Equal(TokenAmountConverter.ToBaseUnits(600, 6),
+            Assert.Single(events, item => item.MilestoneIndex == 0).Refunded);
+        Assert.Equal(TokenAmountConverter.ToBaseUnits(180, 6),
+            Assert.Single(events, item => item.MilestoneIndex == 1).Refunded);
+        Assert.True(await scope.ServiceProvider.GetRequiredService<IEscrowExecutionTrace>().CaptureAsync(escrow.Id, CancellationToken.None));
+        Assert.Equal(3, await db.EscrowExecutionRecords.CountAsync(item => item.EscrowId == escrow.Id));
+    }
+
+    [Theory]
+    [InlineData("short")]
+    [InlineData("extra")]
+    [InlineData("not-ending")]
+    public async Task EndingSettlementCannotRecordAnArbitraryExtraRefund(string fault)
+    {
+        var scenario = await CreateSubmittedMilestoneAsync(client, milestoneCount: 3);
+        FakeEscrowChainDeployer.SettleMilestone(scenario.ContractAddress, 0,
+            TokenAmountConverter.ToBaseUnits(160, 6), endEscrow: true);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var escrow = await db.Escrows.AsNoTracking().SingleAsync(item => item.ProjectId == scenario.ProjectId);
+        var chain = scope.ServiceProvider.GetRequiredService<IEscrowChainDeployer>();
+        var events = (await chain.GetExecutionEventsAsync(scenario.ContractAddress, "", CancellationToken.None)).ToList();
+        var settlement = Assert.Single(events, item => item.Kind == "CaseSettlement");
+        events.Remove(settlement);
+        events.Add(fault switch
+        {
+            "short" => settlement with { Refunded = settlement.Refunded - 1 },
+            "extra" => settlement with { Refunded = settlement.Refunded + 1 },
+            _ => settlement with { EscrowEnded = false }
+        });
+        FakeEscrowChainDeployer.SetExecutionEvents(scenario.ContractAddress, events);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            scope.ServiceProvider.GetRequiredService<IEscrowExecutionTrace>().CaptureAsync(escrow.Id, CancellationToken.None));
+        Assert.Empty(await db.EscrowExecutionRecords.Where(item => item.EscrowId == escrow.Id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task ValidatedExecutionEvidenceUsesTheChainClockInsteadOfTheServerClock()
+    {
+        var scenario = await CreateSubmittedMilestoneAsync(client);
+        FakeEscrowChainDeployer.MarkMilestoneReleased(scenario.ContractAddress, 0);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var escrow = await db.Escrows.AsNoTracking().SingleAsync(item => item.ProjectId == scenario.ProjectId);
+        var chain = scope.ServiceProvider.GetRequiredService<IEscrowChainDeployer>();
+        var blockTime = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.AddDays(15).ToUnixTimeSeconds());
+        var events = await chain.GetExecutionEventsAsync(scenario.ContractAddress, "", CancellationToken.None);
+        FakeEscrowChainDeployer.SetExecutionEvents(scenario.ContractAddress,
+            events.Select(item => item with { OccurredAt = blockTime }).ToList());
+
+        Assert.True(await scope.ServiceProvider.GetRequiredService<IEscrowExecutionTrace>().CaptureAsync(escrow.Id, CancellationToken.None));
+        var saved = await db.EscrowExecutionRecords.Where(item => item.EscrowId == escrow.Id).ToListAsync();
+        Assert.Equal(2, saved.Count);
+        Assert.All(saved, item => Assert.Equal(blockTime, item.OccurredAt));
+    }
 }

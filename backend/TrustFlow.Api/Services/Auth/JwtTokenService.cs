@@ -21,11 +21,11 @@ public sealed class JwtTokenService(
         IEnumerable<string> roles, DateTimeOffset? adminMfaVerifiedAt = null)
         => BuildToken(user, roles, adminMfaVerifiedAt, false);
 
-    public JwtTokenResult CreateLocalAdminPreviewToken(ApplicationUser user)
-        => BuildToken(user, [Constants.AppRoles.Admin], null, true);
+    public JwtTokenResult CreateLocalAdminPreviewToken(ApplicationUser user, bool allowReview = false)
+        => BuildToken(user, [Constants.AppRoles.Admin], null, true, allowReview);
 
     private JwtTokenResult BuildToken(ApplicationUser user, IEnumerable<string> roles,
-        DateTimeOffset? adminMfaVerifiedAt, bool localPreview)
+        DateTimeOffset? adminMfaVerifiedAt, bool localPreview, bool localReview = false)
     {
         var expiresAtUtc = DateTime.UtcNow.AddMinutes(
             localPreview ? Math.Min(30, _settings.ExpirationMinutes) : _settings.ExpirationMinutes
@@ -86,6 +86,7 @@ public sealed class JwtTokenService(
         if (localPreview)
         {
             claims.Add(new Claim(LocalAdminPreview.Claim, "true"));
+            if (localReview) claims.Add(new Claim(LocalAdminPreview.ReviewClaim, "true"));
             claims.Add(new Claim(AdminSessionSecurity.StampClaim, user.SecurityStamp ?? string.Empty));
         }
 
