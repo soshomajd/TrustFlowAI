@@ -12,6 +12,7 @@ public class MilestoneResponse
     public string Description { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public string AmountExact => Amount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    public int? OnChainIndex { get; set; }
     public int SequenceNumber { get; set; }
 
     public DateTimeOffset Deadline { get; set; }

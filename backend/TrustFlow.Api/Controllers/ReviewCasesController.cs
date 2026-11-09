@@ -14,6 +14,7 @@ using TrustFlow.Api.Models;
 using TrustFlow.Api.Models.Enums;
 using TrustFlow.Api.Options;
 using TrustFlow.Api.Services.Ai;
+using TrustFlow.Api.Services.Files;
 
 namespace TrustFlow.Api.Controllers;
 
@@ -287,6 +288,11 @@ public sealed class ReviewCasesController(
                     item.SequenceNumber < row.MilestoneSequence,
                 cancellationToken);
 
+        var mappedIndex = await dbContext.EscrowFundingStages.AsNoTracking()
+            .Where(s => s.EscrowId == row.Case.EscrowId && s.MilestoneId == row.Case.MilestoneId && s.FundedAt != null)
+            .Select(s => s.ChainIndex).SingleOrDefaultAsync(cancellationToken);
+        if (mappedIndex.HasValue) onChainIndex = mappedIndex.Value;
+
         var deliveries = await dbContext.MilestoneSubmissions
             .AsNoTracking()
             .Where(item =>
@@ -388,6 +394,8 @@ public sealed class ReviewCasesController(
         Note = submission.Note,
         PreviewLink = submission.PreviewLink,
         SourceFilesLink = submission.SourceFilesLink,
+        HasSourceFiles = submission.SourceFilesLink is not null,
+        OriginalsUnlocked = true,
         ClientFeedback = submission.ClientFeedback,
         SubmittedAt = submission.SubmittedAt,
         ReviewedAt = submission.ReviewedAt,
@@ -398,7 +406,8 @@ public sealed class ReviewCasesController(
                 FileName = file.OriginalFileName,
                 ContentType = file.ContentType,
                 FileSize = file.FileSize,
-                Sha256 = file.Sha256
+                Sha256 = file.Sha256,
+                HasPreview = DeliveryReviewPreview.Supports(file.ContentType)
             })
             .ToList()
     };

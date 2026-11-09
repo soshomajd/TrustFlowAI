@@ -5,8 +5,22 @@ import type {
   EscrowCase,
   ProjectEscrow,
   ProjectEscrowParticipant,
+  EscrowFundingStage,
 } from "@/features/escrow/types/escrow";
 import { apiClient } from "@/lib/api/api-client";
+
+export async function getEscrowStages(projectId: string, freelancerId: string) {
+  return (await apiClient.get<EscrowFundingStage[]>(`/projects/${projectId}/escrow/stages`, {
+    params: { freelancerId },
+  })).data;
+}
+
+export async function prepareNextEscrowStage(projectId: string, freelancerId: string, milestoneId: string,
+  newStage?: { title: string; amount: string; deadline: string }) {
+  return (await apiClient.post<{ milestoneId: string }>(`/projects/${projectId}/escrow/stages`, {
+    freelancerId, milestoneId, ...newStage,
+  })).data;
+}
 
 // Every freelancer assigned to the project, each with their own escrow once
 // the client has created it. A freelancer only ever gets their own row.

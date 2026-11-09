@@ -16,9 +16,19 @@ export function createTransactionConfirmer() {
 
     const operation = (async () => {
       let hash = submitted.get(key);
+      const storageKey = `trustflow:pending-transaction:v1:${key}`;
+      if (!hash && typeof window !== "undefined") {
+        try {
+          const stored = window.localStorage.getItem(storageKey);
+          if (stored && /^0x[0-9a-fA-F]{64}$/.test(stored)) hash = stored as Hash;
+        } catch { /* Wallet confirmation remains usable when storage is disabled. */ }
+      }
       if (!hash) {
         hash = await send();
         submitted.set(key, hash);
+        if (typeof window !== "undefined") {
+          try { window.localStorage.setItem(storageKey, hash); } catch { /* No secrets are stored. */ }
+        }
       }
 
       let receipt;
@@ -28,6 +38,9 @@ export function createTransactionConfirmer() {
         throw new Error("A transaction was submitted, but its confirmation could not be read. Wait for your wallet to finish, then use Refresh on-chain status or retry to check the same transaction.");
       }
       submitted.delete(key);
+      if (typeof window !== "undefined") {
+        try { window.localStorage.removeItem(storageKey); } catch { /* Best effort cleanup. */ }
+      }
       if (receipt.status !== "success") {
         throw new Error("The transaction reverted. Refresh the on-chain status before trying again.");
       }

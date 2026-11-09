@@ -7,6 +7,8 @@ import { readContract, waitForTransactionReceipt, writeContract } from "wagmi/ac
 import { readContractQueryKey } from "wagmi/query";
 
 import { syncEscrow } from "@/features/escrow/api/escrow-api";
+import { stagedEscrowAbi } from "@/features/escrow/lib/staged-escrow-abi";
+import type { EscrowFundingStage } from "@/features/escrow/types/escrow";
 import { escrowAbi } from "@/features/escrow/lib/escrow-abi";
 import { startWorkWithRecovery } from "@/features/escrow/lib/recoverable-escrow-actions";
 import { confirmEscrowTransaction } from "@/features/escrow/lib/transaction-confirmation";
@@ -18,6 +20,7 @@ import { wagmiConfig } from "@/lib/wallet/wagmi-config";
 type StartWorkVariables = {
   contractAddress: string;
   chainId: number;
+  stage?: EscrowFundingStage;
 };
 
 export function useStartWork(projectId: string, freelancerId: string) {
@@ -27,8 +30,13 @@ export function useStartWork(projectId: string, freelancerId: string) {
   return useMutation({
     mutationKey: escrowQueryKeys.startWork(normalizedProjectId, freelancerId),
 
-    mutationFn: async ({ contractAddress, chainId }: StartWorkVariables) => {
+    mutationFn: async ({ contractAddress, chainId, stage }: StartWorkVariables) => {
       const address = contractAddress as Address;
+      if (stage) {
+        const index = await readContract(wagmiConfig, { address, abi: escrowAbi, functionName: "nextMilestoneIndex", chainId });
+        if (stage.chainIndex === null || index !== BigInt(stage.chainIndex) || !stage.fundedAt)
+          throw new Error("The funded scope changed. Refresh and review the current milestone before accepting.");
+      }
       return startWorkWithRecovery({
         sync: () => syncEscrow(normalizedProjectId, freelancerId),
         readStarted: () => readContract(wagmiConfig, {
@@ -37,7 +45,10 @@ export function useStartWork(projectId: string, freelancerId: string) {
           functionName: "workStarted",
           chainId,
         }),
-        start: () => confirmEscrowTransaction(`${chainId}:${address.toLowerCase()}:start`, () => writeContract(wagmiConfig, {
+        start: () => confirmEscrowTransaction(`${chainId}:${address.toLowerCase()}:${stage?.fundingReference ?? "legacy"}:start`, () => stage
+          ? writeContract(wagmiConfig, { address, abi: stagedEscrowAbi, functionName: "acceptAndStart",
+              args: [stage.fundingReference, stage.termsHash], chainId })
+          : writeContract(wagmiConfig, {
           address,
           abi: escrowAbi,
           functionName: "startWork",

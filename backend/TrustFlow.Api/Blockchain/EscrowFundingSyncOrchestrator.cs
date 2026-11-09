@@ -16,7 +16,8 @@ public interface IEscrowChainSyncOrchestrator
 public sealed class EscrowChainSyncOrchestrator(
     AppDbContext dbContext,
     IEscrowChainDeployer deployer,
-    IEscrowExecutionTrace executionTrace)
+    IEscrowExecutionTrace executionTrace,
+    EscrowStageSync stageSync)
     : IEscrowChainSyncOrchestrator
 {
     public async Task<bool> TrySyncAsync(
@@ -63,11 +64,11 @@ public sealed class EscrowChainSyncOrchestrator(
                 snapshot.Freelancer,
                 escrow.FreelancerWalletAddress,
                 StringComparison.OrdinalIgnoreCase) ||
-            snapshot.TotalAmount !=
+            (escrow.ProtocolVersion != 3 && snapshot.TotalAmount !=
                 TokenAmountConverter.ToBaseUnits(
                     escrow.TotalAmount,
                     tokenDecimals
-                ))
+                )))
         {
             throw new InvalidOperationException(
                 $"On-chain escrow {escrow.ContractAddress} does " +
@@ -96,7 +97,13 @@ public sealed class EscrowChainSyncOrchestrator(
                 throw new InvalidOperationException("On-chain escrow fee policy differs from the stored snapshot.");
         }
 
-        var traced = await SyncLifecycleEventsAsync(escrow, snapshot, cancellationToken);
+        var traced = false;
+        if (escrow.ProtocolVersion == 3)
+        {
+            traced = await stageSync.ReconcileAsync(escrow.Id, snapshot, tokenDecimals, cancellationToken);
+            escrow = await dbContext.Escrows.AsNoTracking().SingleAsync(e => e.Id == escrow.Id, cancellationToken);
+        }
+        traced |= await SyncLifecycleEventsAsync(escrow, snapshot, cancellationToken);
         if (snapshot.WorkStarted || snapshot.NextMilestoneIndex > 0)
             traced |= await executionTrace.CaptureAsync(escrow.Id, cancellationToken);
 
@@ -157,7 +164,7 @@ public sealed class EscrowChainSyncOrchestrator(
         if (snapshot.State == OnChainEscrowState.AwaitingFunding)
             return false;
 
-        var needsFunding = escrow.FundingTransactionHash is null &&
+        var needsFunding = escrow.ProtocolVersion != 3 && escrow.FundingTransactionHash is null &&
             !(snapshot.State == OnChainEscrowState.Cancelled && snapshot.RefundedAmount == 0 &&
               escrow.CancellationTransactionHash is not null);
         var needsCancellation = snapshot.State == OnChainEscrowState.Cancelled &&
@@ -177,7 +184,7 @@ public sealed class EscrowChainSyncOrchestrator(
             (snapshot.State != OnChainEscrowState.Cancelled || snapshot.RefundedAmount > 0))
             throw new InvalidOperationException("Funded escrow has no matching funding event.");
         if (needsCancellation && (events.Cancellation is null ||
-            events.Cancellation.RefundedAmount != snapshot.RefundedAmount))
+            (escrow.ProtocolVersion != 3 && events.Cancellation.RefundedAmount != snapshot.RefundedAmount)))
             throw new InvalidOperationException("Cancelled escrow has no matching refund event.");
 
         var changed = 0;
@@ -273,7 +280,8 @@ public sealed class EscrowChainSyncOrchestrator(
         await dbContext.Milestones
             .Where(item =>
                 item.ProjectId == projectId &&
-                item.FreelancerId == freelancerId)
+                item.FreelancerId == freelancerId &&
+                item.Status != MileStoneStatus.Approved && item.Status != MileStoneStatus.Settled)
             .ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(
@@ -293,7 +301,7 @@ public sealed class EscrowChainSyncOrchestrator(
             .Where(item =>
                 item.ProjectId == projectId &&
                 item.FreelancerId == freelancerId &&
-                item.Status == ProposalStatus.Accepted)
+                (item.Status == ProposalStatus.Accepted || item.Status == ProposalStatus.Funded || item.Status == ProposalStatus.AwaitingFunding))
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(
                     item => item.Status,
@@ -349,6 +357,11 @@ public sealed class EscrowChainSyncOrchestrator(
             .OrderBy(item => item.SequenceNumber)
             .ToListAsync(cancellationToken);
 
+        if (escrow.ProtocolVersion == 3)
+            milestones = await dbContext.EscrowFundingStages.AsNoTracking()
+                .Where(s => s.EscrowId == escrow.Id && s.FundedAt != null)
+                .OrderBy(s => s.ChainIndex).Select(s => s.Milestone).ToListAsync(cancellationToken);
+
         var changed = false;
 
         var released = Math.Min(
@@ -376,8 +389,15 @@ public sealed class EscrowChainSyncOrchestrator(
 
             // A release by the client is finished by the client's own
             // approval. Only a settlement is the arbiter's to report.
-            if (!onChain.Released || !onChain.SettledByCase)
+            if (!onChain.Released)
             {
+                continue;
+            }
+
+            if (!onChain.SettledByCase)
+            {
+                if (escrow.ProtocolVersion == 3)
+                    changed |= await ApplyClientReleaseAsync(escrow, milestone, onChain, tokenDecimals, cancellationToken);
                 continue;
             }
 
@@ -418,6 +438,28 @@ public sealed class EscrowChainSyncOrchestrator(
         }
 
         return changed;
+    }
+
+    private async Task<bool> ApplyClientReleaseAsync(Escrow escrow, MileStone milestone, OnChainMilestone onChain,
+        int decimals, CancellationToken ct)
+    {
+        var amount = TokenAmountConverter.FromBaseUnits(onChain.Amount, decimals);
+        var fee = TokenAmountConverter.FromBaseUnits(onChain.PlatformFee, decimals);
+        if (amount != milestone.Amount || onChain.Paid != onChain.Amount)
+            throw new InvalidOperationException("Client release differs from the exact funded milestone.");
+        await using var tx = await dbContext.Database.BeginTransactionAsync(ct);
+        var claimed = await dbContext.Milestones.Where(m => m.Id == milestone.Id && m.Status != MileStoneStatus.Approved && m.Status != MileStoneStatus.Settled)
+            .ExecuteUpdateAsync(set => set.SetProperty(m => m.Status, MileStoneStatus.Approved)
+                .SetProperty(m => m.PaidAmount, (decimal?)amount).SetProperty(m => m.PlatformFeePaid, fee), ct);
+        if (claimed > 0)
+        {
+            await dbContext.Escrows.Where(e => e.Id == escrow.Id).ExecuteUpdateAsync(set => set
+                .SetProperty(e => e.ReleasedAmount, e => e.ReleasedAmount + amount)
+                .SetProperty(e => e.PlatformFeesPaid, e => e.PlatformFeesPaid + fee), ct);
+            await SettleDisputesAsync([milestone.Id], ct);
+        }
+        await tx.CommitAsync(ct);
+        return claimed > 0;
     }
 
     private async Task<bool> ApplySettlementAsync(

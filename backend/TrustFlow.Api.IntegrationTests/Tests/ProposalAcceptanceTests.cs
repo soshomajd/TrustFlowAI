@@ -113,6 +113,7 @@ public sealed class ProposalAcceptanceTests
             25
         );
 
+        await FixedEscrowFixture.UseAsync(projectId);
         using var acceptRequest =
             CreateAuthorizedRequest(
                 HttpMethod.Patch,
@@ -243,6 +244,7 @@ public sealed class ProposalAcceptanceTests
             await database.SaveChangesAsync();
         }
 
+        await FixedEscrowFixture.UseAsync(projectId);
         using var acceptRequest = CreateAuthorizedRequest(
             HttpMethod.Patch,
             $"/api/projects/{projectId}/proposals/{proposalId}/accept",

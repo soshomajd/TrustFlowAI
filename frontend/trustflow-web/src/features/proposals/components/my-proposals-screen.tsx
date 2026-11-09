@@ -367,6 +367,10 @@ function MyProposalCard({
                         </Button>
                     )}
 
+                {(proposal.status === "AwaitingFunding" || proposal.status === "Funded" || proposal.status === "Accepted") && (
+                    <Button asChild size="sm"><Link href={`/dashboard/freelancer/projects/${proposal.projectId}`}>Open funded work</Link></Button>
+                )}
+
                 {canWithdraw && (
                     <WithdrawProposalDialog
                         proposalId={proposal.id}
@@ -419,7 +423,7 @@ function ProposalStatusBadge({
                 ],
             )}
         >
-            {status}
+            {status === "AwaitingFunding" ? "Awaiting funding" : status === "Funded" ? "Funded · awaiting your acceptance" : status}
         </span>
     );
 }
@@ -428,6 +432,8 @@ const proposalStatusStyles: Record<
     ProposalStatus,
     string
 > = {
+    AwaitingFunding: "border-amber-500/30 bg-amber-500/10 text-amber-400",
+    Funded: "border-blue-500/30 bg-blue-500/10 text-blue-400",
     Pending:
         "border-amber-500/30 bg-amber-500/10 text-amber-400",
 

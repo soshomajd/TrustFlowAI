@@ -11,6 +11,7 @@ using TrustFlow.Api.Dtos.Notifications;
 using TrustFlow.Api.Models;
 using TrustFlow.Api.Models.Enums;
 using TrustFlow.Api.Options;
+using TrustFlow.Api.Services.Files;
 
 namespace TrustFlow.Api.Controllers;
 
@@ -19,10 +20,12 @@ namespace TrustFlow.Api.Controllers;
 // so they survive cleared assignments, offline users and repeated chain sync.
 [ApiController]
 [Authorize]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [Route("api/notifications")]
 public sealed class NotificationsController(
     AppDbContext dbContext,
-    IOptions<AiOptions> aiOptions)
+    IOptions<AiOptions> aiOptions,
+    DeliveryResponseRedactor redactor)
     : ControllerBase
 {
     private const string ActionSeverity = "action";
@@ -273,6 +276,7 @@ public sealed class NotificationsController(
                 item.PlatformFeePaid,
                 item.ReviewNote,
                 item.ReturnedToClient,
+                item.MilestoneId,
                 ProjectId = item.Milestone.ProjectId,
                 MilestoneTitle = item.Milestone.Title,
                 ProjectTitle = item.Milestone.Project.Title,
@@ -349,7 +353,7 @@ public sealed class NotificationsController(
             }
             else
             {
-                items.Add(new NotificationItemResponse
+                var settled = new NotificationItemResponse
                 {
                     Id = $"case-settled:{row.Id}",
                     Kind = "CaseSettled",
@@ -363,7 +367,8 @@ public sealed class NotificationsController(
                     Href = href,
                     ProjectTitle = row.ProjectTitle,
                     ReferenceCode = EscrowCaseReference.Format(row.Id)
-                });
+                };
+                items.Add(isClient ? await redactor.ForClientAsync(settled, row.ProjectId, row.MilestoneId, cancellationToken) : settled);
             }
         }
 

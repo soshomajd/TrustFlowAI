@@ -50,6 +50,8 @@ public class AppDbContext(
     public DbSet<Escrow> Escrows =>
         Set<Escrow>();
 
+    public DbSet<EscrowFundingStage> EscrowFundingStages => Set<EscrowFundingStage>();
+
     public DbSet<ProposalMilestone> ProposalMilestones =>
         Set<ProposalMilestone>();
 
@@ -70,6 +72,23 @@ public class AppDbContext(
 
 
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<EscrowFundingStage>(stage =>
+        {
+            stage.Property(item => item.Amount).HasPrecision(38, 18);
+            stage.Property(item => item.FundingReference).HasMaxLength(66).IsRequired();
+            stage.Property(item => item.TermsHash).HasMaxLength(66).IsRequired();
+            stage.Property(item => item.Title).HasMaxLength(200).IsRequired();
+            stage.Property(item => item.TermsJson).IsRequired();
+            stage.Property(item => item.FundingTransactionHash).HasMaxLength(66);
+            stage.Property(item => item.StartTransactionHash).HasMaxLength(66);
+            stage.HasOne(item => item.Escrow).WithMany().HasForeignKey(item => item.EscrowId).OnDelete(DeleteBehavior.Cascade);
+            stage.HasOne(item => item.Milestone).WithMany().HasForeignKey(item => item.MilestoneId).OnDelete(DeleteBehavior.Restrict);
+            stage.HasIndex(item => item.FundingReference).IsUnique();
+            stage.HasIndex(item => item.MilestoneId).IsUnique().HasFilter("\"ReservationActive\"");
+            stage.HasIndex(item => new { item.EscrowId, item.PlanOrder }).IsUnique();
+            stage.HasIndex(item => new { item.EscrowId, item.ChainIndex }).IsUnique().HasFilter("\"ChainIndex\" IS NOT NULL");
+        });
 
         modelBuilder.Entity<EscrowExecutionRecord>(record =>
         {
@@ -656,6 +675,8 @@ public class AppDbContext(
             project.Property(item => item.Budget)
                 .HasPrecision(18, 2);
 
+            project.Property(item => item.HiringFlowVersion).HasDefaultValue(2);
+
             project.Property(item => item.Status)
                 .HasConversion<string>()
                 .HasDefaultValue(ProjectStatus.Open);
@@ -836,7 +857,7 @@ public class AppDbContext(
                 item.FreelancerId
             })
                 .IsUnique()
-                .HasFilter("\"Status\" IN ('Pending', 'Accepted')");
+                .HasFilter("\"Status\" IN ('Pending', 'Accepted', 'AwaitingFunding', 'Funded')");
 
             proposal.HasIndex(item => new
             {

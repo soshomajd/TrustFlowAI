@@ -72,7 +72,7 @@ const steps: GuideStep[] = [
     {
         title: "Fund the secure payment",
         description:
-            "Connect and verify your wallet. Every freelancer on the project gets their own escrow, holding only their own milestones, so do this once for each of them. Create and deploy the escrow. Switch to the shown test network, get test ETH and test tokens, then use Approve and fund escrow.",
+            "Connect and verify your wallet. Posting a project does not take payment. Choose Accept and fund on a freelancer proposal. The site prepares their separate contract and your wallet pays for the first selected milestone. Wait for a successful deposit. The freelancer then accepts and starts. Fund later milestones in that same contract after the earlier funded work is settled. Planned milestones are not funded yet.",
         icon: CircleDollarSign,
         action: {
             label: "Open assigned project",
@@ -82,7 +82,7 @@ const steps: GuideStep[] = [
     {
         title: "Review work and release payment",
         description:
-            "Open each submitted milestone. Read the note, download its files and check its links. You can use Check with AI to see if the work matches what you asked for. Then ask for changes with a clear reason, or release payment and approve the work. If you and the freelancer cannot agree, you can open a dispute. If the work never arrives or is not good enough, use Ask for refund.",
+            "Open each submitted milestone. Read the note and use Review preview to check a limited, watermarked sample. Review demo links are also visible. Ask for changes with a clear reason, or approve and release payment. After full payment is confirmed, download the original files and open the source links. If you and the freelancer cannot agree, open a dispute. Use Ask for refund for a payment claim.",
         icon: ClipboardCheck,
         action: {
             label: "Go to my projects",
@@ -98,12 +98,15 @@ const reminders = [
     "Disconnect in the top bar only signs the wallet out of this site. Your account keeps the address you verified.",
     "A new project stays hidden until its milestone amounts add up to the budget.",
     "Your project stays on the marketplace while any milestone is still free, so other freelancers can apply for the rest.",
+    "After funding is confirmed, other pending proposals that include that funded milestone are rejected automatically. Proposals for different milestones stay open.",
     "Changing the budget after a freelancer applies blocks their proposal until they agree again.",
     "Fund each freelancer’s escrow before that freelancer starts work.",
     "Enter budgets and milestone amounts with at most two decimals. If a large amount cannot be sent exactly, the form asks for a smaller amount. The funding check reads the exact total from the contract and shows the full token balance.",
     "If your wallet confirms funding or a refund but the page does not update, use Refresh on-chain status. It does not move money or ask you to sign. Wait for any pending wallet transaction to finish before trying again. An existing token permission can be reused when you retry funding.",
     "You can cancel and get a refund only before work starts. Cancelling drops that one freelancer and puts their stages back on the marketplace. Your other freelancers keep working. After the cancellation is confirmed, that freelancer gets a notification in the site.",
     "Release payment only after you check the submitted work.",
+    "Original files and source links unlock only after the full milestone amount is paid, before the platform fee. A partial award keeps them locked. Use Refresh deliveries if payment was confirmed in another window.",
+    "Previews are limited. A PDF preview shows a short text sample. Previews, screenshots and review demo links can still be copied. Ask the freelancer for a better review sample if needed.",
     "If payment is confirmed in your wallet but approval fails on the site, open the same milestone and choose Approve milestone again. Use Finish approval when shown. The site checks the recorded payment before asking your wallet, so a confirmed release is not sent again.",
     "AI help is advice. It can be wrong. You decide, and you release payment yourself.",
     "A dispute asks an AI to give an opinion on who is right. The opinion does not move any money by itself. While a dispute is open you cannot ask for changes on that milestone.",

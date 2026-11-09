@@ -66,6 +66,7 @@ public class MilestonesController(
             Description = milestone.Description,
             Amount = milestone.Amount,
             SequenceNumber = milestone.SequenceNumber,
+                OnChainIndex = milestone.OnChainIndex,
             Deadline = milestone.Deadline,
             Status = milestone.Status,
             PaidAmount = milestone.PaidAmount,
@@ -141,7 +142,7 @@ public class MilestonesController(
                             (proposal.Status ==
                                  ProposalStatus.Pending ||
                              proposal.Status ==
-                                 ProposalStatus.Accepted),
+                                 ProposalStatus.Accepted || proposal.Status == ProposalStatus.AwaitingFunding || proposal.Status == ProposalStatus.Funded),
                         cancellationToken
                     );
 
@@ -372,6 +373,7 @@ public class MilestonesController(
 
                 SequenceNumber =
                     milestone.SequenceNumber,
+                OnChainIndex = milestone.OnChainIndex,
 
                 Deadline = milestone.Deadline,
 
@@ -464,7 +466,7 @@ public class MilestonesController(
                             (proposal.Status ==
                                  ProposalStatus.Pending ||
                              proposal.Status ==
-                                 ProposalStatus.Accepted),
+                                 ProposalStatus.Accepted || proposal.Status == ProposalStatus.AwaitingFunding || proposal.Status == ProposalStatus.Funded),
                         cancellationToken
                     );
 
@@ -643,7 +645,7 @@ public class MilestonesController(
                 // scope and the payment split they agreed to.
                 !milestone.Project.Proposals.Any(proposal =>
                     proposal.Status == ProposalStatus.Pending ||
-                    proposal.Status == ProposalStatus.Accepted))
+                    proposal.Status == ProposalStatus.Accepted || proposal.Status == ProposalStatus.AwaitingFunding || proposal.Status == ProposalStatus.Funded))
             .ExecuteDeleteAsync(cancellationToken);
 
         if (affectedRows == 1)
@@ -688,7 +690,7 @@ public class MilestonesController(
                 proposal =>
                     proposal.ProjectId == projectId &&
                     (proposal.Status == ProposalStatus.Pending ||
-                     proposal.Status == ProposalStatus.Accepted),
+                     proposal.Status == ProposalStatus.Accepted || proposal.Status == ProposalStatus.AwaitingFunding || proposal.Status == ProposalStatus.Funded),
                 cancellationToken
             );
 
@@ -727,6 +729,11 @@ public class MilestonesController(
         {
             return Unauthorized();
         }
+
+        var reserved = await dbContext.EscrowFundingStages.AsNoTracking()
+            .Where(s => s.MilestoneId == milestoneId && s.ReservationActive).FirstOrDefaultAsync(cancellationToken);
+        if (reserved != null && (reserved.FundedAt == null || reserved.StartedAt == null))
+            return Conflict(new { message = "Accept and start this funded milestone in the freelancer wallet first." });
 
         var workStartGate = await dbContext.Milestones
             .AsNoTracking()
@@ -1135,6 +1142,11 @@ public class MilestonesController(
                 otherMilestone.SequenceNumber <
                     preCheck.SequenceNumber)
             .CountAsync(cancellationToken);
+
+        var mappedIndex = await dbContext.EscrowFundingStages.AsNoTracking()
+            .Where(s => s.EscrowId == preCheck.Escrow.Id && s.MilestoneId == milestoneId && s.FundedAt != null)
+            .Select(s => s.ChainIndex).SingleOrDefaultAsync(cancellationToken);
+        if (mappedIndex.HasValue) onChainIndex = mappedIndex.Value;
 
         var tokenDecimals =
             await chainDeployer.GetTokenDecimalsAsync(

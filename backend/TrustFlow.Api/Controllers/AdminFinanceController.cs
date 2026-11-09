@@ -77,8 +77,12 @@ public sealed class AdminFinanceController(AppDbContext db) : ControllerBase
                 DeploymentTransactionHash = item.DeploymentTransactionHash, FundingTransactionHash = item.FundingTransactionHash,
                 CancellationTransactionHash = item.CancellationTransactionHash, FundedAt = item.FundedAt,
                 CancelledAt = item.CancelledAt, UpdatedAt = item.UpdatedAt,
-                WorkStartedAt = db.EscrowExecutionRecords.Where(r => r.EscrowId == item.Id && r.Kind == "WorkStarted").Select(r => (DateTimeOffset?)r.OccurredAt).FirstOrDefault(),
-                WorkStartTransactionHash = db.EscrowExecutionRecords.Where(r => r.EscrowId == item.Id && r.Kind == "WorkStarted").Select(r => r.TransactionHash).FirstOrDefault(),
+                WorkStartedAt = item.ProtocolVersion == 3
+                    ? db.EscrowFundingStages.Where(s => s.EscrowId == item.Id && s.StartedAt != null).OrderBy(s => s.ChainIndex).Select(s => s.StartedAt).FirstOrDefault()
+                    : db.EscrowExecutionRecords.Where(r => r.EscrowId == item.Id && r.Kind == "WorkStarted").Select(r => (DateTimeOffset?)r.OccurredAt).FirstOrDefault(),
+                WorkStartTransactionHash = item.ProtocolVersion == 3
+                    ? db.EscrowFundingStages.Where(s => s.EscrowId == item.Id && s.StartedAt != null).OrderBy(s => s.ChainIndex).Select(s => s.StartTransactionHash).FirstOrDefault()
+                    : db.EscrowExecutionRecords.Where(r => r.EscrowId == item.Id && r.Kind == "WorkStarted").Select(r => r.TransactionHash).FirstOrDefault(),
                 RecordedCaseRefunds = db.EscrowCases.Where(c => c.EscrowId == item.Id && c.Status == EscrowCaseStatus.Settled).Sum(c => c.ReturnedToClient) ?? 0,
                 UnknownCaseRefundCount = db.EscrowCases.Count(c => c.EscrowId == item.Id && c.Status == EscrowCaseStatus.Settled && c.ReturnedToClient == null),
                 RecordedMilestoneGross = db.Milestones.Where(m => m.ProjectId == projectId && m.FreelancerId == item.FreelancerId

@@ -89,6 +89,20 @@ export async function downloadMilestoneSubmissionFile(
   return response.data;
 }
 
+export async function getMilestoneSubmissionPreview(
+  projectId: string,
+  milestoneId: string,
+  submissionId: string,
+  attachmentId: string,
+  signal?: AbortSignal,
+) {
+  const response = await apiClient.get<Blob>(
+    `/projects/${projectId}/milestones/${milestoneId}/submissions/${submissionId}/files/${attachmentId}/preview`,
+    { responseType: "blob", signal },
+  );
+  return response.data;
+}
+
 export async function approveMilestone(projectId: string, milestoneId: string) {
   const response = await apiClient.patch<ApproveMilestoneResponse>(
     `/projects/${projectId}/milestones/${milestoneId}/approve`,

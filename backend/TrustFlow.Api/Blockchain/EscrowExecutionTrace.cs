@@ -34,15 +34,18 @@ public sealed class EscrowExecutionTrace(AppDbContext db, IEscrowChainDeployer c
         }
         var milestones = await db.Milestones.AsNoTracking().Where(item => item.ProjectId == escrow.ProjectId && item.FreelancerId == escrow.FreelancerId)
             .OrderBy(item => item.SequenceNumber).ToListAsync(cancellationToken);
+        if (escrow.ProtocolVersion == 3)
+            milestones = await db.EscrowFundingStages.AsNoTracking().Where(s => s.EscrowId == escrowId && s.FundedAt != null)
+                .OrderBy(s => s.ChainIndex).Select(s => s.Milestone).ToListAsync(cancellationToken);
         if (snapshot.NextMilestoneIndex < 0 || snapshot.NextMilestoneIndex > milestones.Count)
             throw new InvalidOperationException("Execution history has an invalid milestone position.");
         var stored = await db.EscrowExecutionRecords.AsNoTracking().Where(item => item.EscrowId == escrowId).ToListAsync(cancellationToken);
-        if ((!snapshot.WorkStarted || stored.Any(item => item.MilestoneIndex == -1)) &&
+        if ((escrow.ProtocolVersion == 3 || !snapshot.WorkStarted || stored.Any(item => item.MilestoneIndex == -1)) &&
             Enumerable.Range(0, snapshot.NextMilestoneIndex).All(index => stored.Any(item => item.MilestoneIndex == index))) return false;
 
-        var events = await chain.GetExecutionEventsAsync(escrow.ContractAddress, escrow.DeploymentTransactionHash, cancellationToken);
+        var events = await chain.GetExecutionEventsAsync(escrow.ContractAddress, escrow.DeploymentTransactionHash, cancellationToken, escrow.ProtocolVersion == 3);
         if (events.Select(item => item.MilestoneIndex).Distinct().Count() != events.Count ||
-            (snapshot.WorkStarted && events.All(item => item.Kind != "WorkStarted")) ||
+            (escrow.ProtocolVersion != 3 && snapshot.WorkStarted && events.All(item => item.Kind != "WorkStarted")) ||
             Enumerable.Range(0, snapshot.NextMilestoneIndex).Any(index => events.All(item => item.MilestoneIndex != index)))
             throw new InvalidOperationException("Execution events are missing or duplicated.");
         var pending = new List<EscrowExecutionRecord>();

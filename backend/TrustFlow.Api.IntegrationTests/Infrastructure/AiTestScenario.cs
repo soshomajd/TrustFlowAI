@@ -155,6 +155,7 @@ public static class AiTestScenario
                 MilestoneIds = milestoneIds
             }));
 
+        await FixedEscrowFixture.UseAsync(projectId);
         var accepted = await SendAsync(
             client, HttpMethod.Patch,
             $"/api/projects/{projectId}/proposals/" +
@@ -234,7 +235,7 @@ public static class AiTestScenario
             milestoneIds);
     }
 
-    private static async Task ConnectWalletAsync(
+    public static async Task ConnectWalletAsync(
         HttpClient client,
         string token)
     {

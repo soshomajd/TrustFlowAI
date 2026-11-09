@@ -1,4 +1,4 @@
-export type ProposalStatus = "Pending" | "Accepted" | "Rejected" | "Withdrawn";
+export type ProposalStatus = "Pending" | "Accepted" | "Rejected" | "Withdrawn" | "AwaitingFunding" | "Funded";
 
 // The stages a proposal covers. Its price is their total, which is why the
 // client compares the agreed price against these rather than the whole
@@ -85,6 +85,8 @@ export type ProposalStatusResponse = {
 import type { ProjectStatus } from "@/features/projects/types/project";
 
 export type AcceptProposalResponse = {
+  escrowId?: string;
+  requiresFunding?: boolean;
   proposalId: string;
   projectId: string;
   freelancerId: string;

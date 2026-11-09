@@ -1,5 +1,7 @@
 # Sepolia testnet rollout
 
+> This is the older V2 local-to-Sepolia runbook. Use the [release checklist](RELEASE_READINESS.md) for hosted staging and V3 acceptance. The current V3 flow funds one milestone at a time using **Accept and fund**, then the Freelancer uses **Accept and start**. Update the deployment steps for the chosen host before running them.
+
 TrustFlow uses Sepolia for its first public-chain staging environment. Local Hardhat remains the fast development and automated-test network.
 
 ## Safety rules

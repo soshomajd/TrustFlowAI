@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using TrustFlow.Api.Constants;
 using TrustFlow.Api.Data;
 using TrustFlow.Api.Services.Ai;
+using TrustFlow.Api.Services.Files;
 
 namespace TrustFlow.Api.Controllers;
 
@@ -14,11 +15,13 @@ namespace TrustFlow.Api.Controllers;
 // freelancer.
 [ApiController]
 [Authorize(Roles = AppRoles.Client)]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [EnableRateLimiting(RateLimitPolicies.Ai)]
 [Route("api/projects/{projectId:guid}/milestones/{milestoneId:guid}/ai-review")]
 public sealed class MilestoneAiReviewController(
     AppDbContext dbContext,
-    MilestoneReviewService reviews)
+    MilestoneReviewService reviews,
+    DeliveryResponseRedactor redactor)
     : ControllerBase
 {
     [HttpGet]
@@ -41,7 +44,7 @@ public sealed class MilestoneAiReviewController(
 
         return review is null
             ? NotFound(new { message = "No AI review yet." })
-            : Ok(review);
+            : Ok(await redactor.ForClientAsync(review, projectId, milestoneId, cancellationToken));
     }
 
     [HttpPost]
@@ -76,7 +79,7 @@ public sealed class MilestoneAiReviewController(
             {
                 message = "Nothing has been delivered for this milestone."
             })
-            : Ok(review);
+            : Ok(await redactor.ForClientAsync(review, projectId, milestoneId, cancellationToken));
     }
 
     private async Task<bool> OwnsMilestoneAsync(

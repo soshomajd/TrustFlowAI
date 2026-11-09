@@ -68,7 +68,7 @@ const steps: GuideStep[] = [
     {
         title: "Wait for secure funding",
         description:
-            "When a client accepts you, the project appears in Assigned projects. You get your own escrow for your own milestones, even when other freelancers work on the same project. Do not start yet. Wait until your escrow status says Funded. Then use your verified wallet to start work on-chain.",
+            "Send a proposal for the milestones you want to deliver. The client chooses Accept and fund and pays for the first selected milestone. Open your project from My proposals. Read the funded milestone and its amount, then choose Accept and start with your verified wallet. Your contract is separate from other freelancers on the project.",
         icon: CircleDollarSign,
         action: {
             label: "Open assigned projects",
@@ -78,7 +78,7 @@ const steps: GuideStep[] = [
     {
         title: "Do and submit the work",
         description:
-            "When escrow is funded, use Start work and confirm it in your wallet. Start milestone appears after that confirmation. Finish the milestone, then submit a note with files or secure links. If the client asks for changes, read the feedback, fix the work and submit a new version. If you and the client cannot agree about your delivery, you can open a dispute. If the client stays silent after you deliver, use Ask for payment.",
+            "For new contracts, Accept and start begins the funded milestone after your wallet confirms. Submit a note and your original files. The client gets limited previews before payment. Originals and private source links unlock after full payment. If the client asks for changes, read the feedback, fix the work and submit a new version. If you cannot agree, open a dispute. If the client stays silent, use Ask for payment.",
         icon: BriefcaseBusiness,
         action: {
             label: "Go to my projects",
@@ -93,14 +93,18 @@ const reminders = [
     "Use the same wallet that you verified on your account.",
     "Disconnect in the top bar only signs the wallet out of this site. Your account keeps the address you verified.",
     "Do not start work until the escrow status says Funded.",
-    "The client funds the exact total recorded in your escrow contract. Token balances can show more decimal places than the project price because tokens have smaller units.",
-    "If your wallet confirms Start work but the page does not update, use Refresh on-chain status. If you retry Start work, the site first checks whether it has already started. Wait for any pending wallet transaction to finish before trying again.",
+    "The client fully funds each milestone before you accept and start it. Later milestones stay planned until funded. Token balances can show more decimal places than the project price because tokens have smaller units.",
+    "If your wallet confirms Accept and start but the page does not update, use Refresh on-chain status. If you retry Accept and start, the site first checks whether it has already started. Wait for any pending wallet transaction to finish before trying again.",
     "If the client says funding or a refund is confirmed but the page has not updated, use Refresh on-chain status. It does not move money or ask you to sign. Keep waiting until the status is Funded before starting work.",
     "The client can cancel the escrow until you start work on-chain. If they do, you leave the project, your proposal is marked rejected, and your stages go back on the marketplace for others. A notification on the bell tells you what happened, even if you were offline. Open it to view the escrow history, or choose Mark as read to clear it.",
     "Finish your own milestones in order, one at a time. Another freelancer being slow does not block you.",
     "You cannot offer a lower price. The milestones you pick set the price you are paid.",
     "A project can stay on the marketplace after someone is hired. The milestones nobody has taken are still open to you.",
+    "If the client funds one of your proposed milestones with another freelancer, your whole proposal is rejected. You can apply again for work that is still available if you have no escrow on this project.",
     "Keep your proposal and submitted work clear and short.",
+    "Uploaded originals stay locked for the client until the full milestone amount is paid, before the platform fee. A partial award keeps them locked. You and the reviewer can still access the originals.",
+    "Image previews are watermarked. PDF previews show a short text sample. Previews and screenshots can still be copied. Add a limited review demo if the preview does not show enough.",
+    "Delivery notes and review demo links are visible before payment. Never put an original download link there. Use the private source files field instead. TrustFlow cannot control access on an outside website or protect a link you share elsewhere.",
     "A dispute asks an AI to give an opinion on who is right, using the request, your delivered work and what you both write. The opinion does not move any money by itself.",
     "Use a desktop browser with a wallet extension such as MetaMask installed. If no browser wallet is found, open TrustFlow in that browser and try again.",
     "Past escrows stay in Assigned projects after cancellation or resignation. Use View escrow history to check them. Open Transaction history for recorded funding and cancellation transactions. Use Open Messages to read any existing conversations. After you leave a project, its conversation is closed to new messages.",

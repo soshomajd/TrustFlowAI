@@ -11,8 +11,12 @@ export async function invalidateEscrowWorkflow(queryClient: QueryClient, project
   await Promise.all([
     escrowQueryKeys.participants(projectId),
     escrowQueryKeys.cases(projectId),
+    ["escrow-stages", projectId],
+    ["escrow-next-plan", projectId],
     projectQueryKeys.all,
-    milestoneQueryKeys.projectList(projectId),
+    // Delivery originals can unlock when sync discovers a confirmed payout.
+    // Refresh submission entitlements as well as the milestone status list.
+    milestoneQueryKeys.all,
     proposalQueryKeys.all,
     notificationQueryKeys.all,
   ].map((queryKey) => queryClient.invalidateQueries({ queryKey })));

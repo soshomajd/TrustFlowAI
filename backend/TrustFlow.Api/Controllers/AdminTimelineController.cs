@@ -91,7 +91,7 @@ public sealed class AdminTimelineController(AppDbContext db, IDataProtectionProv
             Title = "Escrow record created", OccurredAt = item.CreatedAt, ActorId = null }));
         await Add("escrows", escrows.Where(item => item.DeployedAt != null || item.ContractAddress != null).Select(item => new AdminTimelineEvent {
             Code = 31, Category = "escrows", ResourceId = item.Id, Title = "Deployment recorded", OccurredAt = item.DeployedAt, TransactionHash = item.DeploymentTransactionHash, ActorId = null }));
-        await Add("escrows", escrows.Where(item => item.FundedAt != null || item.Status == EscrowStatus.Funded || item.Status == EscrowStatus.Completed || item.Status == EscrowStatus.Terminated)
+        await Add("escrows", escrows.Where(item => item.ProtocolVersion != 3 && (item.FundedAt != null || item.Status == EscrowStatus.Funded || item.Status == EscrowStatus.Completed || item.Status == EscrowStatus.Terminated))
             .Select(item => new AdminTimelineEvent { Code = 32, Category = "escrows", ResourceId = item.Id,
                 Title = "Funding recorded", OccurredAt = item.FundedAt, TransactionHash = item.FundingTransactionHash, ActorId = null }));
         await Add("escrows", escrows.Where(item => item.CompletedAt != null || item.Status == EscrowStatus.Completed).Select(item => new AdminTimelineEvent {
@@ -147,6 +147,15 @@ public sealed class AdminTimelineController(AppDbContext db, IDataProtectionProv
 
         var executions = db.EscrowExecutionRecords.AsNoTracking().Where(item => item.Escrow.ProjectId == projectId &&
             (item.MilestoneId == null || db.Milestones.Any(m => m.Id == item.MilestoneId && m.ProjectId == projectId)));
+        var fundingStages = db.EscrowFundingStages.AsNoTracking().Where(s => s.Escrow.ProjectId == projectId);
+        await Add("escrows", fundingStages.Where(s => s.FundedAt != null).Select(s => new AdminTimelineEvent {
+            Code = 38, Category = "escrows", ResourceId = s.Id, RelatedId = s.EscrowId,
+            Title = "Milestone funded (chain time)", Label = s.Title, OccurredAt = s.FundedAt,
+            TransactionHash = s.FundingTransactionHash, ActorId = s.Escrow.Project.ClientId }));
+        await Add("escrows", fundingStages.Where(s => s.StartedAt != null).Select(s => new AdminTimelineEvent {
+            Code = 39, Category = "escrows", ResourceId = s.Id, RelatedId = s.EscrowId,
+            Title = "Milestone accepted and started (chain time)", Label = s.Title, OccurredAt = s.StartedAt,
+            TransactionHash = s.StartTransactionHash, ActorId = s.Escrow.FreelancerId }));
         await Add("escrows", executions.Where(item => item.Kind == "WorkStarted").Select(item => new AdminTimelineEvent {
             Code = 37, Category = "escrows", ResourceId = item.Id, RelatedId = item.EscrowId, Title = "Work started (chain time)",
             OccurredAt = item.OccurredAt, ActorId = null, TransactionHash = item.TransactionHash,

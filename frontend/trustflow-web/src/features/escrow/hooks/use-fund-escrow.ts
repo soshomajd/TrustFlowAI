@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import type { Address } from "viem";
 import { getAccount, readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
 
+import { getEscrowStages } from "@/features/escrow/api/escrow-api";
+import { fundStagedMilestone } from "@/features/escrow/lib/fund-staged-milestone";
 import { syncEscrow } from "@/features/escrow/api/escrow-api";
 import { erc20Abi } from "@/features/escrow/lib/erc20-abi";
 import { escrowAbi } from "@/features/escrow/lib/escrow-abi";
@@ -12,7 +14,7 @@ import { fundEscrowWithRecovery } from "@/features/escrow/lib/recoverable-escrow
 import { confirmEscrowTransaction } from "@/features/escrow/lib/transaction-confirmation";
 import { invalidateEscrowWorkflow } from "@/features/escrow/queries/invalidate-escrow-workflow";
 import { escrowQueryKeys } from "@/features/escrow/queries/escrow-query-keys";
-import type { ProjectEscrow } from "@/features/escrow/types/escrow";
+import type { ProjectEscrow, EscrowFundingStage } from "@/features/escrow/types/escrow";
 import { getWalletErrorMessage } from "@/lib/wallet/get-wallet-error-message";
 import { wagmiConfig } from "@/lib/wallet/wagmi-config";
 
@@ -24,7 +26,13 @@ export function useFundEscrow(projectId: string, freelancerId: string) {
   return useMutation({
     mutationKey: escrowQueryKeys.fund(normalizedProjectId, freelancerId),
 
-    mutationFn: async (escrow: ProjectEscrow) => {
+    mutationFn: async (input: ProjectEscrow | { escrow: ProjectEscrow; stage: EscrowFundingStage }) => {
+      const escrow = "escrow" in input ? input.escrow : input;
+      if (escrow.protocolVersion === 3) {
+        const stage = "escrow" in input ? input.stage : (await getEscrowStages(projectId, freelancerId)).find(s => s.chainIndex === 0);
+        if (!stage) throw new Error("The milestone funding plan is unavailable.");
+        return fundStagedMilestone(projectId, escrow, stage);
+      }
       if (!escrow.contractAddress) {
         throw new Error("The escrow contract has not been deployed yet.");
       }

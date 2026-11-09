@@ -11,6 +11,7 @@ public sealed class EscrowResponse
     // A project can hold one escrow per assigned freelancer, so every
     // response says which freelancer this contract pays.
     public Guid FreelancerId { get; set; }
+    public int ProtocolVersion { get; set; }
 
     public long ChainId { get; set; }
 

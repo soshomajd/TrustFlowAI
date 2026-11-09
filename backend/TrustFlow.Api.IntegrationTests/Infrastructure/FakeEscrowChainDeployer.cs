@@ -26,6 +26,31 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
     private static readonly ConcurrentDictionary<string, bool>
         StartedEscrows = new();
 
+    private static readonly ConcurrentDictionary<string, IReadOnlyList<OnChainStageEvent>> StageEvidence = new();
+    public static void SetStageEvents(string contract, IReadOnlyList<OnChainStageEvent> events) => StageEvidence[contract] = events;
+    public Task<IReadOnlyList<OnChainStageEvent>> GetStageEventsAsync(string contractAddress, string deploymentTransactionHash, CancellationToken cancellationToken)
+        => Task.FromResult(StageEvidence.GetValueOrDefault(contractAddress) ?? (IReadOnlyList<OnChainStageEvent>)[]);
+
+    public static void FundStage(string contract, int index, string reference, string terms, BigInteger amount)
+    {
+        var request = GetDeployedRequest(contract);
+        if (index == request.MilestoneAmounts.Count)
+            DeployedEscrows[contract] = request with { MilestoneAmounts = request.MilestoneAmounts.Append(amount).ToList() };
+        AddStageEvent(contract, "Funding", index, reference, terms, amount, request.ClientAddress);
+    }
+
+    public static void StartStage(string contract, int index, string reference, string terms)
+        => AddStageEvent(contract, "Start", index, reference, terms, 0, GetDeployedRequest(contract).FreelancerAddress);
+
+    private static void AddStageEvent(string contract, string kind, int index, string reference, string terms, BigInteger amount, string sender)
+    {
+        var events = StageEvidence.GetValueOrDefault(contract) ?? [];
+        var position = events.Count + 10;
+        var hash = "0x" + position.ToString("x").PadLeft(64, '0');
+        StageEvidence[contract] = events.Append(new OnChainStageEvent(kind, index, reference, terms, amount,
+            hash, hash, position, 0, DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds()), sender)).ToList();
+    }
+
     private static readonly ConcurrentDictionary<string, bool>
         CancelledEscrows = new();
 
@@ -36,7 +61,7 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
     private static readonly ConcurrentDictionary<(string Contract, int Index), bool> EndingSettlements = new();
     public static void SetExecutionEvents(string contract, IReadOnlyList<OnChainExecutionEvent> events) => ExecutionOverrides[contract] = events;
 
-    public Task<IReadOnlyList<OnChainExecutionEvent>> GetExecutionEventsAsync(string contractAddress, string deploymentTransactionHash, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<OnChainExecutionEvent>> GetExecutionEventsAsync(string contractAddress, string deploymentTransactionHash, CancellationToken cancellationToken, bool staged = false)
     {
         if (ExecutionOverrides.TryGetValue(contractAddress, out var overridden)) return Task.FromResult(overridden);
         var request = GetDeployedRequest(contractAddress);
@@ -47,7 +72,7 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
             var at = ExecutionTimes.GetOrAdd((contractAddress, index), _ => DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds()));
             result.Add(new OnChainExecutionEvent(kind, index, paid, refunded, participant, hash, hash, index + 2, 0, at, sender, ended));
         }
-        if (StartedEscrows.ContainsKey(contractAddress)) Add("WorkStarted", -1, 0, 0, request.FreelancerAddress, request.FreelancerAddress);
+        if (!staged && StartedEscrows.ContainsKey(contractAddress)) Add("WorkStarted", -1, 0, 0, request.FreelancerAddress, request.FreelancerAddress);
         for (var index = 0; index < request.MilestoneAmounts.Count; index++)
         {
             if (SettledMilestones.TryGetValue((contractAddress, index), out var paid))
@@ -265,22 +290,27 @@ public sealed class FakeEscrowChainDeployer : IEscrowChainDeployer
                 out _
             );
 
+        var isUnfundedStage = request.ProtocolVersion == 3 &&
+            !StageEvidence.GetValueOrDefault(contractAddress, []).Any(e => e.Kind == "Funding");
+
         return Task.FromResult(
             new OnChainEscrowSnapshot(
                 request.TokenAddress,
                 request.ClientAddress,
                 request.FreelancerAddress,
-                totalBaseUnits,
+                isUnfundedStage ? BigInteger.Zero : totalBaseUnits,
                 CancelledEscrows.ContainsKey(contractAddress)
                     ? OnChainEscrowState.Cancelled
                     : TerminatedEscrows.ContainsKey(contractAddress)
                         ? OnChainEscrowState.Terminated
                     : allReleased
                         ? OnChainEscrowState.Completed
-                        : isDeploymentValidation
+                        : isDeploymentValidation || isUnfundedStage
                             ? OnChainEscrowState.AwaitingFunding
                             : OnChainEscrowState.Funded,
-                StartedEscrows.ContainsKey(contractAddress),
+                request.ProtocolVersion == 3
+                    ? StageEvidence.GetValueOrDefault(contractAddress, []).Any(e => e.Kind == "Start" && e.Index == Math.Min(nextIndex, request.MilestoneAmounts.Count - 1))
+                    : StartedEscrows.ContainsKey(contractAddress),
                 request.ArbiterAddress,
                 released,
                 CancelledEscrows.TryGetValue(contractAddress, out var wasFunded) && wasFunded

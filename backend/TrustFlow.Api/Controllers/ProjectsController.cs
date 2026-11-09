@@ -413,7 +413,7 @@ namespace TrustFlow.Api.Controllers
                                 (proposal.Status ==
                                      ProposalStatus.Pending ||
                                  proposal.Status ==
-                                     ProposalStatus.Accepted),
+                                     ProposalStatus.Accepted || proposal.Status == ProposalStatus.AwaitingFunding || proposal.Status == ProposalStatus.Funded),
                             cancellationToken
                         );
 
@@ -586,7 +586,7 @@ namespace TrustFlow.Api.Controllers
                                 (proposal.Status ==
                                      ProposalStatus.Pending ||
                                  proposal.Status ==
-                                     ProposalStatus.Accepted),
+                                     ProposalStatus.Accepted || proposal.Status == ProposalStatus.AwaitingFunding || proposal.Status == ProposalStatus.Funded),
                             cancellationToken
                         );
 
@@ -844,7 +844,7 @@ namespace TrustFlow.Api.Controllers
                                 proposal.Status ==
                                     ProposalStatus.Pending ||
                                 proposal.Status ==
-                                    ProposalStatus.Accepted),
+                                    ProposalStatus.Accepted || proposal.Status == ProposalStatus.AwaitingFunding || proposal.Status == ProposalStatus.Funded),
 
                         Milestones = project.Milestones
                             .Where(milestone => project.ClientId == userId ||

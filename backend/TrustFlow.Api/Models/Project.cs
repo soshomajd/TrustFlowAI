@@ -19,6 +19,8 @@ namespace TrustFlow.Api.Models
 
         public decimal Budget { get; set; }
 
+        public int HiringFlowVersion { get; set; } = 3;
+
         public DateTimeOffset Deadline { get; set; }
 
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

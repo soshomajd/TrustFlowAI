@@ -392,7 +392,7 @@ public sealed class ChatController(
                     proposal.ProjectId == projectId &&
                     proposal.FreelancerId == freelancerId &&
                     (proposal.Status == ProposalStatus.Pending ||
-                     proposal.Status == ProposalStatus.Accepted),
+                     proposal.Status == ProposalStatus.Accepted || proposal.Status == ProposalStatus.AwaitingFunding || proposal.Status == ProposalStatus.Funded),
                 cancellationToken)
             || await dbContext.Milestones
                 .AsNoTracking()

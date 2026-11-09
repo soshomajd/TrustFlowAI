@@ -235,6 +235,14 @@ public sealed class EscrowDeploymentOrchestrator(
             .Select(item => item.Amount)
             .ToListAsync(cancellationToken);
 
+        EscrowFundingStage? initialStage = null;
+        if (escrow.ProtocolVersion == 3)
+        {
+            initialStage = await dbContext.EscrowFundingStages.AsNoTracking()
+                .SingleAsync(s => s.EscrowId == escrow.Id && s.ChainIndex == 0, cancellationToken);
+            milestoneAmounts = [initialStage.Amount];
+        }
+
         if (milestoneAmounts.Count == 0)
         {
             throw new InvalidOperationException(
@@ -274,7 +282,10 @@ public sealed class EscrowDeploymentOrchestrator(
                 blockchainOptions.Value.ArbiterAddress,
             baseUnitAmounts,
             escrow.FeeRecipientAddress,
-            tokenDecimals
+            tokenDecimals,
+            escrow.ProtocolVersion,
+            initialStage?.FundingReference,
+            initialStage?.TermsHash
         );
     }
 
@@ -326,7 +337,7 @@ public sealed class EscrowDeploymentOrchestrator(
                 snapshot.Arbiter,
                 request.ArbiterAddress,
                 StringComparison.OrdinalIgnoreCase) ||
-            snapshot.TotalAmount != expectedTotal ||
+            snapshot.TotalAmount != (escrow.ProtocolVersion == 3 ? 0 : expectedTotal) ||
             snapshot.State != OnChainEscrowState.AwaitingFunding ||
             snapshot.WorkStarted)
         {

@@ -8,6 +8,7 @@ export type EscrowStatus =
   | "Terminated";
 
 export type ProjectEscrow = {
+  protocolVersion?: number;
   id: string;
   projectId: string;
 
@@ -51,6 +52,22 @@ export type ProjectEscrow = {
   fundedAt: string | null;
   completedAt: string | null;
   cancelledAt: string | null;
+};
+
+export type EscrowFundingStage = {
+  id: string;
+  milestoneId: string;
+  title: string;
+  chainIndex: number | null;
+  amount: number;
+  amountExact: string;
+  fundingReference: `0x${string}`;
+  termsHash: `0x${string}`;
+  fundingTransactionHash: string | null;
+  fundedAt: string | null;
+  startTransactionHash: string | null;
+  startedAt: string | null;
+  reservationActive: boolean;
 };
 
 // One row per freelancer holding milestones on the project. The escrow is

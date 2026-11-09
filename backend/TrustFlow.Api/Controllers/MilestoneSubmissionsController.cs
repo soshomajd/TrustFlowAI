@@ -16,11 +16,15 @@ namespace TrustFlow.Api.Controllers;
 
 [ApiController]
 [Authorize]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [Route("api/projects/{projectId:guid}/milestones/{milestoneId:guid}")]
 public sealed class MilestoneSubmissionsController(
     AppDbContext dbContext,
     IMalwareScanner malwareScanner,
-    MilestoneDeliveryFileValidator fileValidator) : ControllerBase
+    MilestoneDeliveryFileValidator fileValidator,
+    DeliveryOriginalAccessPolicy originalAccess,
+    DeliveryReviewPreview reviewPreview,
+    DeliveryResponseRedactor redactor) : ControllerBase
 {
     private const long MaximumRequestSize =
         MilestoneDeliveryFileValidator.MaximumTotalSize + 512 * 1024;
@@ -136,7 +140,8 @@ public sealed class MilestoneSubmissionsController(
             return Conflict(new { message = "This milestone was submitted in another window. Reload and try again." });
         }
 
-        return Ok(ToResponse(submission));
+        PrivateFileHeaders();
+        return Ok(ToResponse(submission, originalsUnlocked: false, revealSource: true));
     }
 
     [HttpGet("submissions")]
@@ -149,11 +154,21 @@ public sealed class MilestoneSubmissionsController(
 
         var submissions = await dbContext.MilestoneSubmissions.AsNoTracking()
             .Where(item => item.MilestoneId == milestoneId &&
-                           item.FreelancerId == item.Milestone.FreelancerId)
+                (item.Milestone.Project.ClientId == userId || item.FreelancerId == userId))
             .Include(item => item.Attachments)
             .OrderByDescending(item => item.Version)
             .ToListAsync(cancellationToken);
-        return Ok(submissions.Select(ToResponse));
+        var access = new Dictionary<Guid, bool>();
+        foreach (var author in submissions.Select(item => item.FreelancerId).Distinct())
+            access[author] = await originalAccess.ClientHasOriginalsAsync(projectId, milestoneId, author, cancellationToken);
+        PrivateFileHeaders();
+        var responses = submissions.Select(item => ToResponse(item, access[item.FreelancerId],
+            item.FreelancerId == userId || access[item.FreelancerId])).ToList();
+        var isClient = await dbContext.Projects.AsNoTracking()
+            .AnyAsync(item => item.Id == projectId && item.ClientId == userId, cancellationToken);
+        return Ok(isClient
+            ? await redactor.ForClientAsync(responses, projectId, milestoneId, cancellationToken)
+            : responses);
     }
 
     [HttpGet("submissions/{submissionId:guid}/files/{attachmentId:guid}")]
@@ -162,22 +177,42 @@ public sealed class MilestoneSubmissionsController(
         CancellationToken cancellationToken)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
-        if (!await CanAccessAsync(projectId, milestoneId, userId, cancellationToken))
-            return NotFound(new { message = "Milestone not found." });
-
         var attachment = await dbContext.MilestoneSubmissionAttachments.AsNoTracking()
             .Where(item => item.Id == attachmentId && item.SubmissionId == submissionId &&
-                           item.Submission.MilestoneId == milestoneId &&
-                           item.Submission.FreelancerId == item.Submission.Milestone.FreelancerId)
-            .Select(item => new { item.Content, item.ContentType, item.OriginalFileName })
+                item.Submission.MilestoneId == milestoneId && item.Submission.Milestone.ProjectId == projectId &&
+                (item.Submission.Milestone.Project.ClientId == userId || item.Submission.FreelancerId == userId))
+            .Select(item => new { item.Content, item.ContentType, item.OriginalFileName, item.Submission.FreelancerId })
             .SingleOrDefaultAsync(cancellationToken);
         if (attachment is null) return NotFound(new { message = "Delivery file not found." });
 
-        Response.Headers.CacheControl = "private, no-store";
-        Response.Headers.XContentTypeOptions = "nosniff";
-        Response.Headers.ContentSecurityPolicy = "sandbox";
+        PrivateFileHeaders();
+        if (attachment.FreelancerId != userId && !await originalAccess.ClientHasOriginalsAsync(
+                projectId, milestoneId, attachment.FreelancerId, cancellationToken))
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                message = "The original unlocks after the full milestone payment is confirmed. Use the review preview before payment."
+            });
         return File(attachment.Content, attachment.ContentType, attachment.OriginalFileName,
             enableRangeProcessing: false);
+    }
+
+    [HttpGet("submissions/{submissionId:guid}/files/{attachmentId:guid}/preview")]
+    [EnableRateLimiting(RateLimitPolicies.MilestoneDelivery)]
+    public async Task<IActionResult> Preview(
+        Guid projectId, Guid milestoneId, Guid submissionId, Guid attachmentId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        var attachment = await dbContext.MilestoneSubmissionAttachments.AsNoTracking()
+            .Where(item => item.Id == attachmentId && item.SubmissionId == submissionId &&
+                item.Submission.MilestoneId == milestoneId && item.Submission.Milestone.ProjectId == projectId &&
+                (item.Submission.Milestone.Project.ClientId == userId || item.Submission.FreelancerId == userId))
+            .Select(item => new { item.Content, item.ContentType })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (attachment is null) return NotFound(new { message = "Delivery file not found." });
+        var preview = await reviewPreview.CreateAsync(attachment.Content, attachment.ContentType, cancellationToken);
+        PrivateFileHeaders();
+        return File(preview, "image/png", enableRangeProcessing: false);
     }
 
     [Authorize(Roles = AppRoles.Client)]
@@ -239,7 +274,8 @@ public sealed class MilestoneSubmissionsController(
         Guid projectId, Guid milestoneId, Guid userId, CancellationToken cancellationToken) =>
         await dbContext.Milestones.AsNoTracking().AnyAsync(
             item => item.Id == milestoneId && item.ProjectId == projectId &&
-                    (item.Project.ClientId == userId || item.FreelancerId == userId),
+                    (item.Project.ClientId == userId || item.FreelancerId == userId ||
+                        dbContext.MilestoneSubmissions.Any(delivery => delivery.MilestoneId == item.Id && delivery.FreelancerId == userId)),
             cancellationToken);
 
     private static string? NormalizeUrl(string? value)
@@ -251,14 +287,17 @@ public sealed class MilestoneSubmissionsController(
         return uri.AbsoluteUri;
     }
 
-    private static MilestoneSubmissionResponse ToResponse(MilestoneSubmission submission) => new()
+    private static MilestoneSubmissionResponse ToResponse(MilestoneSubmission submission,
+        bool originalsUnlocked, bool revealSource) => new()
     {
         Id = submission.Id,
         MilestoneId = submission.MilestoneId,
         Version = submission.Version,
         Note = submission.Note,
         PreviewLink = submission.PreviewLink,
-        SourceFilesLink = submission.SourceFilesLink,
+        SourceFilesLink = revealSource ? submission.SourceFilesLink : null,
+        HasSourceFiles = submission.SourceFilesLink is not null,
+        OriginalsUnlocked = originalsUnlocked,
         ClientFeedback = submission.ClientFeedback,
         SubmittedAt = submission.SubmittedAt,
         ReviewedAt = submission.ReviewedAt,
@@ -269,9 +308,17 @@ public sealed class MilestoneSubmissionsController(
                 FileName = item.OriginalFileName,
                 ContentType = item.ContentType,
                 FileSize = item.FileSize,
-                Sha256 = item.Sha256
+                Sha256 = item.Sha256,
+                HasPreview = DeliveryReviewPreview.Supports(item.ContentType)
             }).ToList()
     };
+
+    private void PrivateFileHeaders()
+    {
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers.XContentTypeOptions = "nosniff";
+        Response.Headers.ContentSecurityPolicy = "sandbox";
+    }
 
     private bool TryGetUserId(out Guid userId) =>
         Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out userId);

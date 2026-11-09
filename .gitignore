@@ -24,3 +24,6 @@
 *.log
 # browser-test logs and snapshots
 .playwright-mcp/
+
+# Hardhat Ignition runtime journals and build output
+/blockchain/ignition/deployments/

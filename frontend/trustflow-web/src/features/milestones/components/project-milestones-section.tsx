@@ -237,7 +237,7 @@ export function ProjectMilestonesSection({
                                             ) ?? null
                                         }
                                         onChainIndex={
-                                            onChainIndexes.get(
+                                            milestone.onChainIndex ?? onChainIndexes.get(
                                                 milestone.id,
                                             ) ?? 0
                                         }
@@ -382,6 +382,7 @@ function MilestoneCard({
                     <MilestoneSubmissionsPanel
                         projectId={projectId}
                         milestoneId={milestone.id}
+                        viewerRole="Client"
                     />
 
                     {(milestone.status === "Submitted" ||

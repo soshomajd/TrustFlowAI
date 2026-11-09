@@ -131,6 +131,7 @@ public sealed class ProposalReapplicationTests : IClassFixture<CustomWebApplicat
         var (client, freelancer, project, stage) = await SetupAsync();
         var first = await ApplyAsync(freelancer, project, stage);
         var proposalId = (await ReadAsync(first)).GetProperty("id").GetGuid();
+        await FixedEscrowFixture.UseAsync(project);
         Assert.Equal(HttpStatusCode.OK, (await SendAsync(_client, HttpMethod.Patch,
             $"/api/projects/{project}/proposals/{proposalId}/accept", client.Token)).StatusCode);
         await AssertEligibilityAsync(freelancer, project, false, "ActiveProposal");

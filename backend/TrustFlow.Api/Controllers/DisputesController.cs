@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using TrustFlow.Api.Constants;
 using TrustFlow.Api.Dtos.Ai;
 using TrustFlow.Api.Services.Ai;
+using TrustFlow.Api.Services.Files;
 
 namespace TrustFlow.Api.Controllers;
 
@@ -14,7 +15,8 @@ namespace TrustFlow.Api.Controllers;
 // nobody, including them, can edit or delete a ruling.
 [ApiController]
 [Authorize]
-public sealed class DisputesController(DisputeService disputes)
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+public sealed class DisputesController(DisputeService disputes, DeliveryResponseRedactor redactor)
     : ControllerBase
 {
     [HttpGet("api/projects/{projectId:guid}/milestones/{milestoneId:guid}/disputes")]
@@ -25,11 +27,14 @@ public sealed class DisputesController(DisputeService disputes)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
 
-        return Ok(await disputes.ListForMilestoneAsync(
+        var list = await disputes.ListForMilestoneAsync(
             userId,
             projectId,
             milestoneId,
-            cancellationToken));
+            cancellationToken);
+        return Ok(list.Count > 0 && list[0].MyRole == AppRoles.Client
+            ? await redactor.ForClientAsync(list, projectId, milestoneId, cancellationToken)
+            : list);
     }
 
     [EnableRateLimiting(RateLimitPolicies.Ai)]
@@ -53,7 +58,7 @@ public sealed class DisputesController(DisputeService disputes)
             ? Fail(outcome)
             : Created(
                 $"/api/disputes/{outcome.Dispute.Id}",
-                outcome.Dispute);
+                await ProtectAsync(outcome.Dispute, cancellationToken));
     }
 
     [HttpGet("api/disputes/{disputeId:guid}")]
@@ -68,7 +73,7 @@ public sealed class DisputesController(DisputeService disputes)
             disputeId,
             cancellationToken);
 
-        return outcome.Dispute is null ? Fail(outcome) : Ok(outcome.Dispute);
+        return outcome.Dispute is null ? Fail(outcome) : Ok(await ProtectAsync(outcome.Dispute, cancellationToken));
     }
 
     [EnableRateLimiting(RateLimitPolicies.Ai)]
@@ -86,7 +91,7 @@ public sealed class DisputesController(DisputeService disputes)
             request.Statement,
             cancellationToken);
 
-        return outcome.Dispute is null ? Fail(outcome) : Ok(outcome.Dispute);
+        return outcome.Dispute is null ? Fail(outcome) : Ok(await ProtectAsync(outcome.Dispute, cancellationToken));
     }
 
     [EnableRateLimiting(RateLimitPolicies.Ai)]
@@ -102,8 +107,13 @@ public sealed class DisputesController(DisputeService disputes)
             disputeId,
             cancellationToken);
 
-        return outcome.Dispute is null ? Fail(outcome) : Ok(outcome.Dispute);
+        return outcome.Dispute is null ? Fail(outcome) : Ok(await ProtectAsync(outcome.Dispute, cancellationToken));
     }
+
+    private Task<DisputeResponse> ProtectAsync(DisputeResponse response, CancellationToken cancellationToken) =>
+        response.MyRole == AppRoles.Client
+            ? redactor.ForClientAsync(response, response.ProjectId, response.MilestoneId, cancellationToken)
+            : Task.FromResult(response);
 
     private IActionResult Fail(DisputeOutcome outcome) =>
         outcome.Failure == DisputeFailure.NotFound

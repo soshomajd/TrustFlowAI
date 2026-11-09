@@ -6,6 +6,7 @@ using TrustFlow.Api.Blockchain;
 using TrustFlow.Api.Data;
 using TrustFlow.Api.Dtos.Escrows;
 using TrustFlow.Api.Models;
+using TrustFlow.Api.Services.Files;
 
 namespace TrustFlow.Api.Controllers;
 
@@ -14,8 +15,10 @@ namespace TrustFlow.Api.Controllers;
 // escrow contract, and the chain sync records it.
 [ApiController]
 [Authorize]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class EscrowCasesController(
-    AppDbContext dbContext)
+    AppDbContext dbContext,
+    DeliveryResponseRedactor redactor)
     : ControllerBase
 {
     [HttpGet("api/projects/{projectId:guid}/escrow-cases")]
@@ -65,7 +68,7 @@ public sealed class EscrowCasesController(
             .Where(item => escrowIds.Contains(item.EscrowId) && item.Kind == "CaseSettlement")
             .ToDictionaryAsync(item => (item.EscrowId, item.MilestoneId), cancellationToken);
 
-        return Ok(rows.Select(row => new EscrowCaseResponse
+        var responses = rows.Select(row => new EscrowCaseResponse
         {
             Id = row.Case.Id,
             EscrowId = row.Case.EscrowId,
@@ -95,7 +98,16 @@ public sealed class EscrowCasesController(
             ChainId = row.ChainId,
             ContractAddress = row.ContractAddress,
             ArbiterWalletAddress = row.ArbiterWalletAddress
-        }));
+        }).ToList();
+        if (isClient)
+        {
+            var protectedRows = new Dictionary<Guid, EscrowCaseResponse>();
+            foreach (var group in responses.GroupBy(item => item.MilestoneId))
+                foreach (var item in await redactor.ForClientAsync(group.ToList(), projectId, group.Key, cancellationToken))
+                    protectedRows[item.Id] = item;
+            responses = responses.Select(item => protectedRows[item.Id]).ToList();
+        }
+        return Ok(responses);
     }
 
     internal static string OpenedByRole(EscrowCaseKind kind) =>

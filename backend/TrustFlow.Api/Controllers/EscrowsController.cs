@@ -108,6 +108,9 @@ public sealed class EscrowsController(
             });
         }
 
+        if (project.HiringFlowVersion >= 3)
+            return Conflict(new { message = "Choose Accept and fund on the freelancer proposal to prepare this contract." });
+
         if (project.Status !=
             ProjectStatus.InProgress)
         {
@@ -644,6 +647,7 @@ public sealed class EscrowsController(
             Id = escrow.Id,
             ProjectId = escrow.ProjectId,
             FreelancerId = escrow.FreelancerId,
+            ProtocolVersion = escrow.ProtocolVersion,
             ChainId = escrow.ChainId,
             TokenAddress =
                 escrow.TokenAddress,

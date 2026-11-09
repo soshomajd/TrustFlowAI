@@ -19,6 +19,9 @@ public class Escrow
     // the milestones assigned to them.
     public Guid FreelancerId { get; set; }
 
+    // Existing records retain their fixed-array protocol. New hiring uses V3.
+    public int ProtocolVersion { get; set; } = 2;
+
     public long ChainId { get; set; }
 
     public string TokenAddress { get; set; } =

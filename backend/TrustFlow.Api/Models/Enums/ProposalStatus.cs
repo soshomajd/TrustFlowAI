@@ -5,6 +5,8 @@ namespace TrustFlow.Api.Models.Enums
         Pending = 0,
         Accepted = 1,
         Rejected = 2,
-        Withdrawn = 3
+        Withdrawn = 3,
+        AwaitingFunding = 4,
+        Funded = 5
     }
 }

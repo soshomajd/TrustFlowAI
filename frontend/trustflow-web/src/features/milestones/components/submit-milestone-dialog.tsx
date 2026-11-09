@@ -76,23 +76,24 @@ export function SubmitMilestoneDialog({ projectId, milestoneId }: { projectId: s
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Submit work for review</DialogTitle>
-          <DialogDescription>Add a clear note and at least one file or link. The client will review this version.</DialogDescription>
+          <DialogDescription>Add a clear note and at least one file or link. The client reviews a limited preview before payment. Original files unlock after the milestone is paid in full.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor={`delivery-note-${milestoneId}`}>Delivery note</Label>
             <Textarea id={`delivery-note-${milestoneId}`} value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} rows={4} placeholder="What did you finish? Add any simple instructions for the client." disabled={mutation.isPending} />
-            <p className="text-xs text-muted-foreground">{note.length}/2000 characters</p>
+            <p className="text-xs text-muted-foreground">{note.length}/2000 characters. This note is visible before payment. Keep original download links out of it.</p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={`delivery-files-${milestoneId}`}>Files</Label>
+            <Label htmlFor={`delivery-files-${milestoneId}`}>Original files</Label>
             <Input id={`delivery-files-${milestoneId}`} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" disabled={mutation.isPending || files.length >= 5} onChange={(event) => {
               addFiles(Array.from(event.target.files ?? []));
               event.target.value = "";
             }} />
             <p className="text-xs text-muted-foreground">Up to 5 files. PDF, JPG, PNG or WebP. 25 MB per file, 100 MB total.</p>
+            <p className="text-xs text-muted-foreground">Uploads stay private until full payment. The client gets a watermarked image preview or a short PDF text preview. You and the reviewer can still access the originals. Previews can be copied.</p>
             {files.length > 0 && <ul className="space-y-2">{files.map((file, index) => (
               <li key={`${file.name}-${file.lastModified}-${index}`} className="flex items-center justify-between gap-3 rounded-lg border bg-background/40 px-3 py-2 text-sm">
                 <span className="min-w-0 truncate"><FileUp className="mr-2 inline size-4 text-electric" />{file.name} · {formatBytes(file.size)}</span>
@@ -102,8 +103,8 @@ export function SubmitMilestoneDialog({ projectId, milestoneId }: { projectId: s
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2"><Label htmlFor={`preview-link-${milestoneId}`}>Preview link (optional)</Label><Input id={`preview-link-${milestoneId}`} type="url" value={previewLink} onChange={(event) => setPreviewLink(event.target.value)} maxLength={1000} placeholder="https://figma.com/..." disabled={mutation.isPending} /></div>
-            <div className="space-y-2"><Label htmlFor={`source-link-${milestoneId}`}>Source files link (optional)</Label><Input id={`source-link-${milestoneId}`} type="url" value={sourceFilesLink} onChange={(event) => setSourceFilesLink(event.target.value)} maxLength={1000} placeholder="https://drive.google.com/..." disabled={mutation.isPending} /></div>
+            <div className="space-y-2"><Label htmlFor={`preview-link-${milestoneId}`}>Review demo link (optional)</Label><Input id={`preview-link-${milestoneId}`} type="url" value={previewLink} onChange={(event) => setPreviewLink(event.target.value)} maxLength={1000} placeholder="https://figma.com/..." disabled={mutation.isPending} /><p className="text-xs text-muted-foreground">Visible before payment. Use a limited demo: the client can open and copy anything available at this link.</p></div>
+            <div className="space-y-2"><Label htmlFor={`source-link-${milestoneId}`}>Private source files link (optional)</Label><Input id={`source-link-${milestoneId}`} type="url" value={sourceFilesLink} onChange={(event) => setSourceFilesLink(event.target.value)} maxLength={1000} placeholder="https://drive.google.com/..." disabled={mutation.isPending} /><p className="text-xs text-muted-foreground">Hidden from the client until full payment. TrustFlow cannot protect a link shared elsewhere or change access on another website.</p></div>
           </div>
 
           {error && <div role="alert" className="flex gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4"><TriangleAlert className="mt-0.5 size-5 shrink-0 text-destructive" /><p className="text-sm text-destructive">{error}</p></div>}

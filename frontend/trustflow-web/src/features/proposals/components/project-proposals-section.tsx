@@ -342,7 +342,7 @@ function ProposalCard({
                     />
                 </div>
             </div>
-            {proposal.status === "Pending" && (
+            {(proposal.status === "Pending" || proposal.status === "AwaitingFunding") && (
                 <div className="mt-5 space-y-3 border-t pt-5">
                     {!agreedPriceMatchesClaimed && (
                         <div className="flex gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 text-sm leading-6">
@@ -354,10 +354,10 @@ function ProposalCard({
                     )}
 
                     <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                        <RejectProposalDialog
+                        {proposal.status === "Pending" && <RejectProposalDialog
                             projectId={projectId}
                             proposal={proposal}
-                        />
+                        />}
 
                         <AcceptProposalDialog
                             projectId={projectId}
@@ -386,6 +386,7 @@ function AcceptProposalDialog({
         useAcceptProposal(
             projectId,
             proposal.id,
+            proposal.freelancerId,
         );
 
     const isAccepting =
@@ -444,7 +445,7 @@ function AcceptProposalDialog({
                     title={!agreedPriceMatchesClaimed ? "These milestone amounts changed after this freelancer applied, so they have not agreed to the current price." : undefined}
                 >
                     <CheckCircle2 className="size-4" />
-                    {agreedPriceMatchesClaimed ? "Accept proposal" : "Price changed"}
+                    {agreedPriceMatchesClaimed ? (proposal.status === "AwaitingFunding" ? "Resume funding" : "Accept and fund") : "Price changed"}
                 </Button>
             </DialogTrigger>
 
@@ -455,11 +456,11 @@ function AcceptProposalDialog({
                     </div>
 
                     <DialogTitle>
-                        Accept this proposal?
+                        Accept and fund this milestone?
                     </DialogTitle>
 
                     <DialogDescription className="leading-6">
-                        You are about to assign{" "}
+                        Fund the first selected milestone for{" "}
                         <span className="font-medium text-foreground">
                             <MemberName userId={proposal.freelancerId} name={proposal.freelancerFullName} />
                         </span>{" "}
@@ -470,12 +471,17 @@ function AcceptProposalDialog({
                 <div className="space-y-3 rounded-xl border bg-card/50 p-4 text-sm">
                     <div className="flex items-center justify-between gap-4">
                         <span className="text-muted-foreground">
-                            Agreed price
+                            Selected plan total
                         </span>
 
                         <span className="font-medium">
                             {formatAmount(moneyText(proposal, "bidAmount"))}
                         </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4">
+                        <span className="text-muted-foreground">Fund now</span>
+                        <span className="font-medium">{formatAmount(proposal.milestones.slice().sort((a, b) => a.sequenceNumber - b.sequenceNumber)[0]?.amountExact ?? proposal.milestones[0]?.amount ?? 0)}</span>
                     </div>
 
                     <div className="flex items-center justify-between gap-4">
@@ -503,11 +509,7 @@ function AcceptProposalDialog({
                 </div>
 
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm leading-6 text-muted-foreground">
-                    New escrows deduct 10% from the freelancer’s gross award. You fund only the agreed price, and refunds have no platform fee. This gives the stages above to this freelancer and sets
-                    the project to InProgress. Other proposals that asked for
-                    any of the same stages are rejected; proposals for the
-                    stages nobody has taken stay pending, and the project
-                    keeps accepting new ones until every stage is given out.
+                    Your wallet funds the first selected milestone now. Later stages remain planned and unfunded until you fund them. Work starts only after the deposit succeeds and the freelancer accepts. A fixed 10% fee comes from the freelancer’s gross award; refunds have no fee.
                 </div>
 
                 {errorMessage && (
@@ -550,12 +552,12 @@ function AcceptProposalDialog({
                         {isAccepting ? (
                             <>
                                 <LoaderCircle className="size-4 animate-spin" />
-                                Accepting
+                                Preparing or confirming funding…
                             </>
                         ) : (
                             <>
                                 <CheckCircle2 className="size-4" />
-                                Accept and assign
+                                Accept and fund
                             </>
                         )}
                     </Button>
@@ -756,7 +758,7 @@ function ProposalStatusBadge({
                 ],
             )}
         >
-            {status}
+            {status === "AwaitingFunding" ? "Awaiting funding" : status === "Funded" ? "Funded · waiting for the freelancer to start" : status}
         </span>
     );
 }
@@ -765,6 +767,8 @@ const proposalStatusStyles: Record<
     ProposalStatus,
     string
 > = {
+    AwaitingFunding: "border-amber-500/30 bg-amber-500/10 text-amber-400",
+    Funded: "border-blue-500/30 bg-blue-500/10 text-blue-400",
     Pending:
         "border-amber-500/30 bg-amber-500/10 text-amber-400",
 

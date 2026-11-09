@@ -14,6 +14,7 @@ export type MilestoneSubmissionAttachment = {
   contentType: string;
   fileSize: number;
   sha256: string;
+  hasPreview: boolean;
 };
 
 export type MilestoneSubmission = {
@@ -23,6 +24,8 @@ export type MilestoneSubmission = {
   note: string;
   previewLink: string | null;
   sourceFilesLink: string | null;
+  hasSourceFiles: boolean;
+  originalsUnlocked: boolean;
   clientFeedback: string | null;
   submittedAt: string;
   reviewedAt: string | null;
@@ -37,6 +40,7 @@ export type SubmitMilestoneInput = {
 };
 
 export type ProjectMilestone = {
+  onChainIndex?: number | null;
   id: string;
   projectId: string;
 

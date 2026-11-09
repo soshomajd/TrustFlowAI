@@ -14,7 +14,7 @@ public sealed record OnChainExecutionEvent(string Kind, int MilestoneIndex, BigI
 public sealed partial class EscrowChainDeployer
 {
     public async Task<IReadOnlyList<OnChainExecutionEvent>> GetExecutionEventsAsync(string contractAddress,
-        string deploymentTransactionHash, CancellationToken cancellationToken)
+        string deploymentTransactionHash, CancellationToken cancellationToken, bool staged = false)
     {
         var (web3, _) = CreateWeb3();
         var deployment = await web3.Eth.Transactions.GetTransactionReceipt.SendRequestAsync(deploymentTransactionHash).WaitAsync(cancellationToken);
@@ -70,8 +70,9 @@ public sealed partial class EscrowChainDeployer
             cancellationToken.ThrowIfCancellationRequested();
             var from = new BlockParameter(new HexBigInteger(start));
             var to = new BlockParameter(new HexBigInteger(BigInteger.Min(start + 1999, latest.Value)));
-            foreach (var log in await work.GetAllChangesAsync(work.CreateFilterInput(from, to)).WaitAsync(cancellationToken))
-                await Add(log.Log, "WorkStarted", -1, 0, 0, log.Event.Freelancer);
+            if (!staged)
+                foreach (var log in await work.GetAllChangesAsync(work.CreateFilterInput(from, to)).WaitAsync(cancellationToken))
+                    await Add(log.Log, "WorkStarted", -1, 0, 0, log.Event.Freelancer);
             foreach (var log in await release.GetAllChangesAsync(release.CreateFilterInput(from, to)).WaitAsync(cancellationToken))
                 await Add(log.Log, "ClientRelease", log.Event.Index, log.Event.Amount, 0, log.Event.Freelancer);
             foreach (var log in await settle.GetAllChangesAsync(settle.CreateFilterInput(from, to)).WaitAsync(cancellationToken))

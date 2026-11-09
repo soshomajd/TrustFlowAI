@@ -16,7 +16,9 @@ namespace TrustFlow.Api.Models
 
         public decimal Amount { get; set; }
 
-        public int SequenceNumber { get; set; }
+        public int? OnChainIndex { get; set; }
+
+    public int SequenceNumber { get; set; }
 
         public DateTimeOffset Deadline { get; set; }
 

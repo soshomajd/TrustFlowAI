@@ -515,6 +515,7 @@ function FreelancerMilestoneCard({
                 <MilestoneSubmissionsPanel
                     projectId={projectId}
                     milestoneId={milestone.id}
+                    viewerRole="Freelancer"
                 />
             )}
 

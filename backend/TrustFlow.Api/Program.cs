@@ -381,11 +381,16 @@ builder.Services.AddScoped<IEscrowChainDeployer, EscrowChainDeployer>();
 builder.Services.AddScoped<IEscrowDeploymentOrchestrator, EscrowDeploymentOrchestrator>();
 builder.Services.AddScoped<IEscrowChainSyncOrchestrator, EscrowChainSyncOrchestrator>();
 builder.Services.AddScoped<IEscrowExecutionTrace, EscrowExecutionTrace>();
+builder.Services.AddScoped<FundedHiringPreparation>();
+builder.Services.AddScoped<EscrowStageSync>();
 builder.Services.Configure<MalwareScannerOptions>(
     builder.Configuration.GetSection(MalwareScannerOptions.SectionName));
 builder.Services.AddScoped<IMalwareScanner, ClamAvMalwareScanner>();
 builder.Services.AddSingleton<PdfResumeValidator>();
 builder.Services.AddSingleton<MilestoneDeliveryFileValidator>();
+builder.Services.AddScoped<DeliveryOriginalAccessPolicy>();
+builder.Services.AddScoped<DeliveryResponseRedactor>();
+builder.Services.AddSingleton<DeliveryReviewPreview>();
 builder.Services.AddDataProtection();
 builder.Services.AddSingleton<ProfilePhotoProcessor>();
 builder.Services.AddHostedService<RefreshTokenCleanupService>();

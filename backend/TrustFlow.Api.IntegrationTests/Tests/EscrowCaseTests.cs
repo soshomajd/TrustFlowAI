@@ -380,7 +380,17 @@ public sealed class EscrowCaseTests
             scenario.Client.Token);
 
         Assert.Equal(HttpStatusCode.OK, visible.StatusCode);
-        Assert.Empty((await ReadAsync(visible)).EnumerateArray());
+        // The client retains review history, but resignation does not buy
+        // the original or transfer it to a replacement freelancer.
+        var previousDelivery = Assert.Single((await ReadAsync(visible)).EnumerateArray());
+        Assert.False(previousDelivery.GetProperty("originalsUnlocked").GetBoolean());
+        Assert.Null(previousDelivery.GetProperty("sourceFilesLink").GetString());
+        var previousFile = Assert.Single(previousDelivery.GetProperty("attachments").EnumerateArray());
+        var original = await SendAsync(_client, HttpMethod.Get,
+            $"/api/projects/{scenario.ProjectId}/milestones/{scenario.MilestoneId}/submissions/" +
+            $"{previousDelivery.GetProperty("id").GetGuid()}/files/{previousFile.GetProperty("id").GetGuid()}",
+            scenario.Client.Token);
+        Assert.Equal(HttpStatusCode.Forbidden, original.StatusCode);
     }
 
     [Fact]

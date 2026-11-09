@@ -51,6 +51,10 @@ import { useFundEscrow } from "@/features/escrow/hooks/use-fund-escrow";
 import { useMintTestTokens } from "@/features/escrow/hooks/use-mint-test-tokens";
 import { useProjectEscrows } from "@/features/escrow/hooks/use-project-escrows";
 import { useStartWork } from "@/features/escrow/hooks/use-start-work";
+import { StagedScopePanel } from "@/features/escrow/components/staged-scope-panel";
+import { useQuery } from "@tanstack/react-query";
+import { getEscrowStages } from "@/features/escrow/api/escrow-api";
+import { requiredFundingAmount } from "@/features/escrow/lib/token-amount";
 import { useSyncEscrow } from "@/features/escrow/hooks/use-sync-escrow";
 import { erc20Abi } from "@/features/escrow/lib/erc20-abi";
 import { escrowAbi } from "@/features/escrow/lib/escrow-abi";
@@ -63,7 +67,7 @@ import {
     TEST_TOKEN_MINT_ENABLED,
 } from "@/features/escrow/lib/network-config";
 import { formatBaseUnits } from "@/lib/money/decimal-amount";
-import type { ProjectEscrow } from "@/features/escrow/types/escrow";
+import type { ProjectEscrow, EscrowFundingStage } from "@/features/escrow/types/escrow";
 import type { ProjectStatus } from "@/features/projects/types/project";
 import { WalletConnectButton } from "@/features/wallet/components/wallet-connect-button";
 import { useMyWallet } from "@/features/wallet/hooks/use-my-wallet";
@@ -383,6 +387,9 @@ function EscrowDetailsCard({
                 />
             </div>
 
+            {escrow.protocolVersion === 3 && <StagedScopePanel projectId={projectId} escrow={escrow} viewerRole={viewerRole}
+                renderFundingControls={stage => <ClientFundingControls projectId={projectId} escrow={escrow} stage={stage} />} />}
+
             <p className="mt-4 text-sm text-muted-foreground">
                 {(escrow.platformFeeBasisPoints ?? 0) === 1000
                     ? "A fixed 10% platform fee is deducted from each gross freelancer award, including case settlements. The client funds the agreed total; refunds have no fee."
@@ -497,7 +504,7 @@ function EscrowDetailsCard({
 
             {escrow.status === "Funded" && (
                 <div className="mt-5 border-t pt-5">
-                    {viewerRole === "Freelancer" &&
+                    {viewerRole === "Freelancer" && escrow.protocolVersion !== 3 &&
                         workStartedQuery.data === false && (
                             <>
                                 <p className="mb-3 text-sm text-muted-foreground">
@@ -775,9 +782,11 @@ function CancelEscrowControl({
 function ClientFundingControls({
     projectId,
     escrow,
+    stage,
 }: {
     projectId: string;
     escrow: ProjectEscrow;
+    stage?: EscrowFundingStage;
 }) {
     const connection = useConnection();
     const walletQuery = useMyWallet();
@@ -791,6 +800,10 @@ function ClientFundingControls({
     const checksEnabled = Boolean(
         connection.address && expectedWalletAddress,
     );
+    const stagesQuery = useQuery({ queryKey: ["escrow-stages", projectId, escrow.freelancerId],
+        queryFn: () => getEscrowStages(projectId, escrow.freelancerId),
+        enabled: checksEnabled && escrow.protocolVersion === 3 && !stage });
+    const selectedStage = stage ?? stagesQuery.data?.find(item => item.chainIndex === 0);
 
     const tokenDecimalsQuery = useReadContract({
         address: escrow.tokenAddress as Address,
@@ -808,7 +821,7 @@ function ClientFundingControls({
         abi: escrowAbi,
         functionName: "totalAmount",
         chainId: escrow.chainId,
-        query: { enabled: checksEnabled && Boolean(escrow.contractAddress) },
+        query: { enabled: checksEnabled && Boolean(escrow.contractAddress) && escrow.protocolVersion !== 3 },
     });
 
     const tokenBalanceQuery = useReadContract({
@@ -834,9 +847,8 @@ function ClientFundingControls({
 
     const tokenDecimals = tokenDecimalsQuery.data;
     const unsupportedDecimals = tokenDecimals !== undefined && tokenDecimals > 18;
-    const requiredTokenAmount = unsupportedDecimals
-        ? null
-        : contractAmountQuery.data ?? null;
+    const requiredTokenAmount = requiredFundingAmount(escrow.protocolVersion, selectedStage?.amountExact,
+        contractAmountQuery.data, tokenDecimals);
 
     const tokenBalance = tokenBalanceQuery.data ?? 0n;
     const gasBalance = gasBalanceQuery.data?.value ?? 0n;
@@ -865,13 +877,14 @@ function ClientFundingControls({
         contractAmountQuery.isLoading ||
         tokenBalanceQuery.isLoading ||
         gasBalanceQuery.isLoading;
+    const scopeReady = escrow.protocolVersion === 3 ? Boolean(selectedStage && requiredTokenAmount !== null) : contractAmountQuery.isSuccess;
 
     const canFund =
         networkReady &&
         tokenReady &&
         gasReady &&
         tokenDecimalsQuery.isSuccess &&
-        contractAmountQuery.isSuccess &&
+        scopeReady &&
         !unsupportedDecimals &&
         !checksLoading;
 
@@ -884,6 +897,7 @@ function ClientFundingControls({
     const balanceReadFailed =
         tokenDecimalsQuery.isError ||
         contractAmountQuery.isError ||
+        (escrow.protocolVersion === 3 && stagesQuery.isError) ||
         tokenBalanceQuery.isError ||
         gasBalanceQuery.isError;
 
@@ -1006,7 +1020,7 @@ function ClientFundingControls({
                         testFundsMutation.isPending
                     }
                     onClick={() => {
-                        fundMutation.mutate(escrow);
+                        fundMutation.mutate(escrow.protocolVersion === 3 && selectedStage ? { escrow, stage: selectedStage } : escrow);
                     }}
                 >
                     {fundMutation.isPending ? (

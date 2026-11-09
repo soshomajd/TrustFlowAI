@@ -17,7 +17,10 @@ public sealed record EscrowDeploymentRequest(
     string ArbiterAddress,
     IReadOnlyList<BigInteger> MilestoneAmounts,
     string? FeeRecipientAddress = null,
-    int TokenDecimals = 6);
+    int TokenDecimals = 6,
+    int ProtocolVersion = 2,
+    string? FundingReference = null,
+    string? TermsHash = null);
 
 public sealed record OnChainFeePolicy(string Recipient, int BasisPoints);
 
@@ -106,7 +109,11 @@ public interface IEscrowChainDeployer
         CancellationToken cancellationToken);
 
     Task<IReadOnlyList<OnChainExecutionEvent>> GetExecutionEventsAsync(string contractAddress,
-        string deploymentTransactionHash, CancellationToken cancellationToken);
+        string deploymentTransactionHash, CancellationToken cancellationToken, bool staged = false);
+
+    Task<IReadOnlyList<OnChainStageEvent>> GetStageEventsAsync(string contractAddress,
+        string deploymentTransactionHash, CancellationToken cancellationToken)
+        => throw new NotSupportedException("Staged funding is not supported by this chain adapter.");
 }
 
 public sealed partial class EscrowChainDeployer(
@@ -122,6 +129,8 @@ public sealed partial class EscrowChainDeployer(
         new(() => LoadArtifact("TrustFlowEscrow.json"));
     private static readonly Lazy<(string Abi, string Bytecode)> FeeArtifact =
         new(() => LoadArtifact("TrustFlowEscrowV2.json"));
+    private static readonly Lazy<(string Abi, string Bytecode)> StagedArtifact =
+        new(() => LoadArtifact("TrustFlowEscrowV3.json"));
 
     public async Task<long> GetChainIdAsync(
         CancellationToken cancellationToken)
@@ -152,6 +161,19 @@ public sealed partial class EscrowChainDeployer(
         CancellationToken cancellationToken)
     {
         var (web3, deployerAddress) = CreateWeb3();
+
+        if (request.ProtocolVersion == 3)
+        {
+            var staged = new TrustFlowEscrowV3ConstructorParams
+            {
+                Token = request.TokenAddress, Client = request.ClientAddress,
+                Freelancer = request.FreelancerAddress, Arbiter = request.ArbiterAddress,
+                MilestoneAmounts = request.MilestoneAmounts.ToList(), FeeRecipient = request.FeeRecipientAddress!,
+                FundingReference = Convert.FromHexString(request.FundingReference![2..]),
+                TermsHash = Convert.FromHexString(request.TermsHash![2..])
+            };
+            return await SubmitTypedDeploymentAsync(web3, deployerAddress, StagedArtifact.Value.Bytecode, staged, cancellationToken);
+        }
 
         TrustFlowEscrowConstructorParams constructorParams = request.FeeRecipientAddress is null
             ? new TrustFlowEscrowConstructorParams()
@@ -408,10 +430,16 @@ public sealed partial class EscrowChainDeployer(
         public List<BigInteger> MilestoneAmounts { get; set; } = [];
     }
 
-    private sealed class TrustFlowEscrowV2ConstructorParams : TrustFlowEscrowConstructorParams
+    private class TrustFlowEscrowV2ConstructorParams : TrustFlowEscrowConstructorParams
     {
         [Parameter("address", "feeRecipient_", 6)]
         public string FeeRecipient { get; set; } = string.Empty;
+    }
+
+    private sealed class TrustFlowEscrowV3ConstructorParams : TrustFlowEscrowV2ConstructorParams
+    {
+        [Parameter("bytes32", "fundingReference_", 7)] public byte[] FundingReference { get; set; } = [];
+        [Parameter("bytes32", "termsHash_", 8)] public byte[] TermsHash { get; set; } = [];
     }
 
     [FunctionOutput]

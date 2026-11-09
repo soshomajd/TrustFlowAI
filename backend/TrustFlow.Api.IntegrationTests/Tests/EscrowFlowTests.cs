@@ -2222,6 +2222,7 @@ public sealed class EscrowFlowTests
         Guid projectId,
         Guid proposalId)
     {
+        await FixedEscrowFixture.UseAsync(projectId);
         using var request =
             CreateAuthorizedRequest(
                 HttpMethod.Patch,

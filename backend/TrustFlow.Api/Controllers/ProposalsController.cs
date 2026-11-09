@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using TrustFlow.Api.Constants;
+using TrustFlow.Api.Blockchain;
 using TrustFlow.Api.Data;
 using TrustFlow.Api.Dtos.Common;
 using TrustFlow.Api.Dtos.Proposals;
@@ -14,7 +15,7 @@ namespace TrustFlow.Api.Controllers;
 
 [ApiController]
 [Route("api/projects/{projectId:guid}/proposals")]
-public class ProposalsController(AppDbContext dbContext)
+public class ProposalsController(AppDbContext dbContext, FundedHiringPreparation fundedHiring)
     : ControllerBase
 {
     private static bool IsUniqueViolation(Exception exception)
@@ -80,7 +81,7 @@ public class ProposalsController(AppDbContext dbContext)
                 HasEscrow = project.Escrows.Any(escrow => escrow.FreelancerId == freelancerId),
                 HasActiveProposal = project.Proposals.Any(proposal =>
                     proposal.FreelancerId == freelancerId &&
-                    (proposal.Status == ProposalStatus.Pending || proposal.Status == ProposalStatus.Accepted))
+                    (proposal.Status == ProposalStatus.Pending || proposal.Status == ProposalStatus.Accepted || proposal.Status == ProposalStatus.AwaitingFunding || proposal.Status == ProposalStatus.Funded))
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -215,7 +216,7 @@ public class ProposalsController(AppDbContext dbContext)
                             proposal.FreelancerId ==
                                 freelancerId &&
                             (proposal.Status == ProposalStatus.Pending ||
-                             proposal.Status == ProposalStatus.Accepted),
+                             proposal.Status == ProposalStatus.Accepted || proposal.Status == ProposalStatus.AwaitingFunding || proposal.Status == ProposalStatus.Funded),
                         cancellationToken
                     );
 
@@ -745,6 +746,21 @@ public class ProposalsController(AppDbContext dbContext)
         if (!Guid.TryParse(clientIdValue, out var clientId))
         {
             return Unauthorized();
+        }
+
+        var newFlow = await dbContext.Projects.AsNoTracking()
+            .AnyAsync(p => p.Id == projectId && p.ClientId == clientId && p.HiringFlowVersion >= 3, cancellationToken);
+        if (newFlow)
+        {
+            try
+            {
+                var escrowId = await fundedHiring.PrepareAsync(projectId, proposalId, clientId, cancellationToken);
+                return Ok(new { escrowId, requiresFunding = true, message = "Reserved. Fund the milestone, then the freelancer can accept and start." });
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+            catch (InvalidOperationException ex) { return Conflict(new { message = ex.Message }); }
+            catch (Exception ex) when (IsSerializationFailure(ex) || IsUniqueViolation(ex))
+            { return Conflict(new { message = "The milestone was changed by another request. Refresh and resume funding." }); }
         }
 
         const int maxAttempts = 3;

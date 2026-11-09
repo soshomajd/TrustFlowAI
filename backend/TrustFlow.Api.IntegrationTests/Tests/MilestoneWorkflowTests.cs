@@ -332,8 +332,15 @@ public sealed class MilestoneWorkflowTests
                 $"{firstSubmission.GetProperty("id").GetGuid()}/files/{attachment.GetProperty("id").GetGuid()}",
                 clientToken);
             var downloadResponse = await _client.SendAsync(downloadRequest);
-            Assert.Equal(HttpStatusCode.OK, downloadResponse.StatusCode);
-            Assert.NotEmpty(await downloadResponse.Content.ReadAsByteArrayAsync());
+            Assert.Equal(HttpStatusCode.Forbidden, downloadResponse.StatusCode);
+            using var previewRequest = CreateAuthorizedRequest(
+                HttpMethod.Get,
+                downloadRequest.RequestUri + "/preview",
+                clientToken);
+            var previewResponse = await _client.SendAsync(previewRequest);
+            Assert.Equal(HttpStatusCode.OK, previewResponse.StatusCode);
+            Assert.Equal("image/png", previewResponse.Content.Headers.ContentType!.MediaType);
+            Assert.NotEmpty(await previewResponse.Content.ReadAsByteArrayAsync());
         }
 
         using (var changesRequest = CreateAuthorizedRequest(
@@ -781,6 +788,7 @@ public sealed class MilestoneWorkflowTests
         Guid proposalId,
         string clientToken)
     {
+        await FixedEscrowFixture.UseAsync(projectId);
         using var request =
             CreateAuthorizedRequest(
                 HttpMethod.Patch,
